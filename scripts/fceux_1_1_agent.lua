@@ -11,6 +11,7 @@ local after_attempt_frames = tonumber(os.getenv("SMB3_AFTER_ATTEMPT_FRAMES") or 
 local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
 local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
 local post_1_2_enemy_min_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MIN_DX") or "0")
+local post_1_2_enemy_max_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MAX_DX") or "95")
 local post_1_2_enemy_jump_frames = tonumber(os.getenv("SMB3_1_2_ENEMY_JUMP_FRAMES") or "24")
 local post_1_2_hill_enemy_jump_frames =
   tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_JUMP_FRAMES") or "20")
@@ -430,7 +431,7 @@ local function run_1_2_naive_probe()
           log_state("post_probe_1_2_jump_first_gap")
         elseif enemy ~= nil
             and enemy.dx >= post_1_2_enemy_min_dx
-            and enemy.dx < 95
+            and enemy.dx < post_1_2_enemy_max_dx
             and enemy.dy > -45 then
           if m.x >= post_1_2_hill_enemy_start and m.x <= post_1_2_hill_enemy_end then
             jump_frames = post_1_2_hill_enemy_jump_frames
