@@ -9,6 +9,7 @@ from pathlib import Path
 
 STATE_RE = re.compile(r"\battempt_(?P<attempt>\d+)_(?P<event>[A-Za-z0-9_]+)\b")
 X_RE = re.compile(r"\bx=(?P<x>-?\d+)\b")
+EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,8 @@ class AttemptSummary:
 @dataclass(frozen=True)
 class BatchSummary:
     attempts: tuple[AttemptSummary, ...]
+    post_probe_max_x: int = -1
+    post_probe_last_event: str | None = None
 
     @property
     def success_count(self) -> int:
@@ -54,6 +57,10 @@ class BatchSummary:
                     max_x=attempt.max_x,
                 )
             )
+        if self.post_probe_max_x >= 0:
+            lines.append(f"post_probe_max_x={self.post_probe_max_x}")
+        if self.post_probe_last_event is not None:
+            lines.append(f"post_probe_last_event={self.post_probe_last_event}")
         return "\n".join(lines)
 
 
@@ -66,23 +73,34 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
     goal_area: set[int] = set()
     max_x: dict[int, int] = {}
     current_attempt: int | None = None
+    post_probe_max_x = -1
+    post_probe_last_event: str | None = None
 
     for line in text.splitlines():
+        event_match = EVENT_RE.search(line)
+        event = event_match.group("event") if event_match is not None else None
+        x_match = X_RE.search(line)
+        if event is not None and event.startswith("post_probe_"):
+            post_probe_last_event = event
+            if x_match is not None:
+                x = int(x_match.group("x"))
+                if 0 <= x < 8192:
+                    post_probe_max_x = max(post_probe_max_x, x)
+
         state_match = STATE_RE.search(line)
         if state_match is not None:
             current_attempt = int(state_match.group("attempt"))
-            event = state_match.group("event")
+            attempt_event = state_match.group("event")
             seen_attempts.add(current_attempt)
-            if event == "success_course_clear":
+            if attempt_event == "success_course_clear":
                 success.add(current_attempt)
-            elif event == "bad_state":
+            elif attempt_event == "bad_state":
                 bad_state.add(current_attempt)
-            elif event == "reached_end_x":
+            elif attempt_event == "reached_end_x":
                 reached_end.add(current_attempt)
-            elif event == "goal_area":
+            elif attempt_event == "goal_area":
                 goal_area.add(current_attempt)
 
-        x_match = X_RE.search(line)
         if current_attempt is not None and x_match is not None:
             x = int(x_match.group("x"))
             if 0 <= x < 8192:
@@ -94,7 +112,7 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
         attempts = range(1, max(seen_attempts or {0}) + 1)
 
     return BatchSummary(
-        tuple(
+        attempts=tuple(
             AttemptSummary(
                 attempt=attempt,
                 success=attempt in success,
@@ -104,7 +122,9 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 max_x=max_x.get(attempt, -1),
             )
             for attempt in attempts
-        )
+        ),
+        post_probe_max_x=post_probe_max_x,
+        post_probe_last_event=post_probe_last_event,
     )
 
 

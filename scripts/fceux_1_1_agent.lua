@@ -362,17 +362,108 @@ local function run_agent(attempt)
   return course_clear
 end
 
+local function enter_1_2_from_map(after_enter_frames)
+  log_state("post_probe_enter_1_2_start")
+  advance(120, "post_probe_map_wait")
+  press("right", 18, "post_probe_map_right_1")
+  advance(60, "post_probe_after_right_1")
+  press("right", 18, "post_probe_map_right_2")
+  advance(60, "post_probe_after_right_2")
+  press("A", 18, "post_probe_map_enter")
+  advance(after_enter_frames, "post_probe_after_enter")
+  log_state("post_probe_enter_1_2_done")
+end
+
+local function run_1_2_naive_probe()
+  local jump_frames = 0
+  local cooldown = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local next_progress_marker = 256
+  held.right = true
+  held.B = true
+  for frame = 1, 3600 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local grounded = m.air == 0
+    local first_gap_carry = m.x >= 470 and m.x <= 650 and m.y < 390
+
+    if m.x >= next_progress_marker and m.x < 8192 then
+      log_state("post_probe_1_2_progress_x_" .. tostring(next_progress_marker))
+      next_progress_marker = next_progress_marker + 256
+    end
+
+    if m.x >= 8192 or m.y == 0 then
+      log_state("post_probe_1_2_transition")
+      break
+    end
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.right = true
+      held.B = true
+      held.A = false
+      if cooldown > 0 then
+        cooldown = cooldown - 1
+      end
+      if grounded and cooldown == 0 then
+        if m.x >= 500 and m.x <= 590 then
+          jump_frames = 42
+          cooldown = 56
+          log_state("post_probe_1_2_jump_first_gap")
+        elseif enemy ~= nil and enemy.dx >= 0 and enemy.dx < 95 and enemy.dy > -45 then
+          jump_frames = 24
+          cooldown = 42
+          log_state("post_probe_1_2_jump_enemy")
+        elseif stuck_frames > 45 and m.x >= 320 and m.x <= 370 then
+          jump_frames = 54
+          cooldown = 72
+          stuck_frames = 0
+          log_state("post_probe_1_2_jump_hill_pipe")
+        elseif stuck_frames > 45 then
+          jump_frames = 32
+          cooldown = 48
+          stuck_frames = 0
+          log_state("post_probe_1_2_jump_stuck")
+        end
+      end
+    end
+
+    if first_gap_carry then
+      held.A = true
+    end
+    held.left = false
+    apply()
+    if frame % 30 == 0 then
+      log_state("post_probe_1_2_tick")
+    end
+    FCEU.frameadvance()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  apply()
+  advance(240, "post_probe_1_2_after")
+  log_state("post_probe_1_2_done")
+end
+
 local function run_post_1_1_probe()
   if post_1_1_probe == "enter_1_2" then
-    log_state("post_probe_enter_1_2_start")
-    advance(120, "post_probe_map_wait")
-    press("right", 18, "post_probe_map_right_1")
-    advance(60, "post_probe_after_right_1")
-    press("right", 18, "post_probe_map_right_2")
-    advance(60, "post_probe_after_right_2")
-    press("A", 18, "post_probe_map_enter")
-    advance(600, "post_probe_after_enter")
-    log_state("post_probe_enter_1_2_done")
+    enter_1_2_from_map(600)
+  elseif post_1_1_probe == "run_1_2_naive" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
   end
 end
 

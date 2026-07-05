@@ -19,6 +19,8 @@ def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
                 "frame=60 event=attempt_2_start x=24 y=384",
                 "frame=70 event=agent_tick x=900 y=384",
                 "frame=80 event=attempt_2_bad_state x=8192 y=0",
+                "frame=90 event=post_probe_1_2_progress_x_512 x=512 y=320",
+                "frame=100 event=post_probe_1_2_done x=490 y=320",
             ]
         )
     )
@@ -32,6 +34,8 @@ def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     assert summary.attempts[0].goal_area is True
     assert summary.attempts[1].max_x == 900
     assert summary.attempts[1].bad_state is True
+    assert summary.post_probe_max_x == 512
+    assert summary.post_probe_last_event == "post_probe_1_2_done"
 
 
 def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:

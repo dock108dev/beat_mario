@@ -162,7 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     fceux_1_1.add_argument("--after-attempt-frames", type=int, default=None)
     fceux_1_1.add_argument(
         "--post-1-1-probe",
-        choices=["enter_1_2"],
+        choices=["enter_1_2", "run_1_2_naive"],
         default=None,
         help="Optional probe to run after the final successful 1-1 clear",
     )

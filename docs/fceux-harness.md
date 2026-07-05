@@ -62,3 +62,22 @@ The current probe command is:
 ```bash
 python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_enter_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe enter_1_2 --require-perfect
 ```
+
+## World 1-2 Naive Probe
+
+The current naive 1-2 probe is deliberately diagnostic:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect
+python -m smb3_agent task review-fceux-log --log artifacts/fceux/probe_run_1_2/fceux_1_1.log --attempts 1
+```
+
+It currently gets through the first pipe gap and reports approximately:
+
+```text
+post_probe_max_x=1333
+```
+
+The next failure is the steep-hill enemy cluster after the first gap. The next
+useful route work is to tune that cluster with screenshots and max-x logs, not
+to broaden the route runner.
