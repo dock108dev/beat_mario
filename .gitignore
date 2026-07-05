@@ -1,0 +1,12 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local game files and generated proof artifacts.
+*.nes
+artifacts/
+data/attempts/
+data/screenshots/
+

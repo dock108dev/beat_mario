@@ -1,0 +1,50 @@
+name: world_1_1_to_late_pipe
+description: Run from 1-1 start to the late pipe/stair area, then stop for checkpointing.
+steps:
+  - hold: right
+  - hold: z
+  - wait: 0.45
+  - tap: x
+    duration: 0.18
+  - wait: 0.90
+  - tap: x
+    duration: 0.16
+  - wait: 0.20
+  - release: z
+  - release: right
+  - wait: 1.10
+  - hold: right
+  - hold: z
+  - wait: 0.08
+  - tap: x
+    duration: 0.24
+  - wait: 0.70
+  - tap: x
+    duration: 0.20
+  - wait: 1.40
+  - tap: x
+    duration: 0.18
+  - wait: 0.65
+  - tap: x
+    duration: 0.18
+  - wait: 0.85
+  - tap: x
+    duration: 0.08
+  - wait: 0.50
+  - tap: x
+    duration: 0.22
+  - wait: 1.20
+  - tap: x
+    duration: 0.18
+  - wait: 0.75
+  - tap: x
+    duration: 0.22
+  - wait: 0.36
+  - tap: x
+    duration: 0.08
+  - wait: 0.12
+  - tap: x
+    duration: 0.30
+  - wait: 5.00
+  - release: z
+  - release: right

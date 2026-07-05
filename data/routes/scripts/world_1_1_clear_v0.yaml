@@ -1,0 +1,23 @@
+name: world_1_1_clear_v0
+description: Conservative first-pass clear route based on the external timing guide. Uses x=A/jump, z=B/run.
+steps:
+  - hold: right
+  - hold: z
+  - wait: 0.90
+  - tap: x
+    duration: 0.135
+  - wait: 0.85
+  - wait: 1.25
+  - tap: x
+    duration: 0.150
+  - wait: 0.95
+  - wait: 1.20
+  - tap: x
+    duration: 0.160
+  - wait: 0.90
+  - wait: 2.20
+  - tap: x
+    duration: 0.120
+  - wait: 1.50
+  - release: z
+  - release: right

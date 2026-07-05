@@ -1,0 +1,91 @@
+name: world_1_1_draft
+description: First rough 1-1 chunk. Hold right/run, clear the opening enemy, wait out the first plant, then jump the pipe.
+steps:
+  - hold: right
+  - hold: z
+  - wait: 0.45
+  - tap: x
+    duration: 0.18
+  - wait: 0.90
+  - tap: x
+    duration: 0.16
+  - wait: 0.20
+  - release: z
+  - release: right
+  - wait: 1.10
+  - hold: right
+  - hold: z
+  - wait: 0.08
+  - tap: x
+    duration: 0.24
+  - wait: 0.70
+  - tap: x
+    duration: 0.20
+  - wait: 1.40
+  - tap: x
+    duration: 0.18
+  - wait: 0.65
+  - tap: x
+    duration: 0.18
+  - wait: 0.85
+  - tap: x
+    duration: 0.08
+  - wait: 0.50
+  - tap: x
+    duration: 0.22
+  - wait: 1.20
+  - tap: x
+    duration: 0.18
+  - wait: 0.75
+  - tap: x
+    duration: 0.22
+  - wait: 0.36
+  - tap: x
+    duration: 0.08
+  - wait: 0.12
+  - tap: x
+    duration: 0.30
+  - wait: 5.00
+  - release: z
+  - release: right
+  - hold: right
+  - hold: z
+  - wait: 0.10
+  - tap: x
+    duration: 0.45
+  - wait: 0.90
+  - tap: x
+    duration: 0.22
+  - wait: 0.35
+  - release: z
+  - release: right
+  - wait: 2.10
+  - hold: right
+  - hold: z
+  - wait: 0.10
+  - tap: x
+    duration: 0.26
+  - wait: 0.80
+  - tap: x
+    duration: 0.28
+  - wait: 2.50
+  - tap: x
+    duration: 0.24
+  - wait: 0.55
+  - tap: x
+    duration: 0.30
+  - wait: 1.00
+  - tap: x
+    duration: 0.24
+  - wait: 3.00
+  - release: right
+  - hold: left
+  - wait: 0.55
+  - tap: x
+    duration: 0.50
+  - wait: 0.35
+  - release: left
+  - hold: right
+  - wait: 8.00
+  - release: z
+  - release: right

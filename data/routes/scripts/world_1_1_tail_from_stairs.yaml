@@ -1,0 +1,44 @@
+name: world_1_1_tail_from_stairs
+description: Tail route from slot 1, starting on the late stair stack near the end of World 1-1.
+steps:
+  - hold: right
+  - hold: z
+  - wait: 0.10
+  - tap: x
+    duration: 0.45
+  - wait: 0.90
+  - tap: x
+    duration: 0.22
+  - wait: 0.35
+  - release: z
+  - release: right
+  - wait: 2.10
+  - hold: right
+  - hold: z
+  - wait: 0.10
+  - tap: x
+    duration: 0.26
+  - wait: 0.80
+  - tap: x
+    duration: 0.28
+  - wait: 2.50
+  - tap: x
+    duration: 0.24
+  - wait: 0.55
+  - tap: x
+    duration: 0.30
+  - wait: 1.00
+  - tap: x
+    duration: 0.24
+  - wait: 3.00
+  - release: right
+  - hold: left
+  - wait: 0.55
+  - tap: x
+    duration: 0.50
+  - wait: 0.35
+  - release: left
+  - hold: right
+  - wait: 8.00
+  - release: z
+  - release: right
