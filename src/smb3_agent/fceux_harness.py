@@ -138,6 +138,7 @@ def run_fceux_1_1(
     capture_ticks: bool = False,
     after_attempt_frames: int | None = None,
     post_1_1_probe: str | None = None,
+    env_overrides: tuple[str, ...] = (),
 ) -> BatchSummary:
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "fceux_1_1.log"
@@ -152,6 +153,11 @@ def run_fceux_1_1(
         env["SMB3_CAPTURE_TICKS"] = "1"
     if post_1_1_probe:
         env["SMB3_POST_1_1_PROBE"] = post_1_1_probe
+    for item in env_overrides:
+        key, separator, value = item.partition("=")
+        if not key or separator != "=":
+            raise ValueError(f"Invalid environment override: {item}")
+        env[key] = value
     if capture_images:
         image_dir.mkdir(parents=True, exist_ok=True)
         env["SMB3_AGENT_IMAGE_DIR"] = str(image_dir.resolve())

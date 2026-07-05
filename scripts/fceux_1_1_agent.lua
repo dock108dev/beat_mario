@@ -10,6 +10,11 @@ local stair_climb_frames = tonumber(os.getenv("SMB3_STAIR_CLIMB_FRAMES") or "32"
 local after_attempt_frames = tonumber(os.getenv("SMB3_AFTER_ATTEMPT_FRAMES") or "180")
 local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
 local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
+local post_1_2_enemy_jump_frames = tonumber(os.getenv("SMB3_1_2_ENEMY_JUMP_FRAMES") or "24")
+local post_1_2_hill_enemy_jump_frames =
+  tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_JUMP_FRAMES") or "20")
+local post_1_2_hill_enemy_start = tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_START") or "1180")
+local post_1_2_hill_enemy_end = tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_END") or "1400")
 local log = assert(io.open(log_path, "w"))
 
 local held = {}
@@ -423,7 +428,11 @@ local function run_1_2_naive_probe()
           cooldown = 56
           log_state("post_probe_1_2_jump_first_gap")
         elseif enemy ~= nil and enemy.dx >= 0 and enemy.dx < 95 and enemy.dy > -45 then
-          jump_frames = 24
+          if m.x >= post_1_2_hill_enemy_start and m.x <= post_1_2_hill_enemy_end then
+            jump_frames = post_1_2_hill_enemy_jump_frames
+          else
+            jump_frames = post_1_2_enemy_jump_frames
+          end
           cooldown = 42
           log_state("post_probe_1_2_jump_enemy")
         elseif stuck_frames > 45 and m.x >= 320 and m.x <= 370 then

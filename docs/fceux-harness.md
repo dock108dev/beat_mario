@@ -75,9 +75,15 @@ python -m smb3_agent task review-fceux-log --log artifacts/fceux/probe_run_1_2/f
 It currently gets through the first pipe gap and reports approximately:
 
 ```text
-post_probe_max_x=1333
+post_probe_max_x=1337
 ```
 
 The next failure is the steep-hill enemy cluster after the first gap. The next
 useful route work is to tune that cluster with screenshots and max-x logs, not
 to broaden the route runner.
+
+For quick Lua parameter sweeps, pass explicit overrides:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2_hill_32 --post-1-1-probe run_1_2_naive --after-attempt-frames 900 --set-env SMB3_1_2_HILL_ENEMY_JUMP_FRAMES=32 --require-perfect
+```

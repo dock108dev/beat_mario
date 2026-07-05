@@ -165,7 +165,7 @@ python -m smb3_agent task review-fceux-log --log artifacts/fceux/probe_run_1_2/f
 ```
 
 Current known result: the probe clears the first pipe gap and reaches roughly
-`post_probe_max_x=1333` before failing in the steep-hill enemy cluster.
+`post_probe_max_x=1337` before failing in the steep-hill enemy cluster.
 
 ## Detect
 

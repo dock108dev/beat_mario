@@ -1,9 +1,10 @@
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
-from smb3_agent.fceux_harness import parse_fceux_log
+from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
 
 
 def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
@@ -54,3 +55,14 @@ def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:
         assert converted_image.size == (256, 224)
     with Image.open(sheet_path) as sheet:
         assert sheet.size == (256, 242)
+
+
+def test_run_fceux_rejects_invalid_env_override(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        run_fceux_1_1(
+            game_path=tmp_path / "game-file.nes",
+            script_path=tmp_path / "script.lua",
+            artifacts_dir=tmp_path / "artifacts",
+            attempts=1,
+            env_overrides=("NOT_A_PAIR",),
+        )

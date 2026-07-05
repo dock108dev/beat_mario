@@ -167,6 +167,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional probe to run after the final successful 1-1 clear",
     )
     fceux_1_1.add_argument(
+        "--set-env",
+        action="append",
+        default=[],
+        help="Set an environment override for the Lua route, formatted KEY=VALUE",
+    )
+    fceux_1_1.add_argument(
         "--require-perfect",
         action="store_true",
         help="Exit non-zero unless every attempt clears the level",
@@ -278,6 +284,7 @@ def main() -> None:
             capture_ticks=args.capture_ticks,
             after_attempt_frames=args.after_attempt_frames,
             post_1_1_probe=args.post_1_1_probe,
+            env_overrides=tuple(args.set_env),
         )
         print(summary.to_text())
         if args.require_perfect and summary.success_count != summary.total:
