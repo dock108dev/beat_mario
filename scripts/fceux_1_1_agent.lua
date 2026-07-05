@@ -10,6 +10,7 @@ local stair_climb_frames = tonumber(os.getenv("SMB3_STAIR_CLIMB_FRAMES") or "32"
 local after_attempt_frames = tonumber(os.getenv("SMB3_AFTER_ATTEMPT_FRAMES") or "180")
 local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
 local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
+local post_1_2_route_mode = os.getenv("SMB3_1_2_ROUTE_MODE") or "naive"
 local post_1_2_enemy_min_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MIN_DX") or "0")
 local post_1_2_enemy_max_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MAX_DX") or "95")
 local post_1_2_enemy_jump_frames = tonumber(os.getenv("SMB3_1_2_ENEMY_JUMP_FRAMES") or "24")
@@ -17,6 +18,17 @@ local post_1_2_hill_enemy_jump_frames =
   tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_JUMP_FRAMES") or "20")
 local post_1_2_hill_enemy_start = tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_START") or "1180")
 local post_1_2_hill_enemy_end = tonumber(os.getenv("SMB3_1_2_HILL_ENEMY_END") or "1400")
+local post_1_2_hill_search_start = tonumber(os.getenv("SMB3_1_2_HILL_SEARCH_START") or "1180")
+local post_1_2_hill_delay_frames = tonumber(os.getenv("SMB3_1_2_HILL_DELAY_FRAMES") or "12")
+local post_1_2_hill_jump_frames = tonumber(os.getenv("SMB3_1_2_HILL_JUMP_FRAMES") or "50")
+local post_1_2_hill_slow_frames = tonumber(os.getenv("SMB3_1_2_HILL_SLOW_FRAMES") or "10")
+local post_1_2_late_jump_start = tonumber(os.getenv("SMB3_1_2_LATE_JUMP_START") or "2350")
+local post_1_2_late_delay_frames = tonumber(os.getenv("SMB3_1_2_LATE_DELAY_FRAMES") or "0")
+local post_1_2_late_jump_frames = tonumber(os.getenv("SMB3_1_2_LATE_JUMP_FRAMES") or "18")
+local post_1_2_late_slow_frames = tonumber(os.getenv("SMB3_1_2_LATE_SLOW_FRAMES") or "0")
+local post_1_2_goal_jump_start = tonumber(os.getenv("SMB3_1_2_GOAL_JUMP_START") or "2580")
+local post_1_2_goal_jump_frames = tonumber(os.getenv("SMB3_1_2_GOAL_JUMP_FRAMES") or "38")
+local post_1_2_goal_carry_frames = tonumber(os.getenv("SMB3_1_2_GOAL_CARRY_FRAMES") or "60")
 local log = assert(io.open(log_path, "w"))
 
 local held = {}
@@ -387,6 +399,19 @@ local function run_1_2_naive_probe()
   local last_x = 0
   local stuck_frames = 0
   local next_progress_marker = 256
+  local hill_maneuver_started = false
+  local hill_delay_frames = 0
+  local hill_jump_frames = 0
+  local hill_slow_frames = 0
+  local late_maneuver_started = false
+  local late_delay_frames = 0
+  local late_jump_frames = 0
+  local late_slow_frames = 0
+  local goal_jump_started = false
+  local goal_carry_frames = 0
+  local goal_recovery_frames = 0
+  local goal_recovery_started = false
+  local reached_goal_card = false
   held.right = true
   held.B = true
   for frame = 1, 3600 do
@@ -400,7 +425,17 @@ local function run_1_2_naive_probe()
       next_progress_marker = next_progress_marker + 256
     end
 
+    if m.x >= 2816 and m.x < 8192 and not reached_goal_card then
+      reached_goal_card = true
+      log_state("post_probe_1_2_goal_card")
+    end
+
     if m.x >= 8192 or m.y == 0 then
+      if reached_goal_card then
+        log_state("post_probe_1_2_success_course_clear")
+      else
+        log_state("post_probe_1_2_bad_state")
+      end
       log_state("post_probe_1_2_transition")
       break
     end
@@ -412,7 +447,202 @@ local function run_1_2_naive_probe()
       last_x = m.x
     end
 
-    if jump_frames > 0 then
+    if not hill_maneuver_started and grounded and m.x >= 1180 and m.x <= 1220 then
+      hill_maneuver_started = true
+      hill_delay_frames = post_1_2_hill_delay_frames
+      hill_jump_frames = post_1_2_hill_jump_frames
+      hill_slow_frames = post_1_2_hill_slow_frames
+      cooldown = hill_delay_frames + hill_jump_frames + 20
+      log_state("post_probe_1_2_hill_maneuver")
+    end
+
+    if not late_maneuver_started and grounded and m.x >= post_1_2_late_jump_start and m.x <= post_1_2_late_jump_start + 80 then
+      late_maneuver_started = true
+      late_delay_frames = post_1_2_late_delay_frames
+      late_jump_frames = post_1_2_late_jump_frames
+      late_slow_frames = post_1_2_late_slow_frames
+      cooldown = late_delay_frames + late_jump_frames + 20
+      log_state("post_probe_1_2_late_maneuver")
+    end
+
+    if not goal_recovery_started and m.x >= 2770 then
+      goal_recovery_started = true
+      goal_recovery_frames = 150
+      cooldown = 150
+      log_state("post_probe_1_2_goal_recovery")
+    end
+
+    if not goal_jump_started and m.x >= post_1_2_goal_jump_start and m.x <= post_1_2_goal_jump_start + 120 then
+      goal_jump_started = true
+      goal_carry_frames = post_1_2_goal_carry_frames
+      log_state("post_probe_1_2_goal_carry")
+    end
+
+    if hill_delay_frames > 0 then
+      held.right = true
+      held.B = hill_slow_frames <= 0
+      held.A = false
+      hill_delay_frames = hill_delay_frames - 1
+      if hill_slow_frames > 0 then
+        hill_slow_frames = hill_slow_frames - 1
+      end
+    elseif hill_jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      hill_jump_frames = hill_jump_frames - 1
+    elseif late_delay_frames > 0 then
+      held.right = true
+      held.B = late_slow_frames <= 0
+      held.A = false
+      late_delay_frames = late_delay_frames - 1
+      if late_slow_frames > 0 then
+        late_slow_frames = late_slow_frames - 1
+      end
+    elseif late_jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      late_jump_frames = late_jump_frames - 1
+    elseif goal_carry_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      goal_carry_frames = goal_carry_frames - 1
+    elseif goal_recovery_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = goal_recovery_frames > 90
+      goal_recovery_frames = goal_recovery_frames - 1
+    elseif jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.right = true
+      held.B = true
+      held.A = false
+      if cooldown > 0 then
+        cooldown = cooldown - 1
+      end
+      if grounded and cooldown == 0 then
+        if m.x >= 500 and m.x <= 590 then
+          jump_frames = 42
+          cooldown = 56
+          log_state("post_probe_1_2_jump_first_gap")
+        elseif grounded and m.x >= post_1_2_goal_jump_start and m.x <= post_1_2_goal_jump_start + 90 then
+          jump_frames = post_1_2_goal_jump_frames
+          cooldown = 80
+          log_state("post_probe_1_2_jump_goal_card")
+        elseif enemy ~= nil
+            and enemy.dx >= post_1_2_enemy_min_dx
+            and enemy.dx < post_1_2_enemy_max_dx
+            and enemy.dy > -45 then
+          if m.x >= post_1_2_hill_enemy_start and m.x <= post_1_2_hill_enemy_end then
+            jump_frames = post_1_2_hill_enemy_jump_frames
+          else
+            jump_frames = post_1_2_enemy_jump_frames
+          end
+          cooldown = 42
+          log_state("post_probe_1_2_jump_enemy")
+        elseif stuck_frames > 45 and m.x >= 320 and m.x <= 370 then
+          jump_frames = 54
+          cooldown = 72
+          stuck_frames = 0
+          log_state("post_probe_1_2_jump_hill_pipe")
+        elseif stuck_frames > 45 then
+          jump_frames = 32
+          cooldown = 48
+          stuck_frames = 0
+          log_state("post_probe_1_2_jump_stuck")
+        end
+      end
+    end
+
+    if first_gap_carry then
+      held.A = true
+    end
+    if goal_recovery_frames <= 0 then
+      held.left = false
+    end
+    apply()
+    if frame % 30 == 0 then
+      log_state("post_probe_1_2_tick")
+    end
+    FCEU.frameadvance()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  apply()
+  advance(240, "post_probe_1_2_after")
+  log_state("post_probe_1_2_done")
+end
+
+local function drive_1_2_to_hill_checkpoint()
+  local jump_frames = 0
+  local cooldown = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local hill_maneuver_started = false
+  local hill_delay_frames = 0
+  local hill_jump_frames = 0
+  local hill_slow_frames = 0
+  held.right = true
+  held.B = true
+  for frame = 1, 1800 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local grounded = m.air == 0
+    local first_gap_carry = m.x >= 470 and m.x <= 650 and m.y < 390
+
+    if m.x >= post_1_2_hill_search_start and m.x < 8192 then
+      held.A = false
+      held.B = false
+      held.right = false
+      held.left = false
+      apply()
+      log_state("post_probe_1_2_hill_checkpoint")
+      return true
+    end
+
+    if m.x >= 8192 or m.y == 0 then
+      log_state("post_probe_1_2_hill_checkpoint_failed")
+      return false
+    end
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if not hill_maneuver_started and grounded and m.x >= 1180 and m.x <= 1220 then
+      hill_maneuver_started = true
+      hill_delay_frames = post_1_2_hill_delay_frames
+      hill_jump_frames = post_1_2_hill_jump_frames
+      hill_slow_frames = post_1_2_hill_slow_frames
+      cooldown = hill_delay_frames + hill_jump_frames + 20
+      log_state("post_probe_1_2_hill_maneuver")
+    end
+
+    if hill_delay_frames > 0 then
+      held.right = true
+      held.B = hill_slow_frames <= 0
+      held.A = false
+      hill_delay_frames = hill_delay_frames - 1
+      if hill_slow_frames > 0 then
+        hill_slow_frames = hill_slow_frames - 1
+      end
+    elseif hill_jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      hill_jump_frames = hill_jump_frames - 1
+    elseif jump_frames > 0 then
       held.right = true
       held.B = true
       held.A = true
@@ -457,19 +687,126 @@ local function run_1_2_naive_probe()
     if first_gap_carry then
       held.A = true
     end
-    held.left = false
     apply()
-    if frame % 30 == 0 then
-      log_state("post_probe_1_2_tick")
-    end
     FCEU.frameadvance()
   end
-  held.A = false
-  held.B = false
-  held.right = false
-  apply()
-  advance(240, "post_probe_1_2_after")
-  log_state("post_probe_1_2_done")
+  log_state("post_probe_1_2_hill_checkpoint_timeout")
+  return false
+end
+
+local function continue_1_2_after_hill(candidate_id, max_frames)
+  local jump_frames = 0
+  local cooldown = 0
+  local max_x = 0
+  local last_x = 0
+  local stuck_frames = 0
+  for frame = 1, max_frames do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local grounded = m.air == 0
+
+    if m.x >= 8192 or m.y == 0 then
+      log_state("post_probe_1_2_search_transition", "candidate=" .. tostring(candidate_id) .. " max_x=" .. tostring(max_x))
+      return max_x
+    end
+
+    max_x = math.max(max_x, m.x)
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.right = true
+      held.B = true
+      held.A = false
+      if cooldown > 0 then
+        cooldown = cooldown - 1
+      end
+      if grounded and cooldown == 0 then
+        if enemy ~= nil and enemy.dx >= 0 and enemy.dx < 85 and enemy.dy > -45 then
+          jump_frames = 20
+          cooldown = 34
+        elseif stuck_frames > 30 then
+          jump_frames = 42
+          cooldown = 40
+          stuck_frames = 0
+        end
+      end
+    end
+    apply()
+    FCEU.frameadvance()
+  end
+  log_state("post_probe_1_2_search_done", "candidate=" .. tostring(candidate_id) .. " max_x=" .. tostring(max_x))
+  return max_x
+end
+
+local function run_1_2_hill_search()
+  if not drive_1_2_to_hill_checkpoint() then
+    return
+  end
+
+  local checkpoint = savestate.create()
+  savestate.save(checkpoint)
+  local candidate = 0
+  local best_x = -1
+  local best_candidate = -1
+
+  local delays = {0, 6, 12, 18, 24, 30, 36}
+  local holds = {12, 18, 24, 30, 36, 42, 50, 60}
+  local slow_frames = {0, 10, 20}
+
+  for _, delay in ipairs(delays) do
+    for _, hold in ipairs(holds) do
+      for _, slow in ipairs(slow_frames) do
+        candidate = candidate + 1
+        savestate.load(checkpoint)
+        held.A = false
+        held.left = false
+        held.right = true
+        held.B = true
+        for i = 1, delay do
+          if slow > 0 and i <= slow then
+            held.B = false
+          else
+            held.B = true
+          end
+          apply()
+          FCEU.frameadvance()
+        end
+        held.A = true
+        held.B = true
+        held.right = true
+        for i = 1, hold do
+          apply()
+          FCEU.frameadvance()
+        end
+        held.A = false
+        local max_x = continue_1_2_after_hill(candidate, 900)
+        if max_x > best_x then
+          best_x = max_x
+          best_candidate = candidate
+          log_state(
+            "post_probe_1_2_search_best",
+            "candidate=" .. tostring(candidate)
+              .. " delay=" .. tostring(delay)
+              .. " hold=" .. tostring(hold)
+              .. " slow=" .. tostring(slow)
+              .. " max_x=" .. tostring(max_x)
+          )
+        end
+      end
+    end
+  end
+  log_state("post_probe_1_2_search_complete", "best_candidate=" .. tostring(best_candidate) .. " best_x=" .. tostring(best_x))
 end
 
 local function run_post_1_1_probe()
@@ -477,7 +814,11 @@ local function run_post_1_1_probe()
     enter_1_2_from_map(600)
   elseif post_1_1_probe == "run_1_2_naive" then
     enter_1_2_from_map(180)
-    run_1_2_naive_probe()
+    if post_1_2_route_mode == "hill_search" then
+      run_1_2_hill_search()
+    else
+      run_1_2_naive_probe()
+    end
   end
 end
 

@@ -27,6 +27,7 @@ class BatchSummary:
     attempts: tuple[AttemptSummary, ...]
     post_probe_max_x: int = -1
     post_probe_last_event: str | None = None
+    post_probe_clear: bool = False
 
     @property
     def success_count(self) -> int:
@@ -61,6 +62,7 @@ class BatchSummary:
             lines.append(f"post_probe_max_x={self.post_probe_max_x}")
         if self.post_probe_last_event is not None:
             lines.append(f"post_probe_last_event={self.post_probe_last_event}")
+        lines.append(f"post_probe_clear={str(self.post_probe_clear).lower()}")
         return "\n".join(lines)
 
 
@@ -75,6 +77,7 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
     current_attempt: int | None = None
     post_probe_max_x = -1
     post_probe_last_event: str | None = None
+    post_probe_clear = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -82,6 +85,8 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
         x_match = X_RE.search(line)
         if event is not None and event.startswith("post_probe_"):
             post_probe_last_event = event
+            if event == "post_probe_1_2_success_course_clear":
+                post_probe_clear = True
             if x_match is not None:
                 x = int(x_match.group("x"))
                 if 0 <= x < 8192:
@@ -125,6 +130,7 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
         ),
         post_probe_max_x=post_probe_max_x,
         post_probe_last_event=post_probe_last_event,
+        post_probe_clear=post_probe_clear,
     )
 
 

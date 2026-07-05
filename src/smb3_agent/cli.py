@@ -177,6 +177,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exit non-zero unless every attempt clears the level",
     )
+    fceux_1_1.add_argument(
+        "--require-post-probe-clear",
+        action="store_true",
+        help="Exit non-zero unless the optional post-1-1 probe reports a course clear",
+    )
 
     review_fceux = task_subparsers.add_parser(
         "review-fceux-log",
@@ -288,6 +293,8 @@ def main() -> None:
         )
         print(summary.to_text())
         if args.require_perfect and summary.success_count != summary.total:
+            raise SystemExit(1)
+        if args.require_post_probe_clear and not summary.post_probe_clear:
             raise SystemExit(1)
         return
 

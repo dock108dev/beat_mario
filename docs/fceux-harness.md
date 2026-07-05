@@ -63,24 +63,33 @@ The current probe command is:
 python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_enter_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe enter_1_2 --require-perfect
 ```
 
-## World 1-2 Naive Probe
+## World 1-2 Clear Gate
 
-The current naive 1-2 probe is deliberately diagnostic:
+The current 1-2 route runs as a post-1-1 probe. It clears 1-1, enters 1-2
+from the map, executes the memory-aware 1-2 route, and exits non-zero unless
+the 1-2 probe reports a course clear:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect
-python -m smb3_agent task review-fceux-log --log artifacts/fceux/probe_run_1_2/fceux_1_1.log --attempts 1
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/gate_1_2 --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
 ```
 
-It currently gets through the first pipe gap and reports approximately:
+Passing means:
 
 ```text
-post_probe_max_x=1337
+successes=1/1
+post_probe_clear=true
 ```
 
-The next failure is the steep-hill enemy cluster after the first gap. The next
-useful route work is to tune that cluster with screenshots and max-x logs, not
-to broaden the route runner.
+The 1-2 success marker requires the route to reach the goal card threshold and
+then hit the normal level transition. This avoids counting a near-miss or invalid
+transition as a clear.
+
+For screenshot-backed review:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/inspect_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
+python -m smb3_agent task fceux-contact-sheet --input-dir artifacts/fceux/inspect_1_2/images
+```
 
 For quick Lua parameter sweeps, pass explicit overrides:
 
@@ -97,4 +106,14 @@ SMB3_1_2_ENEMY_JUMP_FRAMES
 SMB3_1_2_HILL_ENEMY_JUMP_FRAMES
 SMB3_1_2_HILL_ENEMY_START
 SMB3_1_2_HILL_ENEMY_END
+SMB3_1_2_HILL_DELAY_FRAMES
+SMB3_1_2_HILL_JUMP_FRAMES
+SMB3_1_2_HILL_SLOW_FRAMES
+SMB3_1_2_LATE_JUMP_START
+SMB3_1_2_LATE_DELAY_FRAMES
+SMB3_1_2_LATE_JUMP_FRAMES
+SMB3_1_2_LATE_SLOW_FRAMES
+SMB3_1_2_GOAL_JUMP_START
+SMB3_1_2_GOAL_JUMP_FRAMES
+SMB3_1_2_GOAL_CARRY_FRAMES
 ```

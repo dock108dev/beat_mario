@@ -157,15 +157,27 @@ This clears World 1-1, waits for the World 1 map, moves right twice, presses A,
 and captures the next level start. The confirmed 1-2 start signature is a level
 screen with Mario near `x=24`.
 
-To run the current naive 1-2 exploration after entering 1-2:
+To run the current 1-2 clear route after entering 1-2:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect
-python -m smb3_agent task review-fceux-log --log artifacts/fceux/probe_run_1_2/fceux_1_1.log --attempts 1
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/gate_1_2 --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
 ```
 
-Current known result: the probe clears the first pipe gap and reaches roughly
-`post_probe_max_x=1337` before failing in the steep-hill enemy cluster.
+Expected summary:
+
+```text
+successes=1/1
+post_probe_clear=true
+```
+
+For visual review, add `--capture-images --capture-ticks` and build a contact
+sheet from the run's `images` directory.
+
+To reprint a saved summary:
+
+```bash
+python -m smb3_agent task review-fceux-log --log artifacts/fceux/gate_1_2/fceux_1_1.log --attempts 1
+```
 
 ## Detect
 
