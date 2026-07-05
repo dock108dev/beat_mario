@@ -87,3 +87,13 @@ For quick Lua parameter sweeps, pass explicit overrides:
 ```bash
 python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2_hill_32 --post-1-1-probe run_1_2_naive --after-attempt-frames 900 --set-env SMB3_1_2_HILL_ENEMY_JUMP_FRAMES=32 --require-perfect
 ```
+
+Current 1-2 tuning keys:
+
+```text
+SMB3_1_2_ENEMY_MIN_DX
+SMB3_1_2_ENEMY_JUMP_FRAMES
+SMB3_1_2_HILL_ENEMY_JUMP_FRAMES
+SMB3_1_2_HILL_ENEMY_START
+SMB3_1_2_HILL_ENEMY_END
+```
