@@ -46,6 +46,14 @@ python -m smb3_agent task fceux-contact-sheet --input-dir artifacts/fceux/inspec
 The contact sheet is useful for route tuning and debugging, but it is not the
 source of truth for pass/fail. The structured log markers are.
 
+For a visible full-speed demo, run the route with a small frame sleep:
+
+```bash
+SMB3_AGENT_FRAME_SLEEP_SECONDS=0.0135 python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/show_start_to_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
+```
+
+The sleep is only for watching the route. Leave it unset for reliability gates.
+
 ## Next Segment
 
 The next route target is World 1-2 entry:

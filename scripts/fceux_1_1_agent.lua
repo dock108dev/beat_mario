@@ -10,6 +10,8 @@ local stair_climb_frames = tonumber(os.getenv("SMB3_STAIR_CLIMB_FRAMES") or "32"
 local after_attempt_frames = tonumber(os.getenv("SMB3_AFTER_ATTEMPT_FRAMES") or "180")
 local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
 local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
+local speed_mode = os.getenv("SMB3_AGENT_SPEED_MODE")
+local frame_sleep_seconds = tonumber(os.getenv("SMB3_AGENT_FRAME_SLEEP_SECONDS") or "0")
 local post_1_2_route_mode = os.getenv("SMB3_1_2_ROUTE_MODE") or "naive"
 local post_1_2_enemy_min_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MIN_DX") or "0")
 local post_1_2_enemy_max_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MAX_DX") or "95")
@@ -31,7 +33,18 @@ local post_1_2_goal_jump_frames = tonumber(os.getenv("SMB3_1_2_GOAL_JUMP_FRAMES"
 local post_1_2_goal_carry_frames = tonumber(os.getenv("SMB3_1_2_GOAL_CARRY_FRAMES") or "60")
 local log = assert(io.open(log_path, "w"))
 
+if speed_mode ~= nil and speed_mode ~= "" then
+  FCEU.speedmode(speed_mode)
+end
+
 local held = {}
+
+local function advance_frame()
+  FCEU.frameadvance()
+  if frame_sleep_seconds > 0 then
+    os.execute("sleep " .. tostring(frame_sleep_seconds))
+  end
+end
 
 local function mario()
   local x = memory.readbyte(0x90) + memory.readbyte(0x75) * 256
@@ -129,7 +142,7 @@ local function advance(frames, event)
     elseif movie.framecount() % 30 == 0 then
       log_state("tick")
     end
-    FCEU.frameadvance()
+    advance_frame()
   end
 end
 
@@ -234,7 +247,7 @@ local function run_agent(attempt)
       if frame % 30 == 0 or (m.x > 1450 and frame % 10 == 0) then
         log_state("agent_tick")
       end
-      FCEU.frameadvance()
+      advance_frame()
     elseif enemy ~= nil and (
       (grounded and enemy.id == -90 and enemy.dx >= 0 and enemy.dx < 45 and m.x >= 300 and m.x <= 380)
       or (enemy.id == -92 and enemy.dx >= 0 and enemy.dx < 55 and m.x >= 1800 and m.x <= 1900)
@@ -270,7 +283,7 @@ local function run_agent(attempt)
         log_state("jump_after_plant_wait")
       end
       apply()
-      FCEU.frameadvance()
+      advance_frame()
     else
       held.right = true
       if slow_b_frames > 0 then
@@ -369,7 +382,7 @@ local function run_agent(attempt)
       if frame % 30 == 0 then
         log_state("agent_tick")
       end
-      FCEU.frameadvance()
+      advance_frame()
     end
   end
   held.A = false
@@ -571,7 +584,7 @@ local function run_1_2_naive_probe()
     if frame % 30 == 0 then
       log_state("post_probe_1_2_tick")
     end
-    FCEU.frameadvance()
+    advance_frame()
   end
   held.A = false
   held.B = false
@@ -688,7 +701,7 @@ local function drive_1_2_to_hill_checkpoint()
       held.A = true
     end
     apply()
-    FCEU.frameadvance()
+    advance_frame()
   end
   log_state("post_probe_1_2_hill_checkpoint_timeout")
   return false
@@ -743,7 +756,7 @@ local function continue_1_2_after_hill(candidate_id, max_frames)
       end
     end
     apply()
-    FCEU.frameadvance()
+    advance_frame()
   end
   log_state("post_probe_1_2_search_done", "candidate=" .. tostring(candidate_id) .. " max_x=" .. tostring(max_x))
   return max_x
@@ -780,14 +793,14 @@ local function run_1_2_hill_search()
             held.B = true
           end
           apply()
-          FCEU.frameadvance()
+          advance_frame()
         end
         held.A = true
         held.B = true
         held.right = true
         for i = 1, hold do
           apply()
-          FCEU.frameadvance()
+          advance_frame()
         end
         held.A = false
         local max_x = continue_1_2_after_hill(candidate, 900)
