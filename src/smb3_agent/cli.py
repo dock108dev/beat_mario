@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 
 from smb3_agent.detection.state_detector import detect_state
+from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
+from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
 from smb3_agent.tasks.checkpoint_1_1 import run_checkpoint_1_1_task
 from smb3_agent.tasks.enter_1_1 import run_enter_1_1_task
@@ -139,6 +141,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds between captured evidence frames while the input script runs; use 0 to disable sampling",
     )
 
+    fceux_1_1 = task_subparsers.add_parser(
+        "fceux-1-1",
+        help="Run the memory-aware FCEUX World 1-1 route",
+    )
+    fceux_1_1.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    fceux_1_1.add_argument(
+        "--script",
+        default="scripts/fceux_1_1_agent.lua",
+        help="Lua route script to load in FCEUX",
+    )
+    fceux_1_1.add_argument(
+        "--artifacts-dir",
+        default="artifacts/fceux/cli_1_1",
+        help="Directory for route logs and optional screenshots",
+    )
+    fceux_1_1.add_argument("--attempts", type=int, default=10)
+    fceux_1_1.add_argument("--capture-images", action="store_true")
+    fceux_1_1.add_argument("--capture-ticks", action="store_true")
+    fceux_1_1.add_argument("--after-attempt-frames", type=int, default=None)
+    fceux_1_1.add_argument(
+        "--post-1-1-probe",
+        choices=["enter_1_2"],
+        default=None,
+        help="Optional probe to run after the final successful 1-1 clear",
+    )
+    fceux_1_1.add_argument(
+        "--require-perfect",
+        action="store_true",
+        help="Exit non-zero unless every attempt clears the level",
+    )
+
+    review_fceux = task_subparsers.add_parser(
+        "review-fceux-log",
+        help="Summarize a FCEUX route log",
+    )
+    review_fceux.add_argument("--log", required=True, help="Path to a FCEUX route log")
+    review_fceux.add_argument("--attempts", type=int, default=None)
+
+    fceux_contact_sheet = task_subparsers.add_parser(
+        "fceux-contact-sheet",
+        help="Convert FCEUX screenshots to PNG and write a contact sheet",
+    )
+    fceux_contact_sheet.add_argument("--input-dir", required=True, help="Directory containing .gd screenshots")
+    fceux_contact_sheet.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory for converted PNG screenshots; defaults to INPUT_DIR/png",
+    )
+    fceux_contact_sheet.add_argument(
+        "--sheet",
+        default=None,
+        help="Path for the contact sheet; defaults to OUTPUT_DIR/contact_sheet.png",
+    )
+    fceux_contact_sheet.add_argument("--columns", type=int, default=4)
+
     return parser
 
 
@@ -209,6 +266,37 @@ def main() -> None:
             save_final_slot=args.save_final_slot,
             sample_interval_seconds=args.sample_interval_seconds,
         )
+        return
+
+    if args.command == "task" and args.task_name == "fceux-1-1":
+        summary = run_fceux_1_1(
+            game_path=Path(args.game_file),
+            script_path=Path(args.script),
+            artifacts_dir=Path(args.artifacts_dir),
+            attempts=args.attempts,
+            capture_images=args.capture_images,
+            capture_ticks=args.capture_ticks,
+            after_attempt_frames=args.after_attempt_frames,
+            post_1_1_probe=args.post_1_1_probe,
+        )
+        print(summary.to_text())
+        if args.require_perfect and summary.success_count != summary.total:
+            raise SystemExit(1)
+        return
+
+    if args.command == "task" and args.task_name == "review-fceux-log":
+        summary = parse_fceux_log(Path(args.log), expected_attempts=args.attempts)
+        print(summary.to_text())
+        return
+
+    if args.command == "task" and args.task_name == "fceux-contact-sheet":
+        input_dir = Path(args.input_dir)
+        output_dir = Path(args.output_dir) if args.output_dir else input_dir / "png"
+        sheet_path = Path(args.sheet) if args.sheet else output_dir / "contact_sheet.png"
+        converted = convert_gd_directory(input_dir, output_dir)
+        write_contact_sheet(converted, sheet_path, columns=args.columns)
+        print(f"converted={len(converted)}")
+        print(f"sheet={sheet_path}")
         return
 
     parser.error("Unsupported command")

@@ -31,7 +31,9 @@ Place a legally obtained SMB3 NES game file at:
 
 NES game files, generated attempt artifacts, and local save states are intentionally not committed.
 
-Mednafen is the current emulator backend.
+FCEUX is the current reliable route backend. The older Mednafen tasks remain useful for
+window/capture experiments, but the working World 1-1 route uses FCEUX memory reads
+and Lua input control.
 
 ## Controls
 
@@ -113,6 +115,47 @@ python -m smb3_agent task run-1-1-script --slot 0 --script data/routes/scripts/w
 ```
 
 The latest route clears World 1-1 from the clean 1-1 checkpoint and returns to the World 1 map.
+
+## FCEUX 1-1 Reliability Gate
+
+Run:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 10 --artifacts-dir artifacts/fceux/cli_gate_1_1 --require-perfect
+```
+
+The command runs `scripts/fceux_1_1_agent.lua`, writes a route log, parses the
+attempt markers, and exits non-zero unless every attempt clears World 1-1.
+
+Expected summary:
+
+```text
+successes=10/10
+bad_states=0/10
+```
+
+If screenshots are enabled, convert FCEUX `.gd` captures to PNG and create a
+contact sheet:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/inspect_1_1 --capture-images
+python -m smb3_agent task fceux-contact-sheet --input-dir artifacts/fceux/inspect_1_1/images
+```
+
+The contact sheet is a review aid only. Route success is based on route log
+markers, not visual inspection.
+
+## FCEUX Enter 1-2 Probe
+
+Run:
+
+```bash
+python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_enter_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe enter_1_2 --require-perfect
+```
+
+This clears World 1-1, waits for the World 1 map, moves right twice, presses A,
+and captures the next level start. The confirmed 1-2 start signature is a level
+screen with Mario near `x=24`.
 
 ## Detect
 

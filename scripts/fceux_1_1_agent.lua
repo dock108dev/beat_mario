@@ -7,6 +7,9 @@ local late_gap_frames = tonumber(os.getenv("SMB3_LATE_GAP_FRAMES") or "56")
 local late_gap_hold_b = os.getenv("SMB3_LATE_GAP_HOLD_B") ~= "0"
 local late_gap_slow_b_frames = tonumber(os.getenv("SMB3_LATE_GAP_SLOW_B_FRAMES") or "0")
 local stair_climb_frames = tonumber(os.getenv("SMB3_STAIR_CLIMB_FRAMES") or "32")
+local after_attempt_frames = tonumber(os.getenv("SMB3_AFTER_ATTEMPT_FRAMES") or "180")
+local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
+local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
 local log = assert(io.open(log_path, "w"))
 
 local held = {}
@@ -71,6 +74,8 @@ local function log_state(event, extra)
     string.find(event, "bad_state")
     or string.find(event, "reached_end")
     or string.find(event, "jump_")
+    or string.find(event, "post_")
+    or (capture_ticks and event == "tick")
     or (event == "agent_tick" and m.x > 1200)
   ) then
     local safe_event = string.gsub(event, "[^A-Za-z0-9_%-]", "_")
@@ -164,6 +169,7 @@ local function run_agent(attempt)
   local stuck_frames = 0
   local reached_end_area = false
   local reached_goal_area = false
+  local course_clear = false
   held.right = true
   held.B = true
   for frame = 1, 3600 do
@@ -186,6 +192,7 @@ local function run_agent(attempt)
     if m.x >= 8192 or m.y == 0 then
       if reached_goal_area then
         log_state("attempt_" .. tostring(attempt) .. "_success_course_clear")
+        course_clear = true
       else
         log_state("attempt_" .. tostring(attempt) .. "_bad_state")
       end
@@ -350,8 +357,23 @@ local function run_agent(attempt)
   held.B = false
   held.right = false
   apply()
-  advance(180, "attempt_" .. tostring(attempt) .. "_after")
+  advance(after_attempt_frames, "attempt_" .. tostring(attempt) .. "_after")
   log_state("attempt_" .. tostring(attempt) .. "_done")
+  return course_clear
+end
+
+local function run_post_1_1_probe()
+  if post_1_1_probe == "enter_1_2" then
+    log_state("post_probe_enter_1_2_start")
+    advance(120, "post_probe_map_wait")
+    press("right", 18, "post_probe_map_right_1")
+    advance(60, "post_probe_after_right_1")
+    press("right", 18, "post_probe_map_right_2")
+    advance(60, "post_probe_after_right_2")
+    press("A", 18, "post_probe_map_enter")
+    advance(600, "post_probe_after_enter")
+    log_state("post_probe_enter_1_2_done")
+  end
 end
 
 bootstrap_to_level()
@@ -361,7 +383,10 @@ savestate.save(checkpoint)
 for attempt = 1, attempts do
   savestate.load(checkpoint)
   advance(10, "attempt_" .. tostring(attempt) .. "_start")
-  run_agent(attempt)
+  local success = run_agent(attempt)
+  if attempt == attempts and success then
+    run_post_1_1_probe()
+  end
 end
 
 log:close()
