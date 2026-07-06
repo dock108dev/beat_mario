@@ -13,6 +13,7 @@ Command:
 
 ```bash
 python -m smb3_agent task fceux-1-1 \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/cli_gate_1_1 \
   --require-perfect
@@ -42,6 +43,7 @@ Command:
 
 ```bash
 python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/world_1_king \
   --require-perfect

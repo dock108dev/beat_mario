@@ -43,6 +43,7 @@ Run the strict World 1-1 gate:
 
 ```bash
 python -m smb3_agent task fceux-1-1 \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/cli_gate_1_1 \
   --require-perfect
@@ -52,6 +53,7 @@ Run the current World 1 king-transition gate:
 
 ```bash
 python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/world_1_king \
   --require-perfect

@@ -9,21 +9,24 @@ documented.
 Command:
 
 ```bash
-git status --short --ignored
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
 ```
 
 Pass condition:
 
-- Source/docs/tests intended for review are visible as tracked changes.
+- Whitespace checks pass.
+- Source/docs/tests intended for review are visible as tracked or untracked
+  changes.
 - Runtime artifacts and local emulator files are ignored.
 - No generated screenshot/log directories are staged.
+- Unit tests pass.
 
 ## Gate 1: Unit Tests
 
 Command:
 
 ```bash
-python -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
 Pass condition:
@@ -39,7 +42,9 @@ The exact count may grow, but the suite must pass.
 Command:
 
 ```bash
+SMB3_GAME_FILE=/path/to/local-game-file \
 python -m smb3_agent task fceux-1-1 \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/cli_gate_1_1 \
   --require-perfect
@@ -60,7 +65,9 @@ World 1-1 reliably.
 Command:
 
 ```bash
+SMB3_GAME_FILE=/path/to/local-game-file \
 python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/world_1_king \
   --require-perfect

@@ -20,8 +20,7 @@ Implementation:
 Validation gate:
 
 ```bash
-git status --short --ignored
-python -m pytest -q
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
 ```
 
 Pass condition:
@@ -41,7 +40,9 @@ Implementation:
 Validation gate:
 
 ```bash
+SMB3_GAME_FILE=/path/to/local-game-file \
 python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 3 \
   --artifacts-dir artifacts/fceux/doc_gate_world_1_king \
   --require-perfect
@@ -52,6 +53,8 @@ Pass condition:
 - Command exits zero.
 - Summary includes `post_probe_clear=true`.
 - Route status doc matches the result.
+- If `SMB3_GAME_FILE` is not set on a machine, the repo-only Phase 0 gate can
+  still pass, but live route truth is not refreshed.
 
 ## Phase 1: Explicit Goal Contracts
 
