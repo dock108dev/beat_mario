@@ -18,6 +18,7 @@ The repo currently has:
 - Screenshot/contact-sheet tooling for review.
 - Phase 6 attempt-lab scaffolding for sessions, human notes, route variants,
   and evidence-backed iteration.
+- Issue-ledger, UI-summary, and Codex-task layers for batch note review.
 - Parser tests for route summaries and post-probe success markers.
 
 See [docs/route-status.md](docs/route-status.md) for what is solved, bridged,
@@ -105,6 +106,21 @@ python -m smb3_agent lab review latest
 python -m smb3_agent lab propose-variant latest
 ```
 
+Batch review lab commands:
+
+```bash
+python -m smb3_agent lab issues latest
+python -m smb3_agent lab propose-variants latest
+python -m smb3_agent lab ui-summary latest
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
+```
+
+Serve the local lab UI:
+
+```bash
+python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
+```
+
 Review an existing log:
 
 ```bash
@@ -122,6 +138,7 @@ python -m smb3_agent task review-fceux-log \
 - [Agent architecture](docs/agent-architecture.md)
 - [Attempt lab](docs/attempt-lab.md)
 - [World 1 lab guide](docs/world-1-lab-guide.md)
+- [Lab UI plan](docs/lab-ui-plan.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Validation gates](docs/validation-gates.md)
 - [Route status](docs/route-status.md)

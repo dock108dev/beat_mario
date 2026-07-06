@@ -83,6 +83,15 @@ This writes:
 The review links notes to route-log evidence and recommends one controlled
 experiment.
 
+Batch flow:
+
+```bash
+python -m smb3_agent lab issues latest
+python -m smb3_agent lab propose-variants latest
+python -m smb3_agent lab ui-summary latest
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
+```
+
 ## Propose A Variant
 
 ```bash
@@ -91,6 +100,9 @@ python -m smb3_agent lab propose-variant latest
 
 This creates a YAML proposal under `data/variants/`. It does not edit the
 baseline route.
+
+For multi-note sessions, treat this as a compatibility shortcut. The intended
+next behavior is one proposal per actionable issue.
 
 ## Validate A Variant
 
@@ -117,7 +129,7 @@ The command refuses to promote unless the variant has a passing validation
 artifact. When promotion succeeds, it writes baseline metadata and backs up the
 previous baseline metadata under `data/variants/backups/`.
 
-## Good World 1 Workflow
+## Current World 1 Workflow
 
 1. Run `lab start "show me the route at 1x" --attempts 1`.
 2. Add notes while the issue is fresh.
@@ -139,3 +151,49 @@ python -m smb3_agent lab compare-variant VARIANT_ID
 ```
 
 Replace `VARIANT_ID` with the id printed by `lab propose-variant`.
+
+## Batch Workflow
+
+Use this shape when you have notes across several World 1 segments:
+
+1. Run the route once.
+2. Add notes across many segments.
+3. Generate an issue ledger.
+4. Review grouped issues.
+5. Generate one proposal per actionable issue.
+6. Create a Codex task packet for the issue you want patched first.
+7. Validate only the selected proposal.
+
+Example command flow:
+
+```bash
+python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+python -m smb3_agent lab note latest "1-1 falls into hole at 283 on clock." --segment world_1_1 --severity harden
+python -m smb3_agent lab note latest "1-2 and 1-3 are perfect. 1-3 whistle exit is expected." --segment world_1_3_whistle --severity note
+python -m smb3_agent lab note latest "Castle dies first try every time, then carry-over inputs seem to send the route to 1-4." --segment world_1_fortress_whistle --severity harden
+python -m smb3_agent lab issues latest
+python -m smb3_agent lab propose-variants latest
+python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+```
+
+## Route Map UI
+
+Start the local UI:
+
+```bash
+python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765
+```
+
+The UI lets you:
+
+- see every World 1 route segment
+- add notes across multiple segments
+- submit the batch to the latest session
+- regenerate issues and proposals
+- create Codex task packets for actionable issues

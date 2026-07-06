@@ -16,8 +16,10 @@ User Directive
   -> Recovery Manager
   -> Attempt Logger
   -> Note Collector
+  -> Issue Ledger
   -> Reviewer
   -> Variant Manager
+  -> Codex Task Builder
   -> Knowledge Store
 ```
 
@@ -122,7 +124,8 @@ mode used.
 
 ## Reviewer
 
-The reviewer explains failed attempts and recommends the next experiment.
+The reviewer explains failed attempts, groups notes into issues, and recommends
+the next experiments.
 
 Minimum output:
 
@@ -152,6 +155,20 @@ Notes should preserve the raw user text and optional anchors such as segment,
 attempt number, frame, event, screenshot, wall-clock time, or in-game timer.
 Machine interpretation belongs in the review, not in the raw note.
 
+## Issue Ledger
+
+The issue ledger turns a batch of notes into durable route work. It prevents the
+system from collapsing a whole run into one proposal just because one note came
+first.
+
+Responsibilities:
+
+- Group notes by segment and problem type.
+- Track positive evidence and expected behavior separately from actionable bugs.
+- Assign priority.
+- Preserve source note ids.
+- Feed variant proposal generation and UI summaries.
+
 ## Variant Manager
 
 The variant manager protects the known-working route while experiments happen.
@@ -164,6 +181,23 @@ Responsibilities:
 - Compare variant results with parent results.
 - Promote only when the configured gate passes.
 - Preserve enough metadata to roll back a bad promotion.
+
+## Codex Task Builder
+
+The task builder packages a selected issue for Codex CLI or another patch agent.
+
+It should include:
+
+- session manifest
+- notes and issue ledger
+- selected issue
+- nearby log excerpts
+- segment catalog
+- relevant route source files
+- requested validation command
+
+Codex can propose or implement patches, but the lab should still validate,
+compare, and promote through explicit gates.
 
 ## Knowledge Store
 

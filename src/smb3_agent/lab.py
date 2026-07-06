@@ -118,6 +118,7 @@ class VariantProposalResult:
                 f"parent_variant={self.proposal['parent_variant']}",
                 f"status={self.proposal['status']}",
                 f"source_session={self.proposal['source_session']}",
+                f"source_issue={self.proposal.get('source_issue', 'none')}",
                 f"source_notes={','.join(self.proposal['source_notes'])}",
                 f"validation_command={self.proposal['validation']['command']}",
             ]
@@ -161,6 +162,105 @@ class VariantPromotionResult:
                 f"backup={self.backup_path}",
                 f"promotion={self.promotion_path}",
                 "promoted=true",
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class IssueLedgerResult:
+    session_id: str
+    issues_path: Path
+    issues: tuple[dict[str, Any], ...]
+
+    @property
+    def actionable_count(self) -> int:
+        return sum(1 for issue in self.issues if issue.get("actionable"))
+
+    def to_text(self) -> str:
+        lines = [
+            f"session_id={self.session_id}",
+            f"issues_file={self.issues_path}",
+            f"issues={len(self.issues)}",
+            f"actionable_issues={self.actionable_count}",
+        ]
+        primary = _highest_priority_issue(list(self.issues))
+        if primary is not None:
+            lines.append(f"highest_priority_issue={primary['id']}")
+            lines.append(f"highest_priority_segment={primary['segment_id']}")
+        for issue in self.issues:
+            lines.append(
+                "issue={id} segment={segment_id} type={type} priority={priority} "
+                "actionable={actionable} notes={notes}".format(
+                    id=issue["id"],
+                    segment_id=issue["segment_id"],
+                    type=issue["type"],
+                    priority=issue["priority"],
+                    actionable=str(issue["actionable"]).lower(),
+                    notes=",".join(issue["source_notes"]),
+                )
+            )
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class MultiVariantProposalResult:
+    session_id: str
+    proposals_path: Path
+    proposals: tuple[dict[str, Any], ...]
+
+    def to_text(self) -> str:
+        lines = [
+            f"session_id={self.session_id}",
+            f"proposals_file={self.proposals_path}",
+            f"proposals={len(self.proposals)}",
+        ]
+        for proposal in self.proposals:
+            lines.append(
+                "variant_id={variant_id} source_issue={source_issue} priority={priority} "
+                "status={status}".format(
+                    variant_id=proposal["variant_id"],
+                    source_issue=proposal["source_issue"],
+                    priority=proposal["priority"],
+                    status=proposal["status"],
+                )
+            )
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class UiSummaryResult:
+    session_id: str
+    summary_path: Path
+    summary: dict[str, Any]
+
+    def to_text(self) -> str:
+        return "\n".join(
+            [
+                f"session_id={self.session_id}",
+                f"ui_summary={self.summary_path}",
+                f"segments={len(self.summary['segments'])}",
+                f"notes={self.summary['totals']['notes']}",
+                f"issues={self.summary['totals']['issues']}",
+                f"proposals={self.summary['totals']['proposals']}",
+                f"highest_priority_issue={self.summary.get('highest_priority_issue')}",
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class CodexTaskResult:
+    session_id: str
+    issue_id: str
+    task_path: Path
+    excerpt_path: Path
+
+    def to_text(self) -> str:
+        return "\n".join(
+            [
+                f"session_id={self.session_id}",
+                f"issue_id={self.issue_id}",
+                f"codex_task={self.task_path}",
+                f"route_log_excerpt={self.excerpt_path}",
             ]
         )
 
@@ -252,6 +352,30 @@ def add_note_to_latest(
     )
 
 
+def add_batch_notes_to_latest(notes: list[dict[str, Any]]) -> list[LabNoteResult]:
+    return add_batch_notes(_latest_session_dir(), notes)
+
+
+def add_batch_notes(session_dir: Path, notes: list[dict[str, Any]]) -> list[LabNoteResult]:
+    results: list[LabNoteResult] = []
+    for note in notes:
+        text = str(note.get("text", "")).strip()
+        if not text:
+            continue
+        results.append(
+            add_note(
+                session_dir,
+                text,
+                segment_id=note.get("segment_id"),
+                attempt_number=note.get("attempt_number"),
+                anchor_type=note.get("anchor_type"),
+                anchor_value=note.get("anchor_value"),
+                severity=str(note.get("severity") or "note"),
+            )
+        )
+    return results
+
+
 def add_note(
     session_dir: Path,
     text: str,
@@ -275,7 +399,7 @@ def add_note(
         "id": _next_note_id(notes),
         "created_at": _now(),
         "author": "user",
-        "segment_id": segment_id or _infer_segment_id(text),
+        "segment_id": _canonical_segment_id(segment_id or _infer_segment_id(text)),
         "attempt_number": attempt_number,
         "anchor": _note_anchor(text, anchor_type, anchor_value),
         "severity": severity,
@@ -345,35 +469,12 @@ def propose_variant_from_latest() -> VariantProposalResult:
 
 def propose_variant(session_dir: Path) -> VariantProposalResult:
     manifest = _load_session_manifest(session_dir)
-    review_path = session_dir / "review.yaml"
-    if not review_path.is_file():
-        review_session(session_dir)
-    review = _load_yaml(review_path)
-    source_notes = [note["id"] for note in review.get("linked_notes", [])]
-    variant_id = _variant_id(review)
-    proposal = {
-        "variant_id": variant_id,
-        "parent_variant": manifest.get("route_variant", "world_1_baseline"),
-        "status": "proposed",
-        "created_at": _now(),
-        "reason": review["recommended_experiment"],
-        "source_session": manifest["session_id"],
-        "source_notes": source_notes,
-        "changes": [
-            {
-                "file": _suggested_change_file(review["primary_segment"]),
-                "summary": review["recommended_experiment"],
-            }
-        ],
-        "validation": {
-            "command": f"python -m smb3_agent lab run-variant {variant_id} --attempts 10",
-            "promotion_gate": "10/10 for targeted segment or configured goal gate, with no parent-route regression",
-        },
-        "outcome": {
-            "status": "untested",
-            "artifacts_dir": None,
-        },
-    }
+    issues = build_issue_ledger(session_dir).issues
+    issue = _highest_priority_issue([item for item in issues if item.get("actionable")])
+    if issue is None:
+        raise LabError("No actionable issue exists for variant proposal")
+    proposal = _proposal_from_issue(manifest, issue)
+    variant_id = str(proposal["variant_id"])
     proposal_path = Path("data/variants") / f"{variant_id}.yaml"
     session_proposal_path = session_dir / "variant_proposal.yaml"
     _write_yaml(proposal_path, proposal)
@@ -383,6 +484,175 @@ def propose_variant(session_dir: Path) -> VariantProposalResult:
         proposal_path=proposal_path,
         session_proposal_path=session_proposal_path,
         proposal=proposal,
+    )
+
+
+def build_issue_ledger_latest() -> IssueLedgerResult:
+    return build_issue_ledger(_latest_session_dir())
+
+
+def build_issue_ledger(session_dir: Path) -> IssueLedgerResult:
+    manifest = _load_session_manifest(session_dir)
+    notes = _load_notes(session_dir)
+    issues = _issues_from_notes(str(manifest["session_id"]), notes)
+    issues_path = session_dir / "issues.yaml"
+    _write_yaml(
+        issues_path,
+        {
+            "session_id": manifest["session_id"],
+            "issues": issues,
+        },
+    )
+    return IssueLedgerResult(
+        session_id=str(manifest["session_id"]),
+        issues_path=issues_path,
+        issues=tuple(issues),
+    )
+
+
+def propose_variants_from_latest() -> MultiVariantProposalResult:
+    return propose_variants(_latest_session_dir())
+
+
+def propose_variants(session_dir: Path) -> MultiVariantProposalResult:
+    manifest = _load_session_manifest(session_dir)
+    issues_path = session_dir / "issues.yaml"
+    if not issues_path.is_file():
+        build_issue_ledger(session_dir)
+    issues_doc = _load_yaml(issues_path)
+    issues = [issue for issue in issues_doc.get("issues", []) if isinstance(issue, dict)]
+    proposals: list[dict[str, Any]] = []
+    for issue in sorted((issue for issue in issues if issue.get("actionable")), key=_issue_sort_key):
+        proposals.append(_proposal_from_issue(manifest, issue))
+
+    proposals_path = session_dir / "variant_proposals.yaml"
+    _write_yaml(
+        proposals_path,
+        {
+            "session_id": manifest["session_id"],
+            "proposals": proposals,
+        },
+    )
+    for proposal in proposals:
+        _write_yaml(Path("data/variants") / f"{proposal['variant_id']}.yaml", proposal)
+    return MultiVariantProposalResult(
+        session_id=str(manifest["session_id"]),
+        proposals_path=proposals_path,
+        proposals=tuple(proposals),
+    )
+
+
+def write_ui_summary_latest() -> UiSummaryResult:
+    return write_ui_summary(_latest_session_dir())
+
+
+def write_ui_summary(
+    session_dir: Path,
+    *,
+    segment_catalog_path: Path = Path("data/segments/world_1.yaml"),
+) -> UiSummaryResult:
+    manifest = _load_session_manifest(session_dir)
+    notes = _load_notes(session_dir)
+    if not (session_dir / "issues.yaml").is_file():
+        build_issue_ledger(session_dir)
+    issues = _load_yaml(session_dir / "issues.yaml").get("issues", [])
+    if not (session_dir / "variant_proposals.yaml").is_file():
+        propose_variants(session_dir)
+    proposals = _load_yaml(session_dir / "variant_proposals.yaml").get("proposals", [])
+    segments = _load_segment_summaries(segment_catalog_path)
+    highest = _highest_priority_issue([issue for issue in issues if isinstance(issue, dict)])
+    segment_rows = []
+    for segment in segments:
+        segment_id = segment["id"]
+        segment_notes = [note for note in notes if _canonical_segment_id(str(note.get("segment_id"))) == segment_id]
+        segment_issues = [issue for issue in issues if isinstance(issue, dict) and issue.get("segment_id") == segment_id]
+        issue_ids = {issue["id"] for issue in segment_issues}
+        segment_proposals = [
+            proposal
+            for proposal in proposals
+            if isinstance(proposal, dict) and proposal.get("source_issue") in issue_ids
+        ]
+        segment_rows.append(
+            {
+                "id": segment_id,
+                "name": segment.get("name", segment_id),
+                "status": segment.get("status", "unknown"),
+                "notes": len(segment_notes),
+                "issues": len(segment_issues),
+                "open_issues": sum(1 for issue in segment_issues if issue.get("status") == "open"),
+                "highest_priority_issue": _issue_id(_highest_priority_issue(segment_issues)),
+                "proposals": len(segment_proposals),
+                "validation_status": _segment_validation_status(segment_proposals),
+            }
+        )
+
+    summary = {
+        "session_id": manifest["session_id"],
+        "session_dir": str(session_dir),
+        "goal_id": manifest.get("goal_id"),
+        "route_variant": manifest.get("route_variant"),
+        "highest_priority_issue": _issue_id(highest),
+        "segments": segment_rows,
+        "totals": {
+            "notes": len(notes),
+            "issues": len(issues),
+            "actionable_issues": sum(1 for issue in issues if isinstance(issue, dict) and issue.get("actionable")),
+            "proposals": len(proposals),
+        },
+    }
+    summary_path = session_dir / "ui_summary.yaml"
+    _write_yaml(summary_path, summary)
+    return UiSummaryResult(session_id=str(manifest["session_id"]), summary_path=summary_path, summary=summary)
+
+
+def write_codex_task_latest(issue_id: str) -> CodexTaskResult:
+    return write_codex_task(_latest_session_dir(), issue_id)
+
+
+def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
+    manifest = _load_session_manifest(session_dir)
+    if not (session_dir / "issues.yaml").is_file():
+        build_issue_ledger(session_dir)
+    issues = _load_yaml(session_dir / "issues.yaml").get("issues", [])
+    issue = next((item for item in issues if isinstance(item, dict) and item.get("id") == issue_id), None)
+    if issue is None:
+        raise LabError(f"Issue not found in latest session: {issue_id}")
+    notes = [note for note in _load_notes(session_dir) if note.get("id") in set(issue.get("source_notes", []))]
+    route_log = _route_log_path(session_dir, manifest)
+    excerpt_path = session_dir / "excerpts" / f"{issue_id}.log"
+    excerpt_path.parent.mkdir(parents=True, exist_ok=True)
+    excerpt_path.write_text(_route_log_excerpt(route_log, issue), encoding="utf-8")
+    task = {
+        "task_id": f"codex_{issue_id}",
+        "created_at": _now(),
+        "session_id": manifest["session_id"],
+        "issue_id": issue_id,
+        "objective": "Propose a route patch and validation plan for the selected issue.",
+        "selected_issue": issue,
+        "relevant_notes": notes,
+        "inputs": {
+            "session_manifest": str(session_dir / "session.yaml"),
+            "notes": str(session_dir / "notes.yaml"),
+            "issue_ledger": str(session_dir / "issues.yaml"),
+            "review": str(session_dir / "review.yaml"),
+            "route_log_excerpt": str(excerpt_path),
+            "segment_catalog": "data/segments/world_1.yaml",
+            "relevant_files": _relevant_files_for_issue(issue),
+        },
+        "expected_output": {
+            "proposal_summary": "One-paragraph explanation of the route change.",
+            "changed_files": "List of files that should change.",
+            "validation_command": _validation_command_for_issue(issue),
+            "rollback_notes": "How to discard the attempt if validation fails.",
+        },
+    }
+    task_path = session_dir / "codex_tasks" / f"{issue_id}.yaml"
+    _write_yaml(task_path, task)
+    return CodexTaskResult(
+        session_id=str(manifest["session_id"]),
+        issue_id=issue_id,
+        task_path=task_path,
+        excerpt_path=excerpt_path,
     )
 
 
@@ -636,14 +906,30 @@ def _next_note_id(notes: list[Any]) -> str:
 def _infer_segment_id(text: str) -> str:
     lowered = text.lower()
     if "1-1" in lowered or "1 1" in lowered:
-        return "world_1_1"
+        return "world_1_1_clear"
     if "1-2" in lowered or "1 2" in lowered:
-        return "world_1_2"
+        return "world_1_2_clear"
     if "1-3" in lowered or "1 3" in lowered:
         return "world_1_3_whistle"
     if "fortress" in lowered or "castle" in lowered:
         return "world_1_fortress_whistle"
     return "unknown"
+
+
+def _canonical_segment_id(segment_id: str | None) -> str:
+    aliases = {
+        "world_1_1": "world_1_1_clear",
+        "1-1": "world_1_1_clear",
+        "world_1_2": "world_1_2_clear",
+        "1-2": "world_1_2_clear",
+        "world_1_4": "world_1_4_clear",
+        "1-4": "world_1_4_clear",
+        "fortress": "world_1_fortress_whistle",
+        "castle": "world_1_fortress_whistle",
+    }
+    if segment_id is None:
+        return "unknown"
+    return aliases.get(segment_id, segment_id)
 
 
 def _note_anchor(text: str, anchor_type: str | None, anchor_value: str | int | float | None) -> dict[str, Any]:
@@ -696,7 +982,7 @@ def _nearest_events(note: dict[str, Any], events: tuple[LogEvent, ...]) -> list[
         )
         return [_event_ref(event) for event in ordered[:3]]
     segment = note.get("segment_id")
-    if segment == "world_1_1":
+    if _canonical_segment_id(str(segment)) == "world_1_1_clear":
         segment_events = [event for event in events if event.event.startswith("attempt_")]
         return [_event_ref(event) for event in segment_events[-3:]]
     if events:
@@ -824,7 +1110,7 @@ def _variant_id(review: dict[str, Any]) -> str:
 
 
 def _suggested_change_file(segment: str) -> str:
-    if segment == "world_1_1":
+    if _canonical_segment_id(segment) == "world_1_1_clear":
         return "data/routes/scripts/world_1_1_clear_v0.yaml"
     return "scripts/fceux_1_1_agent.lua"
 
@@ -868,3 +1154,230 @@ def _default_baseline() -> dict[str, Any]:
 
 def batch_summary_to_json(summary: BatchSummary) -> str:
     return json.dumps(asdict(summary), sort_keys=True)
+
+
+def _issues_from_notes(session_id: str, notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for note in notes:
+        issue_type = _issue_type_for_note(note)
+        segment_id = _canonical_segment_id(str(note.get("segment_id") or "unknown"))
+        grouped.setdefault((segment_id, issue_type), []).append(note)
+
+    issue_counters: dict[str, int] = {}
+    issues: list[dict[str, Any]] = []
+    for (segment_id, issue_type), source_notes in sorted(grouped.items(), key=lambda item: _group_sort_key(item[0])):
+        issue_counters[segment_id] = issue_counters.get(segment_id, 0) + 1
+        priority = _issue_priority(issue_type, source_notes)
+        issue_id = f"issue_{segment_id}_{issue_counters[segment_id]:03d}"
+        actionable = issue_type not in {"positive_evidence", "expected_behavior"}
+        issues.append(
+            {
+                "id": issue_id,
+                "session_id": session_id,
+                "segment_id": segment_id,
+                "type": issue_type,
+                "priority": priority,
+                "status": "open" if actionable else "accepted",
+                "actionable": actionable,
+                "source_notes": [str(note["id"]) for note in source_notes],
+                "summary": _issue_summary(segment_id, issue_type, source_notes),
+                "proposed_next_step": _issue_next_step(segment_id, issue_type),
+            }
+        )
+    return sorted(issues, key=_issue_sort_key)
+
+
+def _group_sort_key(key: tuple[str, str]) -> tuple[int, str, str]:
+    segment_id, issue_type = key
+    return (_priority_rank(_issue_priority(issue_type, [])), segment_id, issue_type)
+
+
+def _issue_type_for_note(note: dict[str, Any]) -> str:
+    text = str(note.get("text", "")).lower()
+    severity = str(note.get("severity", "")).lower()
+    if "expected" in text or "not complete" in text or "not a complete" in text:
+        return "expected_behavior"
+    if "perfect" in text or "good" in text:
+        return "positive_evidence"
+    if "carry" in text or "leak" in text or "dies first" in text or "die first" in text:
+        return "recovery_bug"
+    if "wrong" in text or "1-4" in text or "map" in text:
+        return "wrong_route_state"
+    if "fall" in text or "hole" in text or "jump" in text or "clock" in text:
+        return "route_hardening" if severity == "harden" else "input_timing"
+    if severity == "harden":
+        return "route_hardening"
+    return "unknown"
+
+
+def _issue_priority(issue_type: str, source_notes: list[dict[str, Any]]) -> str:
+    if issue_type == "recovery_bug":
+        return "high"
+    if issue_type in {"wrong_route_state", "route_hardening", "input_timing"}:
+        return "medium"
+    if issue_type in {"expected_behavior", "positive_evidence"}:
+        return "none"
+    if any(str(note.get("severity", "")).lower() == "harden" for note in source_notes):
+        return "medium"
+    return "low"
+
+
+def _priority_rank(priority: str) -> int:
+    return {
+        "high": 0,
+        "medium": 1,
+        "low": 2,
+        "none": 3,
+    }.get(priority, 4)
+
+
+def _issue_sort_key(issue: dict[str, Any]) -> tuple[int, str]:
+    return (_priority_rank(str(issue.get("priority", "low"))), str(issue.get("id", "")))
+
+
+def _issue_summary(segment_id: str, issue_type: str, source_notes: list[dict[str, Any]]) -> str:
+    raw_text = " ".join(str(note.get("text", "")) for note in source_notes).strip()
+    if raw_text:
+        return raw_text
+    return f"{segment_id} has {issue_type.replace('_', ' ')} evidence."
+
+
+def _issue_next_step(segment_id: str, issue_type: str) -> str:
+    if issue_type == "recovery_bug":
+        return "Add input cleanup and state reclassification after the failed/death path."
+    if issue_type == "wrong_route_state":
+        return "Add a map-state guard and recovery before continuing route input."
+    if issue_type == "route_hardening":
+        return "Add a safer input window or progress guard around the noted hazard."
+    if issue_type == "input_timing":
+        return "Tune one input timing window and validate without broad route changes."
+    if issue_type == "expected_behavior":
+        return "Record as expected route behavior and exclude from failure classification."
+    if issue_type == "positive_evidence":
+        return "Record as passing evidence for this segment."
+    return "Review trace evidence and decide whether this should become actionable."
+
+
+def _highest_priority_issue(issues: list[dict[str, Any]]) -> dict[str, Any] | None:
+    actionable = [issue for issue in issues if issue.get("actionable")]
+    ranked = sorted(actionable or issues, key=_issue_sort_key)
+    return ranked[0] if ranked else None
+
+
+def _issue_id(issue: dict[str, Any] | None) -> str | None:
+    if issue is None:
+        return None
+    return str(issue["id"])
+
+
+def _proposal_from_issue(manifest: dict[str, Any], issue: dict[str, Any]) -> dict[str, Any]:
+    variant_id = _variant_id_from_issue(issue)
+    return {
+        "variant_id": variant_id,
+        "parent_variant": manifest.get("route_variant", "world_1_baseline"),
+        "status": "proposed",
+        "created_at": _now(),
+        "reason": issue["proposed_next_step"],
+        "source_session": manifest["session_id"],
+        "source_issue": issue["id"],
+        "source_notes": issue["source_notes"],
+        "priority": issue["priority"],
+        "changes": [
+            {
+                "file": _suggested_change_file(str(issue["segment_id"])),
+                "summary": issue["proposed_next_step"],
+            }
+        ],
+        "validation": {
+            "command": f"python -m smb3_agent lab run-variant {variant_id} --attempts 10",
+            "promotion_gate": "10/10 for targeted segment or configured goal gate, with no parent-route regression",
+        },
+        "outcome": {
+            "status": "untested",
+            "artifacts_dir": None,
+        },
+    }
+
+
+def _variant_id_from_issue(issue: dict[str, Any]) -> str:
+    segment = re.sub(r"[^a-z0-9_]+", "_", str(issue["segment_id"]).lower()).strip("_") or "route"
+    issue_type = str(issue["type"])
+    suffix = "recovery" if issue_type == "recovery_bug" else "harden"
+    anchor = _first_numeric_anchor(issue)
+    anchor_part = f"_{anchor}" if anchor is not None else ""
+    base = f"{segment}_{suffix}{anchor_part}_a"
+    candidate = base
+    index = 1
+    while (Path("data/variants") / f"{candidate}.yaml").exists():
+        index += 1
+        candidate = f"{base[:-1]}{chr(96 + min(index, 26))}"
+    return candidate
+
+
+def _first_numeric_anchor(issue: dict[str, Any]) -> int | None:
+    match = re.search(r"\b(\d{2,3})\b", str(issue.get("summary", "")))
+    return int(match.group(1)) if match else None
+
+
+def _load_segment_summaries(segment_catalog_path: Path) -> list[dict[str, Any]]:
+    data = _load_yaml(segment_catalog_path)
+    segments = data.get("segments", [])
+    if not isinstance(segments, list):
+        raise LabError(f"Segment catalog has no segment list: {segment_catalog_path}")
+    return [
+        {
+            "id": segment.get("id"),
+            "name": segment.get("name"),
+            "status": segment.get("status"),
+        }
+        for segment in segments
+        if isinstance(segment, dict) and segment.get("id")
+    ]
+
+
+def _segment_validation_status(proposals: list[dict[str, Any]]) -> str:
+    if not proposals:
+        return "none"
+    if any(proposal.get("outcome", {}).get("metrics_passed") for proposal in proposals):
+        return "passed"
+    if any(proposal.get("outcome", {}).get("status") not in {None, "untested"} for proposal in proposals):
+        return "failed"
+    return "untested"
+
+
+def _relevant_files_for_issue(issue: dict[str, Any]) -> list[str]:
+    segment_id = str(issue.get("segment_id", ""))
+    files = [_suggested_change_file(segment_id), "data/segments/world_1.yaml"]
+    return list(dict.fromkeys(files))
+
+
+def _validation_command_for_issue(issue: dict[str, Any]) -> str:
+    if issue.get("type") in {"recovery_bug", "wrong_route_state"}:
+        return "python -m smb3_agent lab run-variant VARIANT_ID --attempts 10"
+    return "python -m smb3_agent lab run-variant VARIANT_ID --attempts 3"
+
+
+def _route_log_excerpt(route_log: Path, issue: dict[str, Any], max_lines: int = 80) -> str:
+    if not route_log.is_file():
+        return ""
+    lines = route_log.read_text(errors="replace").splitlines()
+    segment_id = str(issue.get("segment_id", ""))
+    keywords = _excerpt_keywords(segment_id)
+    selected = [line for line in lines if any(keyword in line for keyword in keywords)]
+    if not selected:
+        selected = lines[-max_lines:]
+    return "\n".join(selected[-max_lines:]) + ("\n" if selected else "")
+
+
+def _excerpt_keywords(segment_id: str) -> tuple[str, ...]:
+    if _canonical_segment_id(segment_id) == "world_1_1_clear":
+        return ("attempt_",)
+    if _canonical_segment_id(segment_id) == "world_1_2_clear":
+        return ("post_probe_1_2",)
+    if segment_id == "world_1_3_whistle":
+        return ("post_probe_1_3",)
+    if segment_id == "world_1_fortress_whistle":
+        return ("post_probe_1_fortress",)
+    if segment_id == "world_1_4_clear":
+        return ("post_probe_1_4",)
+    return ("post_probe_", "attempt_")

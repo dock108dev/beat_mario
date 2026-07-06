@@ -312,6 +312,13 @@ less-known route territory.
 
 See `docs/attempt-lab.md` for the source-of-truth workflow.
 
+Current status:
+
+- Steps 6.1 through 6.9 are implemented.
+- The lab handles sessions, notes, grouped issues, one or many proposals, UI
+  summaries, Codex task packets, variant validation, and guarded promotion.
+- The next gap is the actual UI shell and route-patch application workflow.
+
 ### Step 6.1: Attempt session manifest
 
 Implementation:
@@ -438,12 +445,187 @@ Pass condition:
 - Comparison reports success rate, failure classes, and changed files.
 - Promotion is blocked unless the configured gate passes.
 
-## Phase 7: Research Unknown Routes
+### Step 6.6: Issue ledger
+
+Implementation:
+
+- Add an issue ledger model using `data/lab/issue-ledger-template.yaml` as the
+  initial contract. [implemented]
+- Add `lab issues latest`. [implemented]
+- Group notes by segment and problem type. [implemented]
+- Support issue types:
+  - `route_hardening`
+  - `input_timing`
+  - `recovery_bug`
+  - `wrong_route_state`
+  - `expected_behavior`
+  - `positive_evidence`
+  - `unknown`
+- Mark expected behavior and positive evidence as non-actionable. [implemented]
+- Prioritize high-impact recovery bugs over lower-risk hardening notes. [implemented]
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab issues latest
+```
+
+Pass condition:
+
+- Every note is represented in one issue.
+- Notes from different segments produce distinct issues.
+- Expected behavior and positive evidence do not create route patch proposals.
+- The fortress carry-over/death issue is prioritized above a minor 1-1 hardening
+  issue.
+
+### Step 6.7: Multi-proposal generation
+
+Implementation:
+
+- Add `lab propose-variants latest`. [implemented]
+- Generate one proposal per actionable issue. [implemented]
+- Include source issue id, source notes, priority, relevant files, and validation
+  command. [implemented]
+- Keep the existing `lab propose-variant latest` as a compatibility shortcut for
+  the highest-priority actionable issue.
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab propose-variants latest
+```
+
+Pass condition:
+
+- One proposal is produced for each actionable issue.
+- Non-actionable evidence issues are skipped.
+- Proposals are independent and can be validated separately.
+
+### Step 6.8: UI-ready route map summary
+
+Implementation:
+
+- Add `lab ui-summary latest`. [implemented]
+- Produce a compact JSON/YAML file for a future UI. [implemented]
+- Include route segments, note counts, issue counts, highest priority issue,
+  proposal count, validation status, and artifact links.
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab ui-summary latest
+```
+
+Pass condition:
+
+- Output can drive a World 1 route-map UI without parsing raw logs.
+- Each segment shows notes, issues, and proposal state.
+- The latest session can be reopened from the summary.
+
+### Step 6.9: Codex task packet
+
+Implementation:
+
+- Add `lab codex-task latest --issue ISSUE_ID`. [implemented]
+- Use `data/lab/codex-task-template.yaml` as the initial contract.
+- Include session manifest, notes, issue ledger, selected issue, relevant log
+  excerpts, segment catalog, relevant route files, and validation command.
+- Codex task packets should request a patch proposal and validation plan; the
+  lab still owns applying, validating, comparing, and promoting. [implemented]
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+```
+
+Pass condition:
+
+- Task packet includes enough context for Codex CLI to work without chat
+  history.
+- Packet names the selected issue and excludes unrelated notes unless needed for
+  context.
+- Packet includes the expected validation command.
+
+## Phase 7: Lab UI Prototype
+
+Goal: replace repetitive CLI note entry with a simple route-map UI over the same
+session, note, issue, review, and variant artifacts.
+
+Current status:
+
+- Phase 7 is implemented as a standard-library local web UI.
+- The UI is served by `python -m smb3_agent lab ui`.
+- The UI can also be rendered once with `python -m smb3_agent lab ui-render`.
+- The UI reads/writes the same session, note, issue, proposal, UI-summary, and
+  Codex-task artifacts as the CLI.
+
+### Step 7.1: Static route map
+
+Implementation:
+
+- Build a minimal local UI that reads the World 1 segment catalog and latest
+  lab session. [implemented]
+- Show route segments as clickable nodes. [implemented]
+- Display note count, issue count, and proposal count per segment. [implemented]
+- Avoid writing game-control logic in the UI; control remains in the CLI/backend. [implemented]
+
+Validation gate:
+
+```bash
+python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
+```
+
+Pass condition:
+
+- UI data contains every World 1 segment.
+- Segment status and latest issue/proposal counts are visible.
+- HTML contains the route map, note form, issue list, and proposal list.
+
+### Step 7.2: Batch note submission
+
+Implementation:
+
+- Let the user add multiple notes across multiple segments. [implemented]
+- Submit all notes to the same latest session. [implemented]
+- Run issue grouping after submission. [implemented]
+
+Validation gate:
+
+```bash
+python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
+```
+
+Pass condition:
+
+- A batch note submission creates grouped issues without requiring one command
+  per segment.
+- The UI refreshes issue and proposal artifacts after note submission.
+
+### Step 7.3: Codex task buttons
+
+Implementation:
+
+- Show actionable issues in the UI. [implemented]
+- Add a Codex task button for actionable issues. [implemented]
+- Reuse `lab codex-task latest --issue ISSUE_ID`. [implemented]
+
+Validation gate:
+
+```bash
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
+```
+
+Pass condition:
+
+- UI-created Codex task packets use the same schema as CLI-created packets.
+
+## Phase 8: Research Unknown Routes
 
 Goal: handle World 8 and other less-known route sections through the attempt lab
 instead of one-off scripting.
 
-### Step 7.1: Route research notes
+### Step 8.1: Route research notes
 
 Implementation:
 
@@ -464,7 +646,7 @@ Pass condition:
 - Unknowns are explicit.
 - Each planned segment has a proposed first attempt-lab session command.
 
-### Step 7.2: First World 8 segment proof
+### Step 8.2: First World 8 segment proof
 
 Implementation:
 
@@ -483,7 +665,7 @@ Pass condition:
 - At least one successful run or a classified blocker with artifacts.
 - Any user observations are captured as notes instead of remaining only in chat.
 
-## Phase 8: Generalize Beyond SMB3
+## Phase 9: Generalize Beyond SMB3
 
 Goal: preserve the parts that apply to future sim/playtester products.
 

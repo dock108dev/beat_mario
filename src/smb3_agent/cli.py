@@ -17,13 +17,18 @@ from smb3_agent.goals import (
 from smb3_agent.lab import (
     LabError,
     add_note_to_latest,
+    build_issue_ledger_latest,
     compare_variant,
+    propose_variants_from_latest,
     promote_variant,
     propose_variant_from_latest,
     review_latest_session,
     run_variant,
     start_session,
+    write_codex_task_latest,
+    write_ui_summary_latest,
 )
+from smb3_agent.lab_ui import LabUiError, render_lab_ui, run_lab_ui_server
 from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
@@ -399,8 +404,32 @@ def build_parser() -> argparse.ArgumentParser:
     lab_review = lab_subparsers.add_parser("review", help="Review a lab session")
     lab_review.add_argument("target", choices=["latest"], help="Session target")
 
+    lab_issues = lab_subparsers.add_parser("issues", help="Build grouped issue ledger for a lab session")
+    lab_issues.add_argument("target", choices=["latest"], help="Session target")
+
     lab_propose = lab_subparsers.add_parser("propose-variant", help="Create a route variant proposal")
     lab_propose.add_argument("target", choices=["latest"], help="Session target")
+
+    lab_propose_many = lab_subparsers.add_parser(
+        "propose-variants",
+        help="Create route variant proposals for all actionable issues",
+    )
+    lab_propose_many.add_argument("target", choices=["latest"], help="Session target")
+
+    lab_ui_summary = lab_subparsers.add_parser("ui-summary", help="Write UI-ready route map summary")
+    lab_ui_summary.add_argument("target", choices=["latest"], help="Session target")
+
+    lab_codex_task = lab_subparsers.add_parser("codex-task", help="Write a Codex-ready task packet")
+    lab_codex_task.add_argument("target", choices=["latest"], help="Session target")
+    lab_codex_task.add_argument("--issue", required=True, help="Issue id to package")
+
+    lab_ui = lab_subparsers.add_parser("ui", help="Serve the local World 1 lab UI")
+    lab_ui.add_argument("--host", default="127.0.0.1")
+    lab_ui.add_argument("--port", type=int, default=8765)
+    lab_ui.add_argument("--open", action="store_true", help="Open the UI in the default browser")
+
+    lab_ui_render = lab_subparsers.add_parser("ui-render", help="Render the lab UI HTML once")
+    lab_ui_render.add_argument("--output", default="artifacts/ui/latest.html")
 
     lab_run_variant = lab_subparsers.add_parser("run-variant", help="Run a route variant through validation")
     lab_run_variant.add_argument("variant_id")
@@ -703,11 +732,56 @@ def main() -> None:
             parser.error(str(exc))
         return
 
+    if args.command == "lab" and args.lab_command == "issues":
+        try:
+            print(build_issue_ledger_latest().to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
     if args.command == "lab" and args.lab_command == "propose-variant":
         try:
             print(propose_variant_from_latest().to_text())
         except LabError as exc:
             parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "propose-variants":
+        try:
+            print(propose_variants_from_latest().to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "ui-summary":
+        try:
+            print(write_ui_summary_latest().to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "codex-task":
+        try:
+            print(write_codex_task_latest(args.issue).to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "ui":
+        try:
+            run_lab_ui_server(host=args.host, port=args.port, open_browser=args.open)
+        except (LabError, LabUiError, OSError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "ui-render":
+        try:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_lab_ui(), encoding="utf-8")
+        except (LabError, LabUiError) as exc:
+            parser.error(str(exc))
+        print(f"html={output}")
         return
 
     if args.command == "lab" and args.lab_command == "run-variant":

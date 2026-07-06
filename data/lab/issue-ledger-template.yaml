@@ -1,0 +1,29 @@
+session_id: 20260706T230000Z_world_1_king
+issues:
+  - id: issue_world_1_1_001
+    segment_id: world_1_1
+    type: route_hardening
+    priority: medium
+    status: open
+    source_notes:
+      - note_001
+    summary: Mario falls into a hole at 283 on the clock.
+    proposed_next_step: Add a safer jump or progress guard near the hazard.
+  - id: issue_world_1_3_whistle_001
+    segment_id: world_1_3_whistle
+    type: expected_behavior
+    priority: none
+    status: accepted
+    source_notes:
+      - note_002
+    summary: Leaving 1-3 through the whistle path is expected.
+    proposed_next_step: Do not treat this as a failed course clear.
+  - id: issue_world_1_fortress_whistle_001
+    segment_id: world_1_fortress_whistle
+    type: recovery_bug
+    priority: high
+    status: open
+    source_notes:
+      - note_003
+    summary: Fortress death appears to leak inputs and sends the route toward 1-4.
+    proposed_next_step: Add input cleanup and post-death map-state recovery.

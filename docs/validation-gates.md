@@ -420,3 +420,92 @@ Pass condition:
 
 Promotion should be tested first on disposable variants. Do not promote a route
 variant just because the command exists.
+
+## Gate 24: Issue Ledger
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab issues latest
+```
+
+Pass condition:
+
+- Every note is assigned to an issue.
+- Issues are grouped by segment and type.
+- Expected behavior and positive evidence are marked non-actionable.
+- The highest-priority actionable issue is explicit.
+
+## Gate 25: Multi-Proposal Generation
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab propose-variants latest
+```
+
+Pass condition:
+
+- One proposal is produced per actionable issue.
+- Each proposal records source issue, source notes, relevant files, and
+  validation command.
+
+## Gate 26: UI Summary
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab ui-summary latest
+```
+
+Pass condition:
+
+- Output lists World 1 route segments with note, issue, proposal, and validation
+  state.
+- A UI can render the latest session without parsing raw route logs.
+
+## Gate 27: Codex Task Packet
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+```
+
+Pass condition:
+
+- Packet includes session manifest, issue ledger, selected issue, relevant notes,
+  route-log excerpt, segment catalog, relevant route files, and validation
+  command.
+- Packet is usable by Codex CLI without relying on chat history.
+
+## Gate 28: Lab UI Render
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
+```
+
+Pass condition:
+
+- HTML file is written.
+- HTML contains a World 1 route map.
+- HTML contains batch note inputs for segments.
+- HTML contains issue and proposal sections.
+
+## Gate 29: Lab UI Server
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
+```
+
+Pass condition:
+
+- Server prints a local URL.
+- `GET /` returns the route-map UI.
+- `POST /notes` appends batch notes to the latest session and regenerates
+  issues/proposals.
+- `POST /codex-task` creates a Codex task packet for an actionable issue.

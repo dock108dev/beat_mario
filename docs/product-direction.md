@@ -76,6 +76,7 @@ structured work:
 ```text
 user note
 -> anchored attempt artifact
+-> grouped route issue
 -> review hypothesis
 -> route variant proposal
 -> validation run
@@ -95,7 +96,13 @@ The shop keeps overbuying low-margin items after the second rent payment.
 ```
 
 In both cases, the agent should preserve the observation, connect it to evidence,
-try a controlled change, and compare the next attempt against the previous one.
+group related observations into durable issues, try controlled changes, and
+compare the next attempt against the previous one.
+
+The UI direction follows from that artifact model. The first UI should be a
+route map where the user can click a segment, add notes, submit a batch, review
+grouped issues, and choose which proposal to validate. The CLI and artifact
+schema remain the source of truth.
 
 ## Product Thesis
 
@@ -108,6 +115,7 @@ Build a user-steered gameplay agent that can:
 5. Adjust when lives, map position, inventory, or segment state changes.
 6. Produce a useful report and next action.
 7. Turn user observations into validated route or policy variants.
+8. Package selected issues into Codex-ready patch/review tasks.
 
 SMB3 proves the control, observation, recovery, and route-learning loop. The same
 shape can later operate a store sim, city sim, management game, or custom

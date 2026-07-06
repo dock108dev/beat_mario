@@ -105,6 +105,7 @@ Treat watch mode as a debugging surface, not a reliability gate.
 
 ## Next Route Cleanup Targets
 
-1. Replace or clearly isolate the fortress whistle bridge.
-2. Stabilize World 1-4 under watchable/capture mode.
-3. Start World 8 research as planned segments, not one giant route.
+1. Add route-patch application from selected Codex task packets.
+2. Replace or clearly isolate the fortress whistle bridge.
+3. Stabilize World 1-4 under watchable/capture mode.
+4. Start World 8 research as planned segments, not one giant route.

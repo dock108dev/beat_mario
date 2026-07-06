@@ -1,0 +1,19 @@
+task_id: codex_issue_world_1_fortress_whistle_001
+created_at: 2026-07-06T23:20:00Z
+session_id: 20260706T230000Z_world_1_king
+issue_id: issue_world_1_fortress_whistle_001
+objective: Propose a route patch and validation plan for the selected issue.
+inputs:
+  session_manifest: session.yaml
+  notes: notes.yaml
+  issue_ledger: issues.yaml
+  review: review.yaml
+  route_log_excerpt: excerpts/issue_world_1_fortress_whistle_001.log
+  segment_catalog: data/segments/world_1.yaml
+  relevant_files:
+    - scripts/fceux_1_1_agent.lua
+expected_output:
+  proposal_summary: One-paragraph explanation of the route change.
+  changed_files: List of files that should change.
+  validation_command: Command to prove the change.
+  rollback_notes: How to discard the attempt if validation fails.
