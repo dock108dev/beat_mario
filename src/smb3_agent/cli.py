@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     probe_subparsers = probe.add_subparsers(dest="backend", required=True)
 
     mednafen = probe_subparsers.add_parser("mednafen", help="Probe local Mednafen control/capture")
-    mednafen.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    mednafen.add_argument("--game-file", required=True, help="Path to the local game file")
     mednafen.add_argument(
         "--artifacts-dir",
         default="artifacts/probes",
@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     task_subparsers = task.add_subparsers(dest="task_name", required=True)
 
     start_game = task_subparsers.add_parser("start-game", help="Start a fresh game and capture evidence")
-    start_game.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    start_game.add_argument("--game-file", required=True, help="Path to the local game file")
     start_game.add_argument(
         "--artifacts-dir",
         default="artifacts/tasks/start-game",
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     start_game.add_argument("--startup-seconds", type=float, default=3.0)
 
     enter_1_1 = task_subparsers.add_parser("enter-1-1", help="Start a fresh game and enter World 1-1")
-    enter_1_1.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    enter_1_1.add_argument("--game-file", required=True, help="Path to the local game file")
     enter_1_1.add_argument(
         "--artifacts-dir",
         default="artifacts/tasks/enter-1-1",
@@ -102,7 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
         "checkpoint-1-1",
         help="Start a fresh game, enter World 1-1, and save Mednafen state slot 1",
     )
-    checkpoint_1_1.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    checkpoint_1_1.add_argument("--game-file", required=True, help="Path to the local game file")
     checkpoint_1_1.add_argument(
         "--artifacts-dir",
         default="artifacts/tasks/checkpoint-1-1",
@@ -120,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
         "load-checkpoint-1-1",
         help="Load saved Mednafen state slot 0 and verify World 1-1",
     )
-    load_checkpoint_1_1.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    load_checkpoint_1_1.add_argument("--game-file", required=True, help="Path to the local game file")
     load_checkpoint_1_1.add_argument(
         "--artifacts-dir",
         default="artifacts/tasks/load-checkpoint-1-1",
@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
         "run-1-1-script",
         help="Load the 1-1 checkpoint and execute a YAML input script",
     )
-    run_1_1_script.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    run_1_1_script.add_argument("--game-file", required=True, help="Path to the local game file")
     run_1_1_script.add_argument(
         "--script",
         default="data/routes/scripts/world_1_1_draft.yaml",
@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
         "fceux-1-1",
         help="Run the memory-aware FCEUX World 1-1 route",
     )
-    fceux_1_1.add_argument("--game-file", default="game-file.nes", help="Path to the local NES game file")
+    fceux_1_1.add_argument("--game-file", required=True, help="Path to the local game file")
     fceux_1_1.add_argument(
         "--script",
         default="scripts/fceux_1_1_agent.lua",
@@ -238,7 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
         "fceux-world-1-king",
         help="Run the verified FCEUX World 1 route through the king transition",
     )
-    fceux_world_1_king.add_argument("--game-file", default="game-file.nes", help="Path to the local game file")
+    fceux_world_1_king.add_argument("--game-file", required=True, help="Path to the local game file")
     fceux_world_1_king.add_argument(
         "--script",
         default="scripts/fceux_1_1_agent.lua",

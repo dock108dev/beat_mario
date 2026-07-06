@@ -6,7 +6,10 @@ __pycache__/
 
 # Local game files and generated proof artifacts.
 *.nes
+*.sav
+*.state
+*.fc?
+*.fm2
 artifacts/
 data/attempts/
 data/screenshots/
-

@@ -1,24 +1,25 @@
 # FCEUX Harness
 
-The reliable World 1-1 route currently runs through FCEUX with a Lua route script.
-This path is preferred for route work because it can read stable in-game state,
-drive controller input directly, and emit structured log markers.
+FCEUX is the current reliable backend for SMB3 route work. It gives the project
+direct controller input, stable state reads, route logs, and optional screenshot
+captures.
 
-## World 1-1 Gate
+Use this document for backend mechanics. Use `docs/implementation-plan.md` for
+project sequencing and `docs/validation-gates.md` for pass/fail gates.
+
+## Core Runner
+
+Command:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 10 --artifacts-dir artifacts/fceux/cli_gate_1_1 --require-perfect
+python -m smb3_agent task fceux-1-1 \
+  --attempts 10 \
+  --artifacts-dir artifacts/fceux/cli_gate_1_1 \
+  --require-perfect
 ```
 
-Passing means:
-
-```text
-successes=10/10
-bad_states=0/10
-```
-
-The gate is intentionally strict. `--require-perfect` exits non-zero if any
-attempt fails to clear the level.
+The Python harness launches FCEUX with `scripts/fceux_1_1_agent.lua`, captures
+stdout/stderr, writes `fceux_1_1.log`, and parses route markers.
 
 ## Route Markers
 
@@ -29,99 +30,102 @@ attempt_N_reached_end_x
 attempt_N_goal_area
 attempt_N_success_course_clear
 attempt_N_bad_state
+post_probe_*
 ```
 
-`success_course_clear` only counts if the route first reached the goal area.
-This avoids mistaking a death or invalid transition for a completed level.
+`success_course_clear` only counts if the route first reached the expected goal
+area. This avoids mistaking a death or invalid transition for a completed level.
+
+## Current Preset: World 1 King Transition
+
+Command:
+
+```bash
+python -m smb3_agent task fceux-world-1-king \
+  --attempts 10 \
+  --artifacts-dir artifacts/fceux/world_1_king \
+  --require-perfect
+```
+
+Expected summary:
+
+```text
+successes=10/10
+bad_states=0/10
+post_probe_last_event=post_probe_1_airship_success_king
+post_probe_clear=true
+```
+
+This preset is a route gate, not a claim that every World 1 segment is solved by
+regular gameplay. See `docs/route-status.md`.
 
 ## Visual Review
 
 For screenshot-backed review:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/inspect_1_1 --capture-images
-python -m smb3_agent task fceux-contact-sheet --input-dir artifacts/fceux/inspect_1_1/images
+python -m smb3_agent task fceux-world-1-king \
+  --attempts 1 \
+  --artifacts-dir artifacts/fceux/inspect_world_1_king \
+  --capture-images \
+  --capture-ticks
+
+python -m smb3_agent task fceux-contact-sheet \
+  --input-dir artifacts/fceux/inspect_world_1_king/images
 ```
 
-The contact sheet is useful for route tuning and debugging, but it is not the
-source of truth for pass/fail. The structured log markers are.
+The contact sheet is a review aid only. Structured log markers are the source of
+truth for pass/fail.
 
-For a visible full-speed demo, run the route with a small frame sleep:
+## Watchable Demo Mode
+
+For a visible demo, add a small frame sleep:
 
 ```bash
-SMB3_AGENT_FRAME_SLEEP_SECONDS=0.0135 python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/show_start_to_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
+SMB3_AGENT_FRAME_SLEEP_SECONDS=0.0035 \
+python -m smb3_agent task fceux-world-1-king \
+  --attempts 1 \
+  --artifacts-dir artifacts/fceux/show_world_1_king \
+  --capture-images \
+  --capture-ticks
 ```
 
-The sleep is only for watching the route. Leave it unset for reliability gates.
+Leave frame sleep unset for reliability gates. Demo mode can alter timing and
+should be treated as a debugging view.
 
-## Next Segment
+## Environment Overrides
 
-The next route target is World 1-2 entry:
+The low-level `fceux-1-1` command supports route experiments through
+`--set-env KEY=VALUE`.
 
-1. Clear World 1-1 from a fresh boot path.
-2. Wait until the World 1 map is stable.
-3. Capture map screenshots and state bytes.
-4. Move right twice and press A.
-5. Confirm the 1-2 start with a level screen and Mario near `x=24`.
-6. Save a reusable checkpoint once the 1-2 start is promoted from probe to route.
-
-The current probe command is:
+Example:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_enter_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe enter_1_2 --require-perfect
+python -m smb3_agent task fceux-1-1 \
+  --attempts 1 \
+  --artifacts-dir artifacts/fceux/probe_1_2_timing \
+  --post-1-1-probe run_1_2_naive \
+  --set-env SMB3_1_2_HILL_ENEMY_JUMP_FRAMES=32 \
+  --require-perfect
 ```
 
-## World 1-2 Clear Gate
+Use explicit artifact directories for experiments. Do not overwrite gate
+artifacts when sweeping timings.
 
-The current 1-2 route runs as a post-1-1 probe. It clears 1-1, enters 1-2
-from the map, executes the memory-aware 1-2 route, and exits non-zero unless
-the 1-2 probe reports a course clear:
+## Failure Review
+
+Review an existing log:
 
 ```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/gate_1_2 --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
+python -m smb3_agent task review-fceux-log \
+  --log artifacts/fceux/world_1_king/fceux_1_1.log \
+  --attempts 10
 ```
 
-Passing means:
+Minimum useful failure evidence:
 
-```text
-successes=1/1
-post_probe_clear=true
-```
-
-The 1-2 success marker requires the route to reach the goal card threshold and
-then hit the normal level transition. This avoids counting a near-miss or invalid
-transition as a clear.
-
-For screenshot-backed review:
-
-```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/inspect_1_2 --capture-images --capture-ticks --after-attempt-frames 900 --post-1-1-probe run_1_2_naive --require-perfect --require-post-probe-clear
-python -m smb3_agent task fceux-contact-sheet --input-dir artifacts/fceux/inspect_1_2/images
-```
-
-For quick Lua parameter sweeps, pass explicit overrides:
-
-```bash
-python -m smb3_agent task fceux-1-1 --attempts 1 --artifacts-dir artifacts/fceux/probe_run_1_2_hill_32 --post-1-1-probe run_1_2_naive --after-attempt-frames 900 --set-env SMB3_1_2_HILL_ENEMY_JUMP_FRAMES=32 --require-perfect
-```
-
-Current 1-2 tuning keys:
-
-```text
-SMB3_1_2_ENEMY_MIN_DX
-SMB3_1_2_ENEMY_MAX_DX
-SMB3_1_2_ENEMY_JUMP_FRAMES
-SMB3_1_2_HILL_ENEMY_JUMP_FRAMES
-SMB3_1_2_HILL_ENEMY_START
-SMB3_1_2_HILL_ENEMY_END
-SMB3_1_2_HILL_DELAY_FRAMES
-SMB3_1_2_HILL_JUMP_FRAMES
-SMB3_1_2_HILL_SLOW_FRAMES
-SMB3_1_2_LATE_JUMP_START
-SMB3_1_2_LATE_DELAY_FRAMES
-SMB3_1_2_LATE_JUMP_FRAMES
-SMB3_1_2_LATE_SLOW_FRAMES
-SMB3_1_2_GOAL_JUMP_START
-SMB3_1_2_GOAL_JUMP_FRAMES
-SMB3_1_2_GOAL_CARRY_FRAMES
-```
+- Last `post_probe_*` event.
+- Max x reached in the active segment.
+- Final mode/object set.
+- Lives/form state if available.
+- Whether the run used watchable throttle or reliability mode.

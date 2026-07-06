@@ -83,7 +83,7 @@ def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:
 def test_run_fceux_rejects_invalid_env_override(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         run_fceux_1_1(
-            game_path=tmp_path / "game-file.nes",
+            game_path=tmp_path / "local-game-file",
             script_path=tmp_path / "script.lua",
             artifacts_dir=tmp_path / "artifacts",
             attempts=1,
