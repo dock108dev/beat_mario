@@ -42,7 +42,7 @@ The exact count may grow, but the suite must pass.
 Command:
 
 ```bash
-SMB3_GAME_FILE=/path/to/local-game-file \
+export SMB3_GAME_FILE=/path/to/local-game-file
 python -m smb3_agent task fceux-1-1 \
   --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
@@ -65,7 +65,7 @@ World 1-1 reliably.
 Command:
 
 ```bash
-SMB3_GAME_FILE=/path/to/local-game-file \
+export SMB3_GAME_FILE=/path/to/local-game-file
 python -m smb3_agent task fceux-world-1-king \
   --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \

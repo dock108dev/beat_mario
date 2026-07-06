@@ -81,11 +81,24 @@ def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:
 
 
 def test_run_fceux_rejects_invalid_env_override(tmp_path: Path) -> None:
+    game_path = tmp_path / "local-game-file"
+    game_path.write_bytes(b"placeholder")
+
     with pytest.raises(ValueError):
         run_fceux_1_1(
-            game_path=tmp_path / "local-game-file",
+            game_path=game_path,
             script_path=tmp_path / "script.lua",
             artifacts_dir=tmp_path / "artifacts",
             attempts=1,
             env_overrides=("NOT_A_PAIR",),
+        )
+
+
+def test_run_fceux_rejects_missing_game_file(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Local game file not found"):
+        run_fceux_1_1(
+            game_path=tmp_path / "missing-local-game-file",
+            script_path=tmp_path / "script.lua",
+            artifacts_dir=tmp_path / "artifacts",
+            attempts=1,
         )

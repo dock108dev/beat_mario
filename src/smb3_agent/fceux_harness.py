@@ -174,6 +174,9 @@ def run_fceux_1_1(
     post_1_1_probe: str | None = None,
     env_overrides: tuple[str, ...] = (),
 ) -> BatchSummary:
+    if not game_path.is_file():
+        raise FileNotFoundError(f"Local game file not found: {game_path}")
+
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "fceux_1_1.log"
     stdout_path = artifacts_dir / "fceux_stdout.log"

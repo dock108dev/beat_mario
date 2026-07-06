@@ -16,7 +16,9 @@ Status values:
 Command:
 
 ```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
 python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
   --artifacts-dir artifacts/fceux/world_1_king \
   --require-perfect
@@ -26,6 +28,26 @@ Latest known pass condition:
 
 ```text
 successes=10/10
+post_probe_last_event=post_probe_1_airship_success_king
+post_probe_clear=true
+```
+
+Latest Phase 0 truth refresh:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
+  --attempts 3 \
+  --artifacts-dir artifacts/fceux/doc_gate_world_1_king \
+  --require-perfect
+```
+
+Result:
+
+```text
+successes=3/3
+bad_states=0/3
 post_probe_last_event=post_probe_1_airship_success_king
 post_probe_clear=true
 ```
