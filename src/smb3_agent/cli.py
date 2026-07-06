@@ -14,6 +14,16 @@ from smb3_agent.goals import (
     resolve_goal_path,
     run_goal_contract,
 )
+from smb3_agent.lab import (
+    LabError,
+    add_note_to_latest,
+    compare_variant,
+    promote_variant,
+    propose_variant_from_latest,
+    review_latest_session,
+    run_variant,
+    start_session,
+)
 from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
@@ -361,6 +371,53 @@ def build_parser() -> argparse.ArgumentParser:
     recovery_simulate.add_argument("scenario", choices=["life_lost", "wrong_map_node"])
     recovery_simulate.add_argument("--goal", default="world_1_king", help="Goal id or path")
 
+    lab = subparsers.add_parser("lab", help="Run attempt-lab sessions, notes, reviews, and variants")
+    lab_subparsers = lab.add_subparsers(dest="lab_command", required=True)
+
+    lab_start = lab_subparsers.add_parser("start", help="Start an attempt-lab session from a user command")
+    lab_start.add_argument("text", help="User command text")
+    lab_start.add_argument("--game-file", default=None, help="Path to the local game file")
+    lab_start.add_argument("--attempts", type=int, default=1)
+    lab_start.add_argument(
+        "--artifacts-root",
+        default="artifacts/sessions",
+        help="Root directory for lab sessions",
+    )
+    lab_start.add_argument("--route-variant", default="world_1_baseline")
+    lab_start.add_argument("--capture-images", action="store_true")
+    lab_start.add_argument("--no-capture-ticks", action="store_true")
+
+    lab_note = lab_subparsers.add_parser("note", help="Attach a human note to a lab session")
+    lab_note.add_argument("target", choices=["latest"], help="Session target")
+    lab_note.add_argument("text", help="Raw note text")
+    lab_note.add_argument("--segment", default=None, help="Optional segment id")
+    lab_note.add_argument("--attempt", type=int, default=None, help="Optional attempt number")
+    lab_note.add_argument("--anchor-type", default=None, help="Optional anchor type")
+    lab_note.add_argument("--anchor-value", default=None, help="Optional anchor value")
+    lab_note.add_argument("--severity", default="note")
+
+    lab_review = lab_subparsers.add_parser("review", help="Review a lab session")
+    lab_review.add_argument("target", choices=["latest"], help="Session target")
+
+    lab_propose = lab_subparsers.add_parser("propose-variant", help="Create a route variant proposal")
+    lab_propose.add_argument("target", choices=["latest"], help="Session target")
+
+    lab_run_variant = lab_subparsers.add_parser("run-variant", help="Run a route variant through validation")
+    lab_run_variant.add_argument("variant_id")
+    lab_run_variant.add_argument("--game-file", default=None, help="Path to the local game file")
+    lab_run_variant.add_argument("--attempts", type=int, default=10)
+    lab_run_variant.add_argument(
+        "--artifacts-root",
+        default="artifacts/sessions",
+        help="Root directory for lab sessions",
+    )
+
+    lab_compare_variant = lab_subparsers.add_parser("compare-variant", help="Compare variant evidence")
+    lab_compare_variant.add_argument("variant_id")
+
+    lab_promote_variant = lab_subparsers.add_parser("promote-variant", help="Promote a passing route variant")
+    lab_promote_variant.add_argument("variant_id")
+
     return parser
 
 
@@ -601,6 +658,86 @@ def main() -> None:
             contract = load_goal_contract(resolve_goal_path(args.goal))
             print(simulate_recovery(contract, args.scenario).to_text())
         except (GoalValidationError, RecoveryError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "start":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("lab start requires --game-file or SMB3_GAME_FILE")
+        try:
+            result = start_session(
+                args.text,
+                game_path=Path(game_file),
+                attempts=args.attempts,
+                artifacts_root=Path(args.artifacts_root),
+                route_variant=args.route_variant,
+                capture_images=args.capture_images,
+                capture_ticks=not args.no_capture_ticks,
+            )
+        except (CommandParseError, GoalValidationError, LabError, FileNotFoundError) as exc:
+            parser.error(str(exc))
+        print(result.to_text())
+        return
+
+    if args.command == "lab" and args.lab_command == "note":
+        try:
+            print(
+                add_note_to_latest(
+                    args.text,
+                    segment_id=args.segment,
+                    attempt_number=args.attempt,
+                    anchor_type=args.anchor_type,
+                    anchor_value=args.anchor_value,
+                    severity=args.severity,
+                ).to_text()
+            )
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "review":
+        try:
+            print(review_latest_session().to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "propose-variant":
+        try:
+            print(propose_variant_from_latest().to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "run-variant":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("lab run-variant requires --game-file or SMB3_GAME_FILE")
+        try:
+            print(
+                run_variant(
+                    args.variant_id,
+                    game_path=Path(game_file),
+                    attempts=args.attempts,
+                    artifacts_root=Path(args.artifacts_root),
+                ).to_text()
+            )
+        except (LabError, FileNotFoundError, GoalValidationError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "compare-variant":
+        try:
+            print(compare_variant(args.variant_id).to_text())
+        except LabError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "promote-variant":
+        try:
+            print(promote_variant(args.variant_id).to_text())
+        except LabError as exc:
             parser.error(str(exc))
         return
 

@@ -162,6 +162,7 @@ def run_goal_contract(
     artifacts_dir: Path | None = None,
     capture_images: bool = False,
     capture_ticks: bool = False,
+    env_overrides: tuple[str, ...] = (),
 ) -> GoalRunResult:
     if contract.preset != "fceux_world_1_king":
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
@@ -175,7 +176,7 @@ def run_goal_contract(
         capture_images=capture_images,
         capture_ticks=capture_ticks,
         post_1_1_probe="run_1_castle_after_1_6",
-        env_overrides=WORLD_1_KING_ENV + tuple(contract.runner.get("env", ())),
+        env_overrides=WORLD_1_KING_ENV + tuple(contract.runner.get("env", ())) + env_overrides,
     )
     return GoalRunResult(
         contract=contract,
@@ -230,4 +231,3 @@ def _require_fields(data: dict[str, Any], fields: tuple[str, ...]) -> None:
 def _require_type(data: dict[str, Any], field: str, expected_type: type) -> None:
     if not isinstance(data[field], expected_type):
         raise GoalValidationError(f"{field} must be {expected_type.__name__}")
-

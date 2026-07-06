@@ -1,0 +1,27 @@
+session_id: 20260706T230000Z_world_1_king
+goal_id: world_1_king
+route_variant: world_1_baseline
+run_mode: gate
+requested_speed: 4
+attempts_requested: 3
+started_at: 2026-07-06T23:00:00Z
+artifacts_dir: artifacts/sessions/20260706T230000Z_world_1_king
+inputs:
+  command: show me the route at 4x
+  game_file_env: SMB3_GAME_FILE
+run_settings:
+  emulator: fceux
+  speed_mode: normal
+  frame_sleep_seconds: null
+  capture_images: false
+  capture_ticks: true
+outputs:
+  route_log: fceux_1_1.log
+  state_trace: state_trace.jsonl
+  screenshots_dir: images
+  notes_file: notes.yaml
+  review_file: review.md
+  variant_proposal: variant_proposal.yaml
+result:
+  status: pending
+  summary: ""

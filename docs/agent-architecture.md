@@ -15,7 +15,9 @@ User Directive
   -> State Observer
   -> Recovery Manager
   -> Attempt Logger
+  -> Note Collector
   -> Reviewer
+  -> Variant Manager
   -> Knowledge Store
 ```
 
@@ -134,6 +136,34 @@ next experiment: reduce throttle/capture overhead or adjust the gap trigger
 ```
 
 LLM review is useful here, but the facts must come from logs and artifacts.
+
+## Note Collector
+
+The note collector preserves user observations as artifacts attached to a
+specific attempt session.
+
+Examples:
+
+- "1-1 around 320 timer: falls into the hole and usually gets lucky."
+- "Castle flight starts too far right, then hits the ceiling blocks."
+- "This run is watchable-speed only; do not promote from it."
+
+Notes should preserve the raw user text and optional anchors such as segment,
+attempt number, frame, event, screenshot, wall-clock time, or in-game timer.
+Machine interpretation belongs in the review, not in the raw note.
+
+## Variant Manager
+
+The variant manager protects the known-working route while experiments happen.
+
+Responsibilities:
+
+- Create proposed variants from reviews.
+- Record parent variant, source session, source notes, and intended changes.
+- Run validation gates against a variant.
+- Compare variant results with parent results.
+- Promote only when the configured gate passes.
+- Preserve enough metadata to roll back a bad promotion.
 
 ## Knowledge Store
 

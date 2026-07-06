@@ -66,6 +66,37 @@ The first milestone is not a perfect game-playing AI. The first milestone is a
 workbench that can turn user intent into route execution, evidence, and the next
 experiment.
 
+## Attempt Lab
+
+The attempt lab is the product loop that makes the project scalable.
+
+The user should be able to watch a route, add a note, and have that note become
+structured work:
+
+```text
+user note
+-> anchored attempt artifact
+-> review hypothesis
+-> route variant proposal
+-> validation run
+-> promote or discard
+```
+
+For SMB3, a note might be:
+
+```text
+1-1 around 320 timer: falls into the hole and usually gets lucky.
+```
+
+For a future sim, the same shape might be:
+
+```text
+The shop keeps overbuying low-margin items after the second rent payment.
+```
+
+In both cases, the agent should preserve the observation, connect it to evidence,
+try a controlled change, and compare the next attempt against the previous one.
+
 ## Product Thesis
 
 Build a user-steered gameplay agent that can:
@@ -76,6 +107,7 @@ Build a user-steered gameplay agent that can:
 4. Observe game state continuously.
 5. Adjust when lives, map position, inventory, or segment state changes.
 6. Produce a useful report and next action.
+7. Turn user observations into validated route or policy variants.
 
 SMB3 proves the control, observation, recovery, and route-learning loop. The same
 shape can later operate a store sim, city sim, management game, or custom

@@ -13,3 +13,7 @@ __pycache__/
 artifacts/
 data/attempts/
 data/screenshots/
+data/variants/*.yaml
+data/variants/backups/
+data/variants/promotions/
+!data/variants/.gitkeep

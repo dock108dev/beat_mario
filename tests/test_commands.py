@@ -24,6 +24,14 @@ def test_parse_world_1_king_gate_defaults_to_one_attempt() -> None:
     assert command.attempts == 1
 
 
+def test_parse_world_1_king_gate_with_speed() -> None:
+    command = parse_command("run world 1 king gate 3 times at 4x")
+
+    assert command.action == "run_goal"
+    assert command.attempts == 3
+    assert command.speed == 4
+
+
 def test_parse_show_route_command() -> None:
     command = parse_command("show me the route at 4x")
 

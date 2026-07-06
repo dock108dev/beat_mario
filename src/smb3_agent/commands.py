@@ -10,7 +10,8 @@ from smb3_agent.goals import GoalRunResult, load_goal_contract, resolve_goal_pat
 
 
 RUN_WORLD_1_KING_RE = re.compile(
-    r"^run\s+world\s+1\s+king\s+gate(?:\s+(?P<attempts>\d+)\s+times?)?$",
+    r"^run\s+world\s+1\s+king(?:\s+gate)?(?:\s+(?P<attempts>\d+)\s+times?)?"
+    r"(?:\s+at\s+(?P<speed>\d+(?:\.\d+)?)x)?$",
     re.IGNORECASE,
 )
 SHOW_ROUTE_RE = re.compile(r"^show\s+me\s+the\s+route(?:\s+at\s+(?P<speed>\d+(?:\.\d+)?)x)?$", re.IGNORECASE)
@@ -86,6 +87,7 @@ def parse_command(raw: str) -> AgentCommand:
     match = RUN_WORLD_1_KING_RE.match(normalized)
     if match is not None:
         attempts = int(match.group("attempts") or "1")
+        speed = float(match.group("speed")) if match.group("speed") is not None else None
         return AgentCommand(
             action="run_goal",
             raw=normalized,
@@ -93,6 +95,7 @@ def parse_command(raw: str) -> AgentCommand:
             attempts=attempts,
             run_mode="gate",
             validation_policy="require_goal_metrics",
+            speed=speed,
         )
 
     match = SHOW_ROUTE_RE.match(normalized)
@@ -186,4 +189,3 @@ def _next_action(metrics_passed: bool) -> str:
     if metrics_passed:
         return "Promote this command run as passing evidence or continue to the next implementation phase."
     return "Run review log on the command artifact log and repair the failed segment before expanding scope."
-

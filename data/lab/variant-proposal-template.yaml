@@ -1,0 +1,17 @@
+variant_id: world_1_1_harden_hole_320_a
+parent_variant: world_1_baseline
+status: proposed
+created_at: 2026-07-06T23:10:00Z
+reason: Harden user-noted hole risk around timer 320.
+source_session: 20260706T230000Z_world_1_king
+source_notes:
+  - note_001
+changes:
+  - file: data/routes/scripts/world_1_1_clear_v0.yaml
+    summary: Adjust jump before hole and add verification marker.
+validation:
+  command: python -m smb3_agent lab validate-variant world_1_1_harden_hole_320_a --attempts 10
+  promotion_gate: 10/10 for world_1_1 and no regression in world_1_king smoke
+outcome:
+  status: untested
+  artifacts_dir: null

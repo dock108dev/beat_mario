@@ -329,12 +329,94 @@ action=correct_known_state_or_stop
 The decision must respect `constraints.allow_bridge_steps`; if bridge steps are
 disabled, it must stop instead of silently correcting.
 
-## Future Gates
+## Planned Gates
 
-These are planned gates and should become real commands as the implementation
-plan progresses.
+These gates cover the Phase 6 attempt-lab flow.
 
-No future gates are promoted yet.
+## Gate 18: Lab Session Start
 
-Each future command should be added with tests before it becomes a required
-gate.
+Command:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+```
+
+Pass condition:
+
+- A session manifest is written under `artifacts/sessions/`.
+- The manifest records requested speed, actual run settings, route variant,
+  artifact paths, and result.
+
+## Gate 19: Lab Note Latest
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab note latest \
+  "1-1 around 320 timer: falls into the hole and usually gets lucky"
+```
+
+Pass condition:
+
+- The note is appended to the latest session.
+- Raw text is preserved exactly.
+- Optional anchors are validated when provided.
+
+## Gate 20: Lab Review Latest
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab review latest
+```
+
+Pass condition:
+
+- Review links session, notes, and trace evidence.
+- It recommends one concrete experiment or records why there is not enough
+  evidence.
+
+## Gate 21: Variant Proposal
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab propose-variant latest
+```
+
+Pass condition:
+
+- A proposed variant records parent variant, source session, source notes,
+  changed files, and validation command.
+- Baseline files are unchanged.
+
+## Gate 22: Variant Validation
+
+Command:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent lab run-variant world_1_1_harden_hole_320_a --attempts 10
+```
+
+Pass condition:
+
+- Variant run writes a normal session artifact.
+- Result can be compared to the parent variant.
+
+## Gate 23: Variant Promotion Guard
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent lab promote-variant world_1_1_harden_hole_320_a
+```
+
+Pass condition:
+
+- Promotion is refused without a passing validation artifact.
+- If accepted, prior baseline metadata is preserved.
+
+Promotion should be tested first on disposable variants. Do not promote a route
+variant just because the command exists.

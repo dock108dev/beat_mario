@@ -305,11 +305,145 @@ Pass condition:
 - Recovery respects the goal contract.
 - It does not silently bridge when bridge steps are disallowed.
 
-## Phase 6: Research Unknown Routes
+## Phase 6: Attempt Lab and Route Iteration
 
-Goal: handle World 8 even though the user does not already know it.
+Goal: make every user observation and route change durable before expanding into
+less-known route territory.
 
-### Step 6.1: Route research notes
+See `docs/attempt-lab.md` for the source-of-truth workflow.
+
+### Step 6.1: Attempt session manifest
+
+Implementation:
+
+- Add a session manifest model. [implemented]
+- Store session artifacts under `artifacts/sessions/<session_id>/`. [implemented]
+- Record command text, goal, route variant, speed, capture settings, attempt
+  count, start/end timestamps, and output artifact paths.
+- Add a `lab start` command that wraps existing command/goal runners and writes
+  the manifest. [implemented]
+
+Validation gate:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+```
+
+Pass condition:
+
+- Command exits zero or records a classified run failure.
+- A session manifest is written.
+- Manifest includes requested speed, actual run settings, route log path, and
+  route variant.
+
+### Step 6.2: Human note capture
+
+Implementation:
+
+- Add a note model using `data/lab/note-template.yaml` as the initial contract. [implemented]
+- Add `lab note latest`. [implemented]
+- Support free-form notes plus optional anchors:
+  - segment id
+  - attempt number
+  - frame
+  - event
+  - wall-clock seconds
+  - in-game timer
+  - screenshot
+- Preserve the user's raw text separately from machine interpretation. [implemented]
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab note latest \
+  "1-1 around 320 timer: falls into the hole and usually gets lucky"
+```
+
+Pass condition:
+
+- Latest session receives a note.
+- The note file validates.
+- Raw note text is preserved exactly.
+
+### Step 6.3: Session review
+
+Implementation:
+
+- Add `lab review latest`. [implemented]
+- Join notes, route log events, state trace, and screenshots when available. [implemented for route logs and notes]
+- Produce a review artifact with:
+  - linked notes
+  - nearest trace evidence
+  - failure or hardening classification
+  - hypothesis
+  - recommended experiment
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab review latest
+```
+
+Pass condition:
+
+- Review references the session manifest and note ids.
+- Review does not invent facts not present in artifacts.
+- Review recommends one concrete route experiment or explains why it cannot.
+
+### Step 6.4: Variant proposal
+
+Implementation:
+
+- Add a route variant model using `data/lab/variant-proposal-template.yaml` as
+  the initial contract. [implemented]
+- Add `lab propose-variant latest`. [implemented]
+- Generate a proposed variant from the review without modifying the baseline. [implemented]
+- Include parent variant, source session, source notes, intended files, and
+  validation command.
+
+Validation gate:
+
+```bash
+.venv/bin/python -m smb3_agent lab propose-variant latest
+```
+
+Pass condition:
+
+- A variant proposal file is written.
+- Parent route and source note ids are recorded.
+- Baseline files are unchanged.
+
+### Step 6.5: Variant validation and promotion
+
+Implementation:
+
+- Add `lab run-variant`. [implemented]
+- Add `lab compare-variant`. [implemented]
+- Add `lab promote-variant`. [implemented]
+- Promotion must backup the previous baseline metadata and record the validation
+  artifact that justified promotion.
+
+Validation gate:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent lab run-variant world_1_1_harden_hole_320_a --attempts 10
+.venv/bin/python -m smb3_agent lab compare-variant world_1_1_harden_hole_320_a
+```
+
+Pass condition:
+
+- Variant run writes a normal session artifact.
+- Comparison reports success rate, failure classes, and changed files.
+- Promotion is blocked unless the configured gate passes.
+
+## Phase 7: Research Unknown Routes
+
+Goal: handle World 8 and other less-known route sections through the attempt lab
+instead of one-off scripting.
+
+### Step 7.1: Route research notes
 
 Implementation:
 
@@ -328,13 +462,15 @@ Pass condition:
 
 - World 8 has a planned segment list.
 - Unknowns are explicit.
+- Each planned segment has a proposed first attempt-lab session command.
 
-### Step 6.2: First World 8 segment proof
+### Step 7.2: First World 8 segment proof
 
 Implementation:
 
 - Start from a known World 8 state.
 - Build the first segment as a small run with logs and screenshots.
+- Use attempt-lab notes and variants for each correction.
 
 Validation gate:
 
@@ -345,8 +481,9 @@ python -m smb3_agent goal run world_8_first_segment --attempts 5
 Pass condition:
 
 - At least one successful run or a classified blocker with artifacts.
+- Any user observations are captured as notes instead of remaining only in chat.
 
-## Phase 7: Generalize Beyond SMB3
+## Phase 8: Generalize Beyond SMB3
 
 Goal: preserve the parts that apply to future sim/playtester products.
 

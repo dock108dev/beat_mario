@@ -16,6 +16,8 @@ The repo currently has:
 - A World 1 route gate that reaches the king-transition marker using a mix of
   scripted gameplay and explicit bridge steps.
 - Screenshot/contact-sheet tooling for review.
+- Phase 6 attempt-lab scaffolding for sessions, human notes, route variants,
+  and evidence-backed iteration.
 - Parser tests for route summaries and post-probe success markers.
 
 See [docs/route-status.md](docs/route-status.md) for what is solved, bridged,
@@ -91,6 +93,18 @@ python -m smb3_agent recovery simulate life_lost --goal world_1_king
 python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
 ```
 
+Phase 6 attempt-lab commands are available. Their contracts are documented in
+`docs/attempt-lab.md` and scaffolded under `data/lab/`.
+
+Use the attempt lab:
+
+```bash
+python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+python -m smb3_agent lab note latest "1-1 around 320 timer: falls into the hole and usually gets lucky"
+python -m smb3_agent lab review latest
+python -m smb3_agent lab propose-variant latest
+```
+
 Review an existing log:
 
 ```bash
@@ -106,6 +120,8 @@ python -m smb3_agent task review-fceux-log \
 - [Product direction](docs/product-direction.md)
 - [Goal contract](docs/goal-contract.md)
 - [Agent architecture](docs/agent-architecture.md)
+- [Attempt lab](docs/attempt-lab.md)
+- [World 1 lab guide](docs/world-1-lab-guide.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Validation gates](docs/validation-gates.md)
 - [Route status](docs/route-status.md)
