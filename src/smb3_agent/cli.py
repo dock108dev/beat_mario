@@ -1,45 +1,25 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from smb3_agent.detection.state_detector import detect_state
 from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
 from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
+from smb3_agent.goals import (
+    GoalValidationError,
+    load_goal_contract,
+    resolve_goal_path,
+    run_goal_contract,
+)
+from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
 from smb3_agent.tasks.checkpoint_1_1 import run_checkpoint_1_1_task
 from smb3_agent.tasks.enter_1_1 import run_enter_1_1_task
 from smb3_agent.tasks.load_checkpoint_1_1 import run_load_checkpoint_1_1_task
 from smb3_agent.tasks.run_1_1_script import run_1_1_script_task
 from smb3_agent.tasks.start_game import run_start_game_task
-
-
-WORLD_1_KING_ENV = (
-    "SMB3_FCEUX_TIMEOUT_SECONDS=420",
-    "SMB3_1_3_AFTER_WHISTLE_MODE=memory_return_map",
-    "SMB3_1_FORTRESS_BRIDGE_SECOND_WHISTLE=1",
-    "SMB3_1_FORTRESS_BRIDGE_CLEAR_MAP=1",
-    "SMB3_1_4_ENTRY_FORM=3",
-    "SMB3_1_5_WATER_BRIDGE_X=160",
-    "SMB3_1_5_WATER_BRIDGE_Y=32",
-    "SMB3_1_5_WATER_BRIDGE_SENTINEL_X=40960",
-    "SMB3_1_6_MAP_SEQUENCE=A",
-    "SMB3_1_6_BRIDGE_CLEAR=1",
-    "SMB3_1_6_BRIDGE_CLEAR_X=2848",
-    "SMB3_1_6_BRIDGE_CLEAR_Y=320",
-    "SMB3_WORLD1_FORCE_COMPLETE_FLAGS=1",
-    "SMB3_1_CASTLE_MAP_X=96",
-    "SMB3_1_CASTLE_MAP_Y=32",
-    "SMB3_1_CASTLE_SENTINEL_X=24576",
-    "SMB3_1_CASTLE_CURSOR_X=96",
-    "SMB3_1_CASTLE_CURSOR_Y=32",
-    "SMB3_1_AIRSHIP_OBJECT_BRIDGE=1",
-    "SMB3_1_AIRSHIP_OBJECT_X=96",
-    "SMB3_1_AIRSHIP_OBJECT_Y=32",
-    "SMB3_1_AIRSHIP_STAGE_BRIDGE=1",
-    "SMB3_1_AIRSHIP_BRIDGE_CLEAR=1",
-    "SMB3_1_CASTLE_MAP_SEQUENCE=A",
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -288,6 +268,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fceux_contact_sheet.add_argument("--columns", type=int, default=4)
 
+    goal = subparsers.add_parser("goal", help="Validate and run goal contracts")
+    goal_subparsers = goal.add_subparsers(dest="goal_command", required=True)
+
+    goal_validate = goal_subparsers.add_parser("validate", help="Validate a goal contract file or id")
+    goal_validate.add_argument("goal", help="Goal id or path to a goal YAML file")
+
+    goal_run = goal_subparsers.add_parser("run", help="Run a goal contract")
+    goal_run.add_argument("goal", help="Goal id or path to a goal YAML file")
+    goal_run.add_argument("--game-file", default=None, help="Path to the local game file")
+    goal_run.add_argument("--attempts", type=int, default=3)
+    goal_run.add_argument(
+        "--artifacts-dir",
+        default=None,
+        help="Directory for this goal attempt; defaults to a timestamped goal artifact directory",
+    )
+    goal_run.add_argument("--capture-images", action="store_true")
+    goal_run.add_argument("--capture-ticks", action="store_true")
+
     return parser
 
 
@@ -408,6 +406,44 @@ def main() -> None:
         write_contact_sheet(converted, sheet_path, columns=args.columns)
         print(f"converted={len(converted)}")
         print(f"sheet={sheet_path}")
+        return
+
+    if args.command == "goal" and args.goal_command == "validate":
+        try:
+            contract = load_goal_contract(resolve_goal_path(args.goal))
+        except GoalValidationError as exc:
+            parser.error(str(exc))
+        print("valid=true")
+        print(f"goal_id={contract.id}")
+        print(f"preset={contract.preset}")
+        print(f"segments={len(contract.segments)}")
+        print(f"bridged_segments={len(contract.bridged_segments)}")
+        return
+
+    if args.command == "goal" and args.goal_command == "run":
+        try:
+            contract = load_goal_contract(resolve_goal_path(args.goal))
+        except GoalValidationError as exc:
+            parser.error(str(exc))
+
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("goal run requires --game-file or SMB3_GAME_FILE")
+
+        result = run_goal_contract(
+            contract,
+            game_path=Path(game_file),
+            attempts=args.attempts,
+            artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
+            capture_images=args.capture_images,
+            capture_ticks=args.capture_ticks,
+        )
+        print(f"goal_id={result.contract.id}")
+        print(f"artifacts_dir={result.artifacts_dir}")
+        print(result.summary.to_text())
+        print(f"metrics_passed={str(result.metrics_passed).lower()}")
+        if result.contract.runner.get("require_perfect") and not result.metrics_passed:
+            raise SystemExit(1)
         return
 
     parser.error("Unsupported command")

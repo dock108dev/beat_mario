@@ -59,6 +59,14 @@ python -m smb3_agent task fceux-world-1-king \
   --require-perfect
 ```
 
+Validate and run the first goal contract:
+
+```bash
+python -m smb3_agent goal validate data/goals/world_1_king.yaml
+export SMB3_GAME_FILE=/path/to/local-game-file
+python -m smb3_agent goal run world_1_king --attempts 3
+```
+
 Review an existing log:
 
 ```bash

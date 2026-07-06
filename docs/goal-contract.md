@@ -113,23 +113,24 @@ The recovery manager should ask the contract what is allowed before acting.
 
 ## Validation
 
-Planned command:
+Command:
 
 ```bash
-python -m smb3_agent goal validate data/goals/world_1_king.yaml
+.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
 ```
 
 Pass condition:
 
 - Required fields exist.
-- Every route segment exists in the segment catalog.
 - Every success metric has a supported evaluator.
 - Recovery actions are recognized.
 - Bridge usage is explicit.
 
+Segment catalog cross-checks are a Phase 2 responsibility.
+
 ## First Implementation Target
 
-Do not add LLM interpretation first.
+Do not add LLM interpretation before the contract layer is stable.
 
 First build:
 
@@ -142,7 +143,8 @@ First build:
 Validation gate:
 
 ```bash
-python -m pytest -q
-python -m smb3_agent goal validate data/goals/world_1_king.yaml
-python -m smb3_agent goal run world_1_king --attempts 3
+.venv/bin/python -m pytest -q
+.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent goal run world_1_king --attempts 3
 ```

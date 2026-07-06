@@ -139,14 +139,49 @@ Pass condition:
 - Summary matches the expected pass/fail outcome.
 - Post-probe fields identify the final route event.
 
+## Gate 7: Goal Contract
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
+```
+
+Pass condition:
+
+```text
+valid=true
+goal_id=world_1_king
+```
+
+The validator must reject missing required fields with a clear error.
+
+## Gate 8: Goal Run
+
+Command:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent goal run world_1_king --attempts 3
+```
+
+Pass condition:
+
+```text
+successes=3/3
+post_probe_last_event=post_probe_1_airship_success_king
+post_probe_clear=true
+metrics_passed=true
+```
+
+The command must also print the `artifacts_dir` used for the run.
+
 ## Future Gates
 
 These are planned gates and should become real commands as the implementation
 plan progresses.
 
 ```bash
-python -m smb3_agent goal validate data/goals/world_1_king.yaml
-python -m smb3_agent goal run world_1_king --attempts 3
 python -m smb3_agent segment validate data/segments/world_1.yaml
 python -m smb3_agent goal status world_1_king
 python -m smb3_agent command parse "run world 1 king gate 3 times"

@@ -52,6 +52,23 @@ post_probe_last_event=post_probe_1_airship_success_king
 post_probe_clear=true
 ```
 
+Latest Phase 1 goal-contract run:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+python -m smb3_agent goal run world_1_king --attempts 3
+```
+
+Result:
+
+```text
+successes=3/3
+bad_states=0/3
+post_probe_last_event=post_probe_1_airship_success_king
+post_probe_clear=true
+metrics_passed=true
+```
+
 ## Segment Table
 
 | Segment | Status | Evidence | Notes |
@@ -83,8 +100,7 @@ Treat watch mode as a debugging surface, not a reliability gate.
 ## Next Route Cleanup Targets
 
 1. Promote current implicit route steps into `data/segments/world_1.yaml`.
-2. Add goal contract for `world_1_king`.
-3. Replace or clearly isolate the fortress whistle bridge.
-4. Stabilize World 1-4 under watchable/capture mode.
-5. Add life-loss recovery decisions before attempting longer unknown routes.
-6. Start World 8 research as planned segments, not one giant route.
+2. Replace or clearly isolate the fortress whistle bridge.
+3. Stabilize World 1-4 under watchable/capture mode.
+4. Add life-loss recovery decisions before attempting longer unknown routes.
+5. Start World 8 research as planned segments, not one giant route.

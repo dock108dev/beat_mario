@@ -72,8 +72,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m pytest -q
-python -m smb3_agent goal validate data/goals/world_1_king.yaml
+.venv/bin/python -m pytest -q
+.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
 ```
 
 Pass condition:
@@ -92,7 +92,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent goal run world_1_king --attempts 3
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent goal run world_1_king --attempts 3
 ```
 
 Pass condition:

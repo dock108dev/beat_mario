@@ -1,0 +1,73 @@
+id: world_1_king
+game: smb3
+user_directive: Reach the World 1 king transition from a fresh start.
+
+objective:
+  type: route_completion
+  target: world_1_king_transition
+
+runner:
+  backend: fceux
+  preset: fceux_world_1_king
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_1_king
+  require_perfect: true
+
+route:
+  segments:
+    - fresh_start_to_1_1
+    - world_1_1_clear
+    - world_1_2_clear
+    - world_1_3_whistle
+    - world_1_fortress_whistle
+    - world_1_4_clear
+    - world_1_5_water_path
+    - world_1_6_clear
+    - world_1_airship_to_king
+
+bridged_segments:
+  - world_1_fortress_whistle
+  - world_1_5_water_path
+  - world_1_6_clear
+  - world_1_airship_to_king
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: true
+  preserve_attempt_artifacts: true
+  explain_failures: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: true
+  blind_state_mutation: false
+
+success_metrics:
+  - id: all_attempts_clear_1_1
+    type: summary_field
+    field: success_count
+    equals: total
+  - id: no_bad_1_1_states
+    type: summary_field
+    field: bad_state_count
+    equals: 0
+  - id: reaches_king_transition
+    type: final_event
+    value: post_probe_1_airship_success_king
+  - id: post_probe_clear
+    type: summary_field
+    field: post_probe_clear
+    equals: true
+
+recovery_policy:
+  life_lost:
+    action: reclassify_state
+    continue_if_contract_allows: true
+  wrong_map_node:
+    action: correct_known_state_or_stop
+  timeout:
+    action: stop_and_review
+  unknown_state:
+    action: capture_artifacts_and_stop
+
