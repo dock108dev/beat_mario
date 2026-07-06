@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
+from smb3_agent.commands import CommandParseError, parse_command, run_command
 from smb3_agent.detection.state_detector import detect_state
 from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
 from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
@@ -323,6 +324,21 @@ def build_parser() -> argparse.ArgumentParser:
     review_compare.add_argument("left", help="Left route log or artifact directory")
     review_compare.add_argument("right", help="Right route log or artifact directory")
 
+    command = subparsers.add_parser("command", help="Parse and run user-facing game commands")
+    command_subparsers = command.add_subparsers(dest="command_action", required=True)
+
+    command_parse = command_subparsers.add_parser("parse", help="Parse a user command")
+    command_parse.add_argument("text", help="User command text")
+
+    command_run = command_subparsers.add_parser("run", help="Run a parsed user command")
+    command_run.add_argument("text", help="User command text")
+    command_run.add_argument("--game-file", default=None, help="Path to the local game file")
+    command_run.add_argument(
+        "--artifacts-dir",
+        default=None,
+        help="Directory for command trace and nested goal artifacts",
+    )
+
     return parser
 
 
@@ -514,6 +530,30 @@ def main() -> None:
 
     if args.command == "review" and args.review_command == "compare":
         print(compare_logs(_resolve_review_log(Path(args.left)), _resolve_review_log(Path(args.right))).to_text())
+        return
+
+    if args.command == "command" and args.command_action == "parse":
+        try:
+            print(parse_command(args.text).to_text())
+        except CommandParseError as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "command" and args.command_action == "run":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("command run requires --game-file or SMB3_GAME_FILE")
+        try:
+            result = run_command(
+                args.text,
+                game_path=Path(game_file),
+                artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
+            )
+        except CommandParseError as exc:
+            parser.error(str(exc))
+        print(result.to_text())
+        if not result.goal_result.metrics_passed:
+            raise SystemExit(1)
         return
 
     parser.error("Unsupported command")

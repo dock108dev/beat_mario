@@ -243,14 +243,47 @@ Pass condition:
 - Output explains why a passing reliability run and a watch/capture-style
   failure can differ.
 
+## Gate 13: Command Parse
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent command parse "run world 1 king gate 3 times"
+```
+
+Pass condition:
+
+```text
+action=run_goal
+goal=world_1_king
+attempts=3
+run_mode=gate
+validation_policy=require_goal_metrics
+```
+
+## Gate 14: Command Run
+
+Command:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent command run "run world 1 king gate 3 times"
+```
+
+Pass condition:
+
+- Command runs the same goal gate as `goal run world_1_king --attempts 3`.
+- Output includes `artifacts_dir`.
+- Output includes `trace_path`.
+- Output includes `metrics_passed=true`.
+- Output includes one `next_action`.
+
 ## Future Gates
 
 These are planned gates and should become real commands as the implementation
 plan progresses.
 
 ```bash
-python -m smb3_agent command parse "run world 1 king gate 3 times"
-python -m smb3_agent command run "run world 1 king gate 3 times"
 python -m smb3_agent recovery simulate life_lost --goal world_1_king
 ```
 

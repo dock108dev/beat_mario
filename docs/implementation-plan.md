@@ -213,8 +213,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m pytest -q
-python -m smb3_agent command parse "run world 1 king gate 3 times"
+.venv/bin/python -m pytest -q
+.venv/bin/python -m smb3_agent command parse "run world 1 king gate 3 times"
 ```
 
 Pass condition:
@@ -231,7 +231,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent command run "run world 1 king gate 3 times"
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent command run "run world 1 king gate 3 times"
 ```
 
 Pass condition:

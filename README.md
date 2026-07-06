@@ -74,6 +74,14 @@ python -m smb3_agent segment validate data/segments/world_1.yaml
 python -m smb3_agent goal status world_1_king
 ```
 
+Use the command interface:
+
+```bash
+python -m smb3_agent command parse "run world 1 king gate 3 times"
+export SMB3_GAME_FILE=/path/to/local-game-file
+python -m smb3_agent command run "run world 1 king gate 3 times"
+```
+
 Review an existing log:
 
 ```bash
