@@ -77,6 +77,8 @@ python -m smb3_agent goal status world_1_king
 Review an existing log:
 
 ```bash
+python -m smb3_agent review log artifacts/fceux/world_1_king/fceux_1_1.log
+python -m smb3_agent review compare artifacts/fceux/world_1_king artifacts/fceux/show_world1_king_4x_001
 python -m smb3_agent task review-fceux-log \
   --log artifacts/fceux/world_1_king/fceux_1_1.log \
   --attempts 10

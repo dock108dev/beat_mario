@@ -15,6 +15,7 @@ from smb3_agent.goals import (
 )
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
+from smb3_agent.review import compare_logs, review_log
 from smb3_agent.segments import (
     SegmentValidationError,
     load_segment_catalog,
@@ -311,6 +312,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional goal id/path to cross-check against the catalog",
     )
 
+    review = subparsers.add_parser("review", help="Review route logs and compare attempts")
+    review_subparsers = review.add_subparsers(dest="review_command", required=True)
+
+    review_log_parser = review_subparsers.add_parser("log", help="Review one route log")
+    review_log_parser.add_argument("log", help="Path to a FCEUX route log")
+    review_log_parser.add_argument("--attempts", type=int, default=None)
+
+    review_compare = review_subparsers.add_parser("compare", help="Compare two route logs or artifact dirs")
+    review_compare.add_argument("left", help="Left route log or artifact directory")
+    review_compare.add_argument("right", help="Right route log or artifact directory")
+
     return parser
 
 
@@ -496,4 +508,18 @@ def main() -> None:
             print(f"goal_segments={len(contract.segments)}")
         return
 
+    if args.command == "review" and args.review_command == "log":
+        print(review_log(Path(args.log), expected_attempts=args.attempts).to_text())
+        return
+
+    if args.command == "review" and args.review_command == "compare":
+        print(compare_logs(_resolve_review_log(Path(args.left)), _resolve_review_log(Path(args.right))).to_text())
+        return
+
     parser.error("Unsupported command")
+
+
+def _resolve_review_log(path: Path) -> Path:
+    if path.is_dir():
+        return path / "fceux_1_1.log"
+    return path

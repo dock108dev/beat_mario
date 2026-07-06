@@ -167,7 +167,7 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent review log artifacts/fceux/show_world1_king_4x_001/fceux_1_1.log
+.venv/bin/python -m smb3_agent review log artifacts/fceux/water_to_node_10_up_right_A/fceux_1_1.log
 ```
 
 Pass condition:
@@ -186,9 +186,9 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent review compare \
-  artifacts/fceux/world_1_king \
-  artifacts/fceux/show_world1_king_4x_001
+.venv/bin/python -m smb3_agent review compare \
+  artifacts/goals/world_1_king/20260706T202815Z \
+  artifacts/fceux/water_to_node_10_up_right_A
 ```
 
 Pass condition:

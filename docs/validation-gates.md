@@ -211,6 +211,38 @@ Pass condition:
 - Solved, flaky, and bridged statuses are visible.
 - Bridge flags are explicit for each segment.
 
+## Gate 11: Log Review
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent review log artifacts/fceux/water_to_node_10_up_right_A/fceux_1_1.log
+```
+
+Pass condition:
+
+- Output includes `failure_class`.
+- Output includes `failed_segment`.
+- Output includes `last_event`.
+- Output includes one concrete `next_experiment`.
+
+## Gate 12: Review Compare
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent review compare \
+  artifacts/goals/world_1_king/20260706T202815Z \
+  artifacts/fceux/water_to_node_10_up_right_A
+```
+
+Pass condition:
+
+- Output includes both logs.
+- Output includes both failure classes.
+- Output explains why a passing reliability run and a watch/capture-style
+  failure can differ.
+
 ## Future Gates
 
 These are planned gates and should become real commands as the implementation
