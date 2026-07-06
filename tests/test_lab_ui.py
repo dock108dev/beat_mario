@@ -8,17 +8,14 @@ import yaml
 
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult
-from smb3_agent.lab import (
-    add_batch_notes_to_latest,
-    build_issue_ledger_latest,
-    propose_variants_from_latest,
-    start_session,
-    write_ui_summary_latest,
-)
-from smb3_agent.lab_ui import render_lab_ui
+from smb3_agent.lab import add_batch_notes_to_latest, build_issue_ledger_latest, start_session
+from smb3_agent.lab_ui import build_control_panel_summary, render_lab_ui
 
 
-def test_lab_ui_renders_route_map_and_batch_note_form(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_control_panel_renders_world_1_locations_and_controls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     _prepare_ui_lab(monkeypatch, tmp_path)
     start_session(
         "show me the route at 4x",
@@ -26,34 +23,28 @@ def test_lab_ui_renders_route_map_and_batch_note_form(monkeypatch: pytest.Monkey
         attempts=1,
         artifacts_root=tmp_path / "artifacts/sessions",
     )
-    add_batch_notes_to_latest(
-        [
-            {
-                "segment_id": "world_1_1_clear",
-                "text": "1-1 falls into hole at 283 on clock.",
-                "severity": "harden",
-            },
-            {
-                "segment_id": "world_1_fortress_whistle",
-                "text": "Castle dies first try and carry-over inputs send the route to 1-4.",
-                "severity": "harden",
-            },
-        ]
-    )
-    build_issue_ledger_latest()
-    propose_variants_from_latest()
 
     html = render_lab_ui()
 
-    assert "World 1 Lab" in html
-    assert "Route Map" in html
-    assert 'name="note__world_1_1_clear"' in html
-    assert "World 1 Fortress Whistle" in html
-    assert "Create Codex Task" in html
-    assert "world_1_fortress_whistle_recovery" in html
+    assert "World 1 Control Panel" in html
+    assert "Run Controls" in html
+    assert "World 1 Notes" in html
+    assert "1-1" in html
+    assert "1-3" in html
+    assert "Fortress" in html
+    assert "Airship" in html
+    assert "King" in html
+    assert "Unit Tests" in html
+    assert "Phase Gate" in html
+    assert 'name="note__world_1_1"' in html
+    assert "World 1-3 Whistle" not in html
+    assert "World 1 Fortress Whistle" not in html
 
 
-def test_ui_summary_contains_segment_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_control_panel_groups_notes_by_human_location(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     _prepare_ui_lab(monkeypatch, tmp_path)
     start_session(
         "show me the route at 4x",
@@ -64,36 +55,81 @@ def test_ui_summary_contains_segment_counts(monkeypatch: pytest.MonkeyPatch, tmp
     add_batch_notes_to_latest(
         [
             {
-                "segment_id": "world_1_1_clear",
+                "segment_id": "world_1_1",
                 "text": "1-1 falls into hole at 283 on clock.",
                 "severity": "harden",
             },
             {
-                "segment_id": "world_1_3_whistle",
-                "text": "1-3 whistle exit is expected.",
-                "severity": "note",
+                "segment_id": "world_1_fortress",
+                "text": "Fortress needs Raccoon flight, not fire form.",
+                "severity": "guide_detail",
             },
         ]
     )
     build_issue_ledger_latest()
-    propose_variants_from_latest()
 
-    summary = write_ui_summary_latest().summary
-    segment_map = {segment["id"]: segment for segment in summary["segments"]}
+    summary = build_control_panel_summary()
+    locations = {location["id"]: location for location in summary["locations"]}
 
-    assert segment_map["world_1_1_clear"]["notes"] == 1
-    assert segment_map["world_1_1_clear"]["issues"] == 1
-    assert segment_map["world_1_1_clear"]["proposals"] == 1
-    assert segment_map["world_1_3_whistle"]["notes"] == 1
-    assert segment_map["world_1_3_whistle"]["proposals"] == 0
+    assert locations["world_1_1"]["notes"] == 1
+    assert locations["world_1_1"]["open_issues"] == 1
+    assert locations["world_1_fortress"]["notes"] == 1
+    assert locations["world_1_fortress"]["open_issues"] == 1
+    assert summary["totals"]["notes"] == 2
 
 
 def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
-    tmp_path.joinpath("data/variants").mkdir(parents=True)
+    tmp_path.joinpath("data/worlds").mkdir(parents=True)
     tmp_path.joinpath("data/segments").mkdir(parents=True)
     tmp_path.joinpath("artifacts/sessions").mkdir(parents=True)
     tmp_path.joinpath("local-game-file").write_text("placeholder")
+    tmp_path.joinpath("data/worlds/world_1_locations.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "world": 1,
+                "name": "Grass Land",
+                "locations": [
+                    {
+                        "id": "world_1_map",
+                        "label": "Map",
+                        "default_status": "needs review",
+                        "objective": "Navigate between required locations.",
+                    },
+                    {
+                        "id": "world_1_1",
+                        "label": "1-1",
+                        "default_status": "works",
+                        "objective": "Clear the level.",
+                    },
+                    {
+                        "id": "world_1_3",
+                        "label": "1-3",
+                        "default_status": "works",
+                        "objective": "Get the hidden item route.",
+                    },
+                    {
+                        "id": "world_1_fortress",
+                        "label": "Fortress",
+                        "default_status": "blocked",
+                        "objective": "Use flight above the ceiling.",
+                    },
+                    {
+                        "id": "world_1_airship",
+                        "label": "Airship",
+                        "default_status": "needs review",
+                        "objective": "Complete the moving stage.",
+                    },
+                    {
+                        "id": "world_1_king",
+                        "label": "King",
+                        "default_status": "needs review",
+                        "objective": "Confirm the world clear transition.",
+                    },
+                ],
+            }
+        )
+    )
     tmp_path.joinpath("data/segments/world_1.yaml").write_text(
         yaml.safe_dump(
             {
