@@ -85,7 +85,17 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
         x_match = X_RE.search(line)
         if event is not None and event.startswith("post_probe_"):
             post_probe_last_event = event
-            if event == "post_probe_1_2_success_course_clear":
+            if event in {
+                "post_probe_1_2_enter",
+                "post_probe_1_3_enter",
+                "post_probe_1_fortress_enter",
+            } or event.startswith("post_probe_1_fortress_enter_"):
+                post_probe_clear = False
+            if event in {
+                "post_probe_1_2_success_course_clear",
+                "post_probe_1_3_whistle_room_success",
+                "post_probe_1_fortress_whistle_room_success",
+            }:
                 post_probe_clear = True
             if x_match is not None:
                 x = int(x_match.group("x"))
