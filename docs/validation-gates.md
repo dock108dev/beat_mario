@@ -176,14 +176,47 @@ metrics_passed=true
 
 The command must also print the `artifacts_dir` used for the run.
 
+## Gate 9: Segment Catalog
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent segment validate data/segments/world_1.yaml
+```
+
+Pass condition:
+
+```text
+valid=true
+catalog_id=world_1
+segments=9
+goal_id=world_1_king
+goal_segments=9
+```
+
+The validator must reject unsupported statuses, duplicate ids, missing required
+fields, and goal references to missing segments.
+
+## Gate 10: Goal Status
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent goal status world_1_king
+```
+
+Pass condition:
+
+- Output lists every route segment in goal order.
+- Solved, flaky, and bridged statuses are visible.
+- Bridge flags are explicit for each segment.
+
 ## Future Gates
 
 These are planned gates and should become real commands as the implementation
 plan progresses.
 
 ```bash
-python -m smb3_agent segment validate data/segments/world_1.yaml
-python -m smb3_agent goal status world_1_king
 python -m smb3_agent command parse "run world 1 king gate 3 times"
 python -m smb3_agent command run "run world 1 king gate 3 times"
 python -m smb3_agent recovery simulate life_lost --goal world_1_king

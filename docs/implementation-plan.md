@@ -118,8 +118,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m pytest -q
-python -m smb3_agent segment validate data/segments/world_1.yaml
+.venv/bin/python -m pytest -q
+.venv/bin/python -m smb3_agent segment validate data/segments/world_1.yaml
 ```
 
 Pass condition:
@@ -138,7 +138,7 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent goal status world_1_king
+.venv/bin/python -m smb3_agent goal status world_1_king
 ```
 
 Pass condition:

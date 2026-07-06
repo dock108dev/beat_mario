@@ -71,12 +71,18 @@ metrics_passed=true
 
 ## Segment Table
 
+This table is backed by `data/segments/world_1.yaml` and can be inspected with:
+
+```bash
+python -m smb3_agent goal status world_1_king
+```
+
 | Segment | Status | Evidence | Notes |
 | --- | --- | --- | --- |
 | Fresh start to World 1-1 | solved | FCEUX 1-1 gate | Handled by Lua route bootstrap. |
 | World 1-1 clear | solved | `fceux-1-1 --attempts 10 --require-perfect` | Strongest current base gate. |
-| World 1-2 clear | solved/probe | `run_1_2_naive` post-probe | Needs promotion from post-probe into segment catalog. |
-| World 1-3 whistle | solved/probe | Whistle inventory marker | Route uses white-block whistle path. |
+| World 1-2 clear | solved | `run_1_2_naive` post-probe | Cataloged but still implemented as a post-probe script. |
+| World 1-3 whistle | solved | Whistle inventory marker | Route uses white-block whistle path. |
 | World 1 fortress whistle | bridged | Second whistle bridge marker | Real flight/whistle play is not fully solved. |
 | World 1-4 | flaky | Watchable demo failed here | Reliability gate may skip/bridge around parts; visible throttled run exposed instability. |
 | World 1-5 / water path | bridged | Water map-position bridge | Needs real route implementation or explicit bridge policy. |
@@ -99,8 +105,7 @@ Treat watch mode as a debugging surface, not a reliability gate.
 
 ## Next Route Cleanup Targets
 
-1. Promote current implicit route steps into `data/segments/world_1.yaml`.
-2. Replace or clearly isolate the fortress whistle bridge.
-3. Stabilize World 1-4 under watchable/capture mode.
-4. Add life-loss recovery decisions before attempting longer unknown routes.
-5. Start World 8 research as planned segments, not one giant route.
+1. Replace or clearly isolate the fortress whistle bridge.
+2. Stabilize World 1-4 under watchable/capture mode.
+3. Add life-loss recovery decisions before attempting longer unknown routes.
+4. Start World 8 research as planned segments, not one giant route.

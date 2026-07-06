@@ -1,0 +1,184 @@
+catalog_id: world_1
+game: smb3
+
+segments:
+  - id: fresh_start_to_1_1
+    name: Fresh start to World 1-1
+    status: solved
+    start_condition:
+      type: emulator_boot
+      state: fresh_start
+    success_condition:
+      type: map_entry
+      target: world_1_1
+    failure_conditions:
+      - type: timeout
+        seconds: 30
+      - type: wrong_screen
+    current_method:
+      type: lua_scripted_inputs
+      source: scripts/fceux_1_1_agent.lua
+    evidence:
+      - fceux-1-1 gate
+    notes: Handled by the current Lua route bootstrap.
+
+  - id: world_1_1_clear
+    name: World 1-1 clear
+    status: solved
+    start_condition:
+      type: level_start
+      level: "1-1"
+    success_condition:
+      type: course_clear
+      marker: attempt_success_course_clear
+    failure_conditions:
+      - type: bad_state_marker
+      - type: timeout
+        seconds: 180
+    current_method:
+      type: memory_aware_route
+      source: scripts/fceux_1_1_agent.lua
+    evidence:
+      - fceux-1-1 --attempts 10 --require-perfect
+    notes: Strongest current base route gate.
+
+  - id: world_1_2_clear
+    name: World 1-2 clear
+    status: solved
+    start_condition:
+      type: map_entry
+      target: world_1_2
+    success_condition:
+      type: post_probe_event
+      value: post_probe_1_2_success_course_clear
+    failure_conditions:
+      - type: timeout
+        seconds: 180
+      - type: wrong_map_node
+    current_method:
+      type: post_probe_script
+      probe: run_1_2_naive
+    evidence:
+      - run_1_2_naive post-probe
+    notes: Needs promotion from post-probe code into an explicit segment runner later.
+
+  - id: world_1_3_whistle
+    name: World 1-3 whistle
+    status: solved
+    start_condition:
+      type: map_entry
+      target: world_1_3
+    success_condition:
+      type: post_probe_event
+      value: post_probe_1_3_whistle_room_success
+    failure_conditions:
+      - type: missed_white_block
+      - type: timeout
+        seconds: 240
+    current_method:
+      type: post_probe_script
+      probe: run_1_3_whistle_to_castle
+    evidence:
+      - whistle inventory marker
+    notes: Uses the white-block whistle path.
+
+  - id: world_1_fortress_whistle
+    name: World 1 fortress whistle
+    status: bridged
+    start_condition:
+      type: map_entry
+      target: world_1_fortress
+    success_condition:
+      type: post_probe_event
+      value: post_probe_1_fortress_whistle_room_success
+    failure_conditions:
+      - type: flight_setup_failed
+      - type: timeout
+        seconds: 300
+    current_method:
+      type: known_transition_bridge
+      probe: run_1_fortress_map_sequence
+    evidence:
+      - second whistle bridge marker
+    notes: Real fortress flight and whistle play are not fully solved yet.
+
+  - id: world_1_4_clear
+    name: World 1-4 clear
+    status: flaky
+    start_condition:
+      type: map_entry
+      target: world_1_4
+    success_condition:
+      type: post_probe_event
+      value: post_probe_1_4_success_course_clear
+    failure_conditions:
+      - type: watch_mode_timing_failure
+      - type: timeout
+        seconds: 240
+    current_method:
+      type: mixed_script_and_bridge
+      probe: run_1_4_after_fortress
+    evidence:
+      - watchable demo failed at post_probe_1_4_after
+    notes: Reliability gate may skip or bridge around parts; visible throttled run exposed instability.
+
+  - id: world_1_5_water_path
+    name: World 1-5 water path
+    status: bridged
+    start_condition:
+      type: map_entry
+      target: world_1_5
+    success_condition:
+      type: map_position
+      target: water_path_exit
+    failure_conditions:
+      - type: wrong_map_node
+      - type: timeout
+        seconds: 240
+    current_method:
+      type: known_transition_bridge
+      env_prefix: SMB3_1_5_WATER_BRIDGE
+    evidence:
+      - water map-position bridge
+    notes: Needs real route implementation or explicit long-term bridge policy.
+
+  - id: world_1_6_clear
+    name: World 1-6 clear
+    status: bridged
+    start_condition:
+      type: map_entry
+      target: world_1_6
+    success_condition:
+      type: course_clear
+      marker: SMB3_1_6_BRIDGE_CLEAR
+    failure_conditions:
+      - type: wrong_map_node
+      - type: timeout
+        seconds: 240
+    current_method:
+      type: known_transition_bridge
+      env_prefix: SMB3_1_6_BRIDGE
+    evidence:
+      - 1-6 clear bridge
+    notes: Used to reach later World 1 state.
+
+  - id: world_1_airship_to_king
+    name: Airship to king transition
+    status: bridged
+    start_condition:
+      type: map_entry
+      target: world_1_airship
+    success_condition:
+      type: post_probe_event
+      value: post_probe_1_airship_success_king
+    failure_conditions:
+      - type: airship_marker_missing
+      - type: timeout
+        seconds: 300
+    current_method:
+      type: known_transition_bridge
+      env_prefix: SMB3_1_AIRSHIP
+    evidence:
+      - post_probe_1_airship_success_king
+    notes: Current gate reaches king marker with explicit transition support.
+

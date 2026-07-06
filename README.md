@@ -67,6 +67,13 @@ export SMB3_GAME_FILE=/path/to/local-game-file
 python -m smb3_agent goal run world_1_king --attempts 3
 ```
 
+Inspect the World 1 segment catalog:
+
+```bash
+python -m smb3_agent segment validate data/segments/world_1.yaml
+python -m smb3_agent goal status world_1_king
+```
+
 Review an existing log:
 
 ```bash

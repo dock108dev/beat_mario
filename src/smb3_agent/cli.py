@@ -15,6 +15,12 @@ from smb3_agent.goals import (
 )
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
+from smb3_agent.segments import (
+    SegmentValidationError,
+    load_segment_catalog,
+    render_goal_status,
+    validate_goal_segments,
+)
 from smb3_agent.tasks.checkpoint_1_1 import run_checkpoint_1_1_task
 from smb3_agent.tasks.enter_1_1 import run_enter_1_1_task
 from smb3_agent.tasks.load_checkpoint_1_1 import run_load_checkpoint_1_1_task
@@ -286,6 +292,25 @@ def build_parser() -> argparse.ArgumentParser:
     goal_run.add_argument("--capture-images", action="store_true")
     goal_run.add_argument("--capture-ticks", action="store_true")
 
+    goal_status = goal_subparsers.add_parser("status", help="Show a goal's route segment status")
+    goal_status.add_argument("goal", help="Goal id or path to a goal YAML file")
+    goal_status.add_argument(
+        "--segments",
+        default="data/segments/world_1.yaml",
+        help="Path to the segment catalog YAML file",
+    )
+
+    segment = subparsers.add_parser("segment", help="Validate segment catalogs")
+    segment_subparsers = segment.add_subparsers(dest="segment_command", required=True)
+
+    segment_validate = segment_subparsers.add_parser("validate", help="Validate a segment catalog")
+    segment_validate.add_argument("catalog", help="Path to a segment catalog YAML file")
+    segment_validate.add_argument(
+        "--goal",
+        default="world_1_king",
+        help="Optional goal id/path to cross-check against the catalog",
+    )
+
     return parser
 
 
@@ -444,6 +469,31 @@ def main() -> None:
         print(f"metrics_passed={str(result.metrics_passed).lower()}")
         if result.contract.runner.get("require_perfect") and not result.metrics_passed:
             raise SystemExit(1)
+        return
+
+    if args.command == "goal" and args.goal_command == "status":
+        try:
+            contract = load_goal_contract(resolve_goal_path(args.goal))
+            catalog = load_segment_catalog(Path(args.segments))
+            print(render_goal_status(contract, catalog))
+        except (GoalValidationError, SegmentValidationError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "segment" and args.segment_command == "validate":
+        try:
+            catalog = load_segment_catalog(Path(args.catalog))
+            if args.goal:
+                contract = load_goal_contract(resolve_goal_path(args.goal))
+                validate_goal_segments(contract, catalog)
+        except (GoalValidationError, SegmentValidationError) as exc:
+            parser.error(str(exc))
+        print("valid=true")
+        print(f"catalog_id={catalog.catalog_id}")
+        print(f"segments={len(catalog.segments)}")
+        if args.goal:
+            print(f"goal_id={contract.id}")
+            print(f"goal_segments={len(contract.segments)}")
         return
 
     parser.error("Unsupported command")
