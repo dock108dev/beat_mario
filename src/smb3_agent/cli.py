@@ -14,8 +14,10 @@ from smb3_agent.goals import (
     resolve_goal_path,
     run_goal_contract,
 )
+from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.probes.mednafen_probe import run_mednafen_probe
+from smb3_agent.recovery import RecoveryError, simulate_recovery
 from smb3_agent.review import compare_logs, review_log
 from smb3_agent.segments import (
     SegmentValidationError,
@@ -339,6 +341,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for command trace and nested goal artifacts",
     )
 
+    observe = subparsers.add_parser("observe", help="Run observed segments and write state traces")
+    observe_subparsers = observe.add_subparsers(dest="observe_command", required=True)
+
+    observe_segment = observe_subparsers.add_parser("run-segment", help="Run one segment with state tracing")
+    observe_segment.add_argument("segment", help="Segment id or supported alias")
+    observe_segment.add_argument("--game-file", default=None, help="Path to the local game file")
+    observe_segment.add_argument("--sample-frames", type=int, default=15)
+    observe_segment.add_argument(
+        "--artifacts-dir",
+        default=None,
+        help="Directory for observed run artifacts",
+    )
+
+    recovery = subparsers.add_parser("recovery", help="Simulate recovery decisions from goal contracts")
+    recovery_subparsers = recovery.add_subparsers(dest="recovery_command", required=True)
+
+    recovery_simulate = recovery_subparsers.add_parser("simulate", help="Simulate a recovery scenario")
+    recovery_simulate.add_argument("scenario", choices=["life_lost", "wrong_map_node"])
+    recovery_simulate.add_argument("--goal", default="world_1_king", help="Goal id or path")
+
     return parser
 
 
@@ -554,6 +576,32 @@ def main() -> None:
         print(result.to_text())
         if not result.goal_result.metrics_passed:
             raise SystemExit(1)
+        return
+
+    if args.command == "observe" and args.observe_command == "run-segment":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("observe run-segment requires --game-file or SMB3_GAME_FILE")
+        try:
+            result = run_observed_segment(
+                args.segment,
+                game_path=Path(game_file),
+                sample_frames=args.sample_frames,
+                artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
+            )
+        except ObserveError as exc:
+            parser.error(str(exc))
+        print(result.to_text())
+        if result.summary.success_count != result.summary.total:
+            raise SystemExit(1)
+        return
+
+    if args.command == "recovery" and args.recovery_command == "simulate":
+        try:
+            contract = load_goal_contract(resolve_goal_path(args.goal))
+            print(simulate_recovery(contract, args.scenario).to_text())
+        except (GoalValidationError, RecoveryError) as exc:
+            parser.error(str(exc))
         return
 
     parser.error("Unsupported command")

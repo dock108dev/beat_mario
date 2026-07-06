@@ -107,5 +107,4 @@ Treat watch mode as a debugging surface, not a reliability gate.
 
 1. Replace or clearly isolate the fortress whistle bridge.
 2. Stabilize World 1-4 under watchable/capture mode.
-3. Add life-loss recovery decisions before attempting longer unknown routes.
-4. Start World 8 research as planned segments, not one giant route.
+3. Start World 8 research as planned segments, not one giant route.

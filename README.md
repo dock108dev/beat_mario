@@ -82,6 +82,15 @@ export SMB3_GAME_FILE=/path/to/local-game-file
 python -m smb3_agent command run "run world 1 king gate 3 times"
 ```
 
+Observe and simulate recovery:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+python -m smb3_agent observe run-segment world_1_1 --sample-frames 15
+python -m smb3_agent recovery simulate life_lost --goal world_1_king
+python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
+```
+
 Review an existing log:
 
 ```bash

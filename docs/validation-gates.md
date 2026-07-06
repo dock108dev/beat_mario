@@ -278,14 +278,63 @@ Pass condition:
 - Output includes `metrics_passed=true`.
 - Output includes one `next_action`.
 
+## Gate 15: Observe Segment
+
+Command:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent observe run-segment world_1_1 --sample-frames 15
+```
+
+Pass condition:
+
+- Output includes `trace_path`.
+- Output includes `progress_markers`.
+- Output includes `final_success=true`.
+- The JSONL trace includes a final snapshot.
+
+## Gate 16: Life-Loss Recovery
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent recovery simulate life_lost --goal world_1_king
+```
+
+Pass condition:
+
+```text
+decision=continue_next_life
+action=reclassify_state
+```
+
+The reason must cite the goal recovery policy.
+
+## Gate 17: Wrong-Map Recovery
+
+Command:
+
+```bash
+.venv/bin/python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
+```
+
+Pass condition:
+
+```text
+decision=correct_known_state
+action=correct_known_state_or_stop
+```
+
+The decision must respect `constraints.allow_bridge_steps`; if bridge steps are
+disabled, it must stop instead of silently correcting.
+
 ## Future Gates
 
 These are planned gates and should become real commands as the implementation
 plan progresses.
 
-```bash
-python -m smb3_agent recovery simulate life_lost --goal world_1_king
-```
+No future gates are promoted yet.
 
 Each future command should be added with tests before it becomes a required
 gate.

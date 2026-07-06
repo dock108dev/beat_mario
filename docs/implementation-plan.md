@@ -255,7 +255,8 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent observe run-segment world_1_1 --sample-frames 15
+export SMB3_GAME_FILE=/path/to/local-game-file
+.venv/bin/python -m smb3_agent observe run-segment world_1_1 --sample-frames 15
 ```
 
 Pass condition:
@@ -277,7 +278,7 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent recovery simulate life_lost --goal world_1_king
+.venv/bin/python -m smb3_agent recovery simulate life_lost --goal world_1_king
 ```
 
 Pass condition:
@@ -296,7 +297,7 @@ Implementation:
 Validation gate:
 
 ```bash
-python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
+.venv/bin/python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
 ```
 
 Pass condition:
