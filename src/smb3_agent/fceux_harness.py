@@ -89,12 +89,30 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 "post_probe_1_2_enter",
                 "post_probe_1_3_enter",
                 "post_probe_1_fortress_enter",
-            } or event.startswith("post_probe_1_fortress_enter_"):
+                "post_probe_1_5_enter",
+                "post_probe_1_5_water_enter",
+                "post_probe_1_6_enter",
+                "post_probe_1_castle_enter",
+            } or event.startswith("post_probe_1_fortress_enter_") or event.startswith(
+                "post_probe_1_4_enter"
+            ) or event.startswith("post_probe_1_5_enter") or event.startswith(
+                "post_probe_1_5_water_enter"
+            ) or event.startswith(
+                "post_probe_1_6_enter"
+            ) or event.startswith(
+                "post_probe_1_castle_enter"
+            ):
                 post_probe_clear = False
+                post_probe_max_x = -1
             if event in {
                 "post_probe_1_2_success_course_clear",
                 "post_probe_1_3_whistle_room_success",
                 "post_probe_1_fortress_whistle_room_success",
+                "post_probe_1_4_success_course_clear",
+                "post_probe_1_5_success_course_clear",
+                "post_probe_1_5_water_success_course_clear",
+                "post_probe_1_6_success_course_clear",
+                "post_probe_1_airship_success_king",
             }:
                 post_probe_clear = True
             if x_match is not None:
@@ -158,6 +176,8 @@ def run_fceux_1_1(
 ) -> BatchSummary:
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "fceux_1_1.log"
+    stdout_path = artifacts_dir / "fceux_stdout.log"
+    stderr_path = artifacts_dir / "fceux_stderr.log"
     image_dir = artifacts_dir / "images"
 
     env = os.environ.copy()
@@ -180,20 +200,25 @@ def run_fceux_1_1(
     else:
         env.pop("SMB3_AGENT_IMAGE_DIR", None)
 
-    subprocess.run(
-        [
-            "fceux",
-            "--no-config",
-            "1",
-            "--sound",
-            "0",
-            "--loadlua",
-            str(script_path.resolve()),
-            str(game_path.resolve()),
-        ],
-        check=False,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        with stdout_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
+            subprocess.run(
+                [
+                    "fceux",
+                    "--no-config",
+                    "1",
+                    "--sound",
+                    "0",
+                    "--loadlua",
+                    str(script_path.resolve()),
+                    str(game_path.resolve()),
+                ],
+                check=False,
+                env=env,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                timeout=int(env.get("SMB3_FCEUX_TIMEOUT_SECONDS", "180")),
+            )
+    except subprocess.TimeoutExpired:
+        pass
     return parse_fceux_log(log_path, expected_attempts=attempts)

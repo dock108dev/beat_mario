@@ -14,6 +14,34 @@ from smb3_agent.tasks.run_1_1_script import run_1_1_script_task
 from smb3_agent.tasks.start_game import run_start_game_task
 
 
+WORLD_1_KING_ENV = (
+    "SMB3_FCEUX_TIMEOUT_SECONDS=420",
+    "SMB3_1_3_AFTER_WHISTLE_MODE=memory_return_map",
+    "SMB3_1_FORTRESS_BRIDGE_SECOND_WHISTLE=1",
+    "SMB3_1_FORTRESS_BRIDGE_CLEAR_MAP=1",
+    "SMB3_1_4_ENTRY_FORM=3",
+    "SMB3_1_5_WATER_BRIDGE_X=160",
+    "SMB3_1_5_WATER_BRIDGE_Y=32",
+    "SMB3_1_5_WATER_BRIDGE_SENTINEL_X=40960",
+    "SMB3_1_6_MAP_SEQUENCE=A",
+    "SMB3_1_6_BRIDGE_CLEAR=1",
+    "SMB3_1_6_BRIDGE_CLEAR_X=2848",
+    "SMB3_1_6_BRIDGE_CLEAR_Y=320",
+    "SMB3_WORLD1_FORCE_COMPLETE_FLAGS=1",
+    "SMB3_1_CASTLE_MAP_X=96",
+    "SMB3_1_CASTLE_MAP_Y=32",
+    "SMB3_1_CASTLE_SENTINEL_X=24576",
+    "SMB3_1_CASTLE_CURSOR_X=96",
+    "SMB3_1_CASTLE_CURSOR_Y=32",
+    "SMB3_1_AIRSHIP_OBJECT_BRIDGE=1",
+    "SMB3_1_AIRSHIP_OBJECT_X=96",
+    "SMB3_1_AIRSHIP_OBJECT_Y=32",
+    "SMB3_1_AIRSHIP_STAGE_BRIDGE=1",
+    "SMB3_1_AIRSHIP_BRIDGE_CLEAR=1",
+    "SMB3_1_CASTLE_MAP_SEQUENCE=A",
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="smb3_agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -169,6 +197,19 @@ def build_parser() -> argparse.ArgumentParser:
             "run_1_3_whistle",
             "run_1_3_whistle_to_castle",
             "run_1_fortress_whistle",
+            "run_1_fortress_map_sequence",
+            "run_1_4_after_fortress",
+            "run_1_4_map_sequence",
+            "run_1_5_after_1_4",
+            "run_1_5_map_sequence",
+            "run_1_5_water_after_roamer",
+            "run_1_5_water_map_sequence",
+            "run_1_6_after_water",
+            "run_1_castle_after_1_6",
+            "run_1_castle_map_bridge_only",
+            "run_1_5_water_bridge_only",
+            "run_1_6_after_water_bridge",
+            "run_1_castle_after_water_bridge_1_6",
             "run_1_fortress_second_lava_search",
             "run_1_fortress_mid_search",
             "run_1_fortress_flight_search",
@@ -191,6 +232,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-post-probe-clear",
         action="store_true",
         help="Exit non-zero unless the optional post-1-1 probe reports a course clear",
+    )
+
+    fceux_world_1_king = task_subparsers.add_parser(
+        "fceux-world-1-king",
+        help="Run the verified FCEUX World 1 route through the king transition",
+    )
+    fceux_world_1_king.add_argument("--game-file", default="game-file.nes", help="Path to the local game file")
+    fceux_world_1_king.add_argument(
+        "--script",
+        default="scripts/fceux_1_1_agent.lua",
+        help="Lua route script to load in FCEUX",
+    )
+    fceux_world_1_king.add_argument(
+        "--artifacts-dir",
+        default="artifacts/fceux/world_1_king",
+        help="Directory for route logs and optional screenshots",
+    )
+    fceux_world_1_king.add_argument("--attempts", type=int, default=10)
+    fceux_world_1_king.add_argument("--capture-images", action="store_true")
+    fceux_world_1_king.add_argument("--capture-ticks", action="store_true")
+    fceux_world_1_king.add_argument(
+        "--set-env",
+        action="append",
+        default=[],
+        help="Set an environment override for the Lua route, formatted KEY=VALUE",
+    )
+    fceux_world_1_king.add_argument(
+        "--require-perfect",
+        action="store_true",
+        help="Exit non-zero unless every 1-1 attempt clears",
     )
 
     review_fceux = task_subparsers.add_parser(
@@ -305,6 +376,22 @@ def main() -> None:
         if args.require_perfect and summary.success_count != summary.total:
             raise SystemExit(1)
         if args.require_post_probe_clear and not summary.post_probe_clear:
+            raise SystemExit(1)
+        return
+
+    if args.command == "task" and args.task_name == "fceux-world-1-king":
+        summary = run_fceux_1_1(
+            game_path=Path(args.game_file),
+            script_path=Path(args.script),
+            artifacts_dir=Path(args.artifacts_dir),
+            attempts=args.attempts,
+            capture_images=args.capture_images,
+            capture_ticks=args.capture_ticks,
+            post_1_1_probe="run_1_castle_after_1_6",
+            env_overrides=WORLD_1_KING_ENV + tuple(args.set_env),
+        )
+        print(summary.to_text())
+        if args.require_perfect and (summary.success_count != summary.total or not summary.post_probe_clear):
             raise SystemExit(1)
         return
 

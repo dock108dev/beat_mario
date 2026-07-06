@@ -41,6 +41,27 @@ def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     assert summary.post_probe_clear is True
 
 
+def test_parse_fceux_log_counts_world_1_king_success(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
+                "frame=20 event=post_probe_1_castle_enter x=96 y=32",
+                "frame=30 event=post_probe_1_airship_stage_bridge x=219 y=192",
+                "frame=40 event=post_probe_1_airship_success_king x=432 y=4192",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path, expected_attempts=1)
+
+    assert summary.success_count == 1
+    assert summary.post_probe_max_x == 432
+    assert summary.post_probe_last_event == "post_probe_1_airship_success_king"
+    assert summary.post_probe_clear is True
+
+
 def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:
     image_dir = tmp_path / "gd"
     image_dir.mkdir()

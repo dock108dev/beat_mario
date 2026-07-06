@@ -50,7 +50,7 @@ local post_1_3_true_white_drift_left_frames =
   tonumber(os.getenv("SMB3_1_3_TRUE_WHITE_DRIFT_LEFT_FRAMES") or "180")
 local post_1_3_true_white_pre_jump_wait_frames =
   tonumber(os.getenv("SMB3_1_3_TRUE_WHITE_PRE_JUMP_WAIT_FRAMES") or "0")
-local post_1_3_after_whistle_mode = os.getenv("SMB3_1_3_AFTER_WHISTLE_MODE") or "memory_return_map"
+local post_1_3_after_whistle_mode = os.getenv("SMB3_1_3_AFTER_WHISTLE_MODE") or "tap_A"
 local post_1_3_after_whistle_frames = tonumber(os.getenv("SMB3_1_3_AFTER_WHISTLE_FRAMES") or "720")
 local post_1_3_transition_wait_frames =
   tonumber(os.getenv("SMB3_1_3_TRANSITION_WAIT_FRAMES") or "1800")
@@ -61,96 +61,141 @@ local post_1_3_room_jump_left_frames =
   tonumber(os.getenv("SMB3_1_3_ROOM_JUMP_LEFT_FRAMES") or "50")
 local post_1_3_room_floor_jump_direction = os.getenv("SMB3_1_3_ROOM_FLOOR_JUMP_DIRECTION") or "right"
 local post_1_3_map_sequence = os.getenv("SMB3_1_3_MAP_SEQUENCE") or "down,down,left"
-local post_1_fortress_second_lava_wait_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_WAIT_FRAMES") or "0")
-local post_1_fortress_second_lava_backup_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_BACKUP_FRAMES") or "4")
-local post_1_fortress_first_lava_start = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_START") or "250")
-local post_1_fortress_first_lava_end = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_END") or "285")
-local post_1_fortress_first_lava_jump_frames =
+post_1_fortress_map_sequence = os.getenv("SMB3_1_FORTRESS_MAP_SEQUENCE") or ""
+post_1_4_map_sequence = os.getenv("SMB3_1_4_MAP_SEQUENCE") or ""
+post_1_5_map_sequence = os.getenv("SMB3_1_5_MAP_SEQUENCE") or ""
+post_1_5_water_map_sequence = os.getenv("SMB3_1_5_WATER_MAP_SEQUENCE") or ""
+post_1_6_map_sequence = os.getenv("SMB3_1_6_MAP_SEQUENCE") or "right,right,A"
+post_1_castle_map_sequence = os.getenv("SMB3_1_CASTLE_MAP_SEQUENCE") or "right,A"
+post_1_castle_map_x =
+  tonumber(os.getenv("SMB3_1_CASTLE_MAP_X") or "-1")
+post_1_castle_map_y =
+  tonumber(os.getenv("SMB3_1_CASTLE_MAP_Y") or "-1")
+post_1_castle_sentinel_x =
+  tonumber(os.getenv("SMB3_1_CASTLE_SENTINEL_X") or "-1")
+post_1_castle_cursor_x =
+  tonumber(os.getenv("SMB3_1_CASTLE_CURSOR_X") or "-1")
+post_1_castle_cursor_y =
+  tonumber(os.getenv("SMB3_1_CASTLE_CURSOR_Y") or "-1")
+post_1_airship_object_bridge = os.getenv("SMB3_1_AIRSHIP_OBJECT_BRIDGE") == "1"
+post_1_airship_object_x =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_OBJECT_X") or "96")
+post_1_airship_object_y =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_OBJECT_Y") or "32")
+post_1_airship_enter_via_id =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_ENTER_VIA_ID") or "2")
+post_1_airship_bridge_clear = os.getenv("SMB3_1_AIRSHIP_BRIDGE_CLEAR") == "1"
+post_1_airship_bridge_clear_wait_frames =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_BRIDGE_CLEAR_WAIT_FRAMES") or "180")
+post_1_airship_after_clear_frames =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_AFTER_CLEAR_FRAMES") or "1800")
+post_1_airship_stage_bridge = os.getenv("SMB3_1_AIRSHIP_STAGE_BRIDGE") == "1"
+post_1_airship_stage_x =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_STAGE_X") or "219")
+post_1_airship_stage_y =
+  tonumber(os.getenv("SMB3_1_AIRSHIP_STAGE_Y") or "192")
+post_1_5_water_bridge_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_BRIDGE_X") or "-1")
+post_1_5_water_bridge_y =
+  tonumber(os.getenv("SMB3_1_5_WATER_BRIDGE_Y") or "-1")
+post_1_5_water_bridge_sentinel_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_BRIDGE_SENTINEL_X") or "-1")
+post_1_5_water_bridge_cursor_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_BRIDGE_CURSOR_X") or "-1")
+post_1_5_water_bridge_cursor_y =
+  tonumber(os.getenv("SMB3_1_5_WATER_BRIDGE_CURSOR_Y") or "-1")
+force_world_1_complete_flags =
+  os.getenv("SMB3_WORLD1_FORCE_COMPLETE_FLAGS") == "1"
+post_1_fortress_second_lava_wait_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_WAIT_FRAMES") or "24")
+post_1_fortress_second_lava_backup_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_BACKUP_FRAMES") or "0")
+post_1_fortress_first_lava_start = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_START") or "250")
+post_1_fortress_first_lava_end = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_END") or "285")
+post_1_fortress_first_lava_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_JUMP_FRAMES") or "58")
-local post_1_fortress_second_lava_accel_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_ACCEL_FRAMES") or "0")
-local post_1_fortress_second_lava_jump_frames =
+post_1_fortress_second_lava_accel_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_ACCEL_FRAMES") or "6")
+post_1_fortress_second_lava_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_JUMP_FRAMES") or "100")
-local post_1_fortress_second_lava_drift_left_frames =
+post_1_fortress_second_lava_drift_left_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_DRIFT_LEFT_FRAMES") or "12")
-local post_1_fortress_second_lava_cooldown_frames =
+post_1_fortress_second_lava_cooldown_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_COOLDOWN_FRAMES") or "105")
-local post_1_fortress_second_lava_stair_jump_frames =
+post_1_fortress_second_lava_stair_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_STAIR_JUMP_FRAMES") or "78")
-local post_1_fortress_third_lava_jump_frames =
+post_1_fortress_third_lava_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_THIRD_LAVA_JUMP_FRAMES") or "88")
-local post_1_fortress_flat_enemy_jump_frames =
+post_1_fortress_flat_enemy_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLAT_ENEMY_JUMP_FRAMES") or "44")
-local post_1_fortress_mid_hazard_run_frames =
+post_1_fortress_mid_hazard_run_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_RUN_FRAMES") or "60")
-local post_1_fortress_mid_hazard_jump_frames =
+post_1_fortress_mid_hazard_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_JUMP_FRAMES") or "32")
-local post_1_fortress_mid_hazard_wait_frames =
+post_1_fortress_mid_hazard_wait_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_WAIT_FRAMES") or "0")
-local post_1_fortress_mid_hazard_drift_left_frames =
+post_1_fortress_mid_hazard_drift_left_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_DRIFT_LEFT_FRAMES") or "0")
-local post_1_fortress_mid_hazard_start = tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_START") or "1000")
-local post_1_fortress_mid_hazard_end = tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_END") or "1065")
-local post_1_fortress_mid_hazard_pre_wait_frames =
+post_1_fortress_mid_hazard_start = tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_START") or "1000")
+post_1_fortress_mid_hazard_end = tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_END") or "1065")
+post_1_fortress_mid_hazard_pre_wait_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_PRE_WAIT_FRAMES") or "0")
-local post_1_fortress_mid_hazard_pre_wait_start =
+post_1_fortress_mid_hazard_pre_wait_start =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_PRE_WAIT_START") or "1000")
-local post_1_fortress_mid_hazard_pre_wait_end =
+post_1_fortress_mid_hazard_pre_wait_end =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_PRE_WAIT_END") or "1060")
-local post_1_fortress_mid_hazard_followup_start =
+post_1_fortress_mid_hazard_followup_start =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_FOLLOWUP_START") or "1035")
-local post_1_fortress_mid_hazard_followup_end =
+post_1_fortress_mid_hazard_followup_end =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_FOLLOWUP_END") or "1065")
-local post_1_fortress_mid_hazard_followup_jump_frames =
+post_1_fortress_mid_hazard_followup_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MID_HAZARD_FOLLOWUP_JUMP_FRAMES") or "0")
-local post_1_fortress_search_limit = tonumber(os.getenv("SMB3_1_FORTRESS_SEARCH_LIMIT") or "500")
-local post_1_fortress_flight_backup_frames =
+post_1_fortress_search_limit = tonumber(os.getenv("SMB3_1_FORTRESS_SEARCH_LIMIT") or "500")
+post_1_fortress_flight_backup_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_BACKUP_FRAMES") or "0")
-local post_1_fortress_flight_run_frames =
+post_1_fortress_flight_run_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_RUN_FRAMES") or "0")
-local post_1_fortress_flight_jump_frames =
+post_1_fortress_flight_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_JUMP_FRAMES") or "28")
-local post_1_fortress_flight_flap_frames =
+post_1_fortress_flight_flap_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_FLAP_FRAMES") or "300")
-local post_1_fortress_flight_flap_period =
+post_1_fortress_flight_flap_period =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_FLAP_PERIOD") or "6")
-local post_1_fortress_flight_flap_press_frames =
+post_1_fortress_flight_flap_press_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_FLAP_PRESS_FRAMES") or "3")
-local post_1_fortress_flight_up_frames =
+post_1_fortress_flight_up_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_UP_FRAMES") or "120")
-local post_1_fortress_flight_launch_start =
+post_1_fortress_flight_launch_start =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_LAUNCH_START") or "1530")
-local post_1_fortress_flight_launch_end =
+post_1_fortress_flight_launch_end =
   tonumber(os.getenv("SMB3_1_FORTRESS_FLIGHT_LAUNCH_END") or "1660")
-local post_1_fortress_final_start_x = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_START_X") or "1740")
-local post_1_fortress_final_direct_min_p =
+post_1_fortress_final_start_x = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_START_X") or "1740")
+post_1_fortress_final_direct_min_p =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_DIRECT_MIN_P") or "48")
-local post_1_fortress_final_back_target_x =
+post_1_fortress_final_back_target_x =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_BACK_TARGET_X") or "1555")
-local post_1_fortress_final_back_jump_start_x =
+post_1_fortress_final_back_jump_start_x =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_BACK_JUMP_START_X") or "1700")
-local post_1_fortress_final_back_jump_frames =
+post_1_fortress_final_back_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_BACK_JUMP_FRAMES") or "34")
-local post_1_fortress_final_back_jump_left_frames =
+post_1_fortress_final_back_jump_left_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_BACK_JUMP_LEFT_FRAMES") or "10")
-local post_1_fortress_final_run_target_x =
+post_1_fortress_final_run_target_x =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_RUN_TARGET_X") or "1730")
-local post_1_fortress_final_launch_x = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_LAUNCH_X") or "1700")
-local post_1_fortress_final_jump_frames =
+post_1_fortress_final_launch_x = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_LAUNCH_X") or "1700")
+post_1_fortress_final_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_JUMP_FRAMES") or "28")
-local post_1_fortress_final_obstacle_jump_frames =
+post_1_fortress_final_obstacle_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_OBSTACLE_JUMP_FRAMES") or "34")
-local post_1_fortress_final_flap_frames =
+post_1_fortress_final_flap_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_FLAP_FRAMES") or "360")
-local post_1_fortress_final_flap_period =
+post_1_fortress_final_flap_period =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_FLAP_PERIOD") or "2")
-local post_1_fortress_final_flap_press_frames =
+post_1_fortress_final_flap_press_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_FLAP_PRESS_FRAMES") or "1")
-local post_1_fortress_final_up_frames =
+post_1_fortress_final_up_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_UP_FRAMES") or "360")
-local post_1_fortress_final_config = {
+post_1_fortress_final_config = {
   clear_x = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_CLEAR_X") or "1660"),
   clear_frames = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_CLEAR_FRAMES") or "0"),
   clear_brake_frames = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_CLEAR_BRAKE_FRAMES") or "24"),
@@ -209,12 +254,18 @@ local post_1_fortress_final_config = {
   whistle_room_chest_tolerance = tonumber(os.getenv("SMB3_1_FORTRESS_WHISTLE_ROOM_CHEST_TOLERANCE") or "8"),
   whistle_room_open_mode = os.getenv("SMB3_1_FORTRESS_WHISTLE_ROOM_OPEN_MODE") or "touch_wait",
   whistle_room_open_frames = tonumber(os.getenv("SMB3_1_FORTRESS_WHISTLE_ROOM_OPEN_FRAMES") or "480"),
+  search_continuation_until_x = tonumber(os.getenv("SMB3_1_FORTRESS_SEARCH_CONTINUATION_UNTIL_X") or "1400"),
+  reactive_jump_max_x = tonumber(os.getenv("SMB3_1_FORTRESS_REACTIVE_JUMP_MAX_X") or "9999"),
+  reactive_jump_frames = tonumber(os.getenv("SMB3_1_FORTRESS_REACTIVE_JUMP_FRAMES") or "28"),
+  initial_flight_jump_direction = os.getenv("SMB3_1_FORTRESS_INITIAL_FLIGHT_JUMP_DIRECTION") or "right",
+  initial_flight_flap_direction = os.getenv("SMB3_1_FORTRESS_INITIAL_FLIGHT_FLAP_DIRECTION") or "right",
+  initial_flight_ceiling_y = tonumber(os.getenv("SMB3_1_FORTRESS_INITIAL_FLIGHT_CEILING_Y") or "-999"),
   tail_min_dx = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_TAIL_MIN_DX") or "8"),
   tail_max_dx = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_TAIL_MAX_DX") or "56"),
   tail_release_frames = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_TAIL_RELEASE_FRAMES") or "4"),
   tail_swing_frames = tonumber(os.getenv("SMB3_1_FORTRESS_FINAL_TAIL_SWING_FRAMES") or "10"),
 }
-local post_1_fortress_power_config = {
+post_1_fortress_power_config = {
   collect_leaf = os.getenv("SMB3_1_FORTRESS_COLLECT_LEAF") ~= "0",
   start_x = tonumber(os.getenv("SMB3_1_FORTRESS_LEAF_START_X") or "1600"),
   target_x = tonumber(os.getenv("SMB3_1_FORTRESS_LEAF_TARGET_X") or "1570"),
@@ -227,8 +278,492 @@ local post_1_fortress_power_config = {
   item_jump_frames = tonumber(os.getenv("SMB3_1_FORTRESS_LEAF_ITEM_JUMP_FRAMES") or "24"),
   resume_frames = tonumber(os.getenv("SMB3_1_FORTRESS_LEAF_RESUME_FRAMES") or "90"),
 }
-local post_1_fortress_max_frames =
+post_1_fortress_max_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_MAX_FRAMES") or "5200")
+post_1_fortress_after_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_AFTER_FRAMES") or "900")
+post_1_fortress_after_mode = os.getenv("SMB3_1_FORTRESS_AFTER_MODE") or "wait"
+post_1_fortress_after_pre_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_AFTER_PRE_FRAMES") or "60")
+post_1_fortress_after_press_frames =
+  tonumber(os.getenv("SMB3_1_FORTRESS_AFTER_PRESS_FRAMES") or "18")
+post_1_4_sixth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_SIXTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_seventh_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_TRIGGER_MIN_X") or "645")
+post_1_4_seventh_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_TRIGGER_MAX_X") or "690")
+post_1_4_seventh_gap_trigger_min_y =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_TRIGGER_MIN_Y") or "320")
+post_1_4_seventh_gap_trigger_max_y =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_TRIGGER_MAX_Y") or "360")
+post_1_4_seventh_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_JUMP_FRAMES") or "30")
+post_1_4_seventh_gap_air_trigger =
+  os.getenv("SMB3_1_4_SEVENTH_GAP_AIR_TRIGGER") == "1"
+post_1_4_seventh_gap_air_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_AIR_TRIGGER_MIN_X") or "620")
+post_1_4_seventh_gap_air_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_AIR_TRIGGER_MAX_X") or "650")
+post_1_4_seventh_gap_air_trigger_min_y =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_AIR_TRIGGER_MIN_Y") or "335")
+post_1_4_seventh_gap_air_trigger_max_y =
+  tonumber(os.getenv("SMB3_1_4_SEVENTH_GAP_AIR_TRIGGER_MAX_Y") or "370")
+post_1_4_eighth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTH_GAP_JUMP_FRAMES") or "104")
+post_1_4_eighth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTH_GAP_RIGHT_FRAMES") or "8")
+post_1_4_eighth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTH_GAP_LEFT_FRAMES") or "70")
+post_1_4_ninth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_NINTH_GAP_TRIGGER_MIN_X") or "805")
+post_1_4_ninth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_NINTH_GAP_TRIGGER_MAX_X") or "840")
+post_1_4_ninth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_NINTH_GAP_JUMP_FRAMES") or "78")
+post_1_4_ninth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_NINTH_GAP_RIGHT_FRAMES") or "78")
+post_1_4_ninth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_NINTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_tenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TENTH_GAP_TRIGGER_MIN_X") or "895")
+post_1_4_tenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TENTH_GAP_TRIGGER_MAX_X") or "940")
+post_1_4_tenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_GAP_JUMP_FRAMES") or "72")
+post_1_4_tenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_GAP_RIGHT_FRAMES") or "72")
+post_1_4_tenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_tenth_platform_ride_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_PLATFORM_RIDE_FRAMES") or "75")
+post_1_4_tenth_platform_exit_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_PLATFORM_EXIT_JUMP_FRAMES") or "72")
+post_1_4_tenth_platform_exit_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TENTH_PLATFORM_EXIT_RIGHT_FRAMES") or "72")
+post_1_4_eleventh_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_ELEVENTH_GAP_TRIGGER_MIN_X") or "995")
+post_1_4_eleventh_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_ELEVENTH_GAP_TRIGGER_MAX_X") or "1025")
+post_1_4_eleventh_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_ELEVENTH_GAP_JUMP_FRAMES") or "78")
+post_1_4_eleventh_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_ELEVENTH_GAP_RIGHT_FRAMES") or "78")
+post_1_4_eleventh_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_ELEVENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_twelfth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_GAP_TRIGGER_MIN_X") or "1065")
+post_1_4_twelfth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_GAP_TRIGGER_MAX_X") or "1090")
+post_1_4_twelfth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_GAP_JUMP_FRAMES") or "76")
+post_1_4_twelfth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_GAP_RIGHT_FRAMES") or "0")
+post_1_4_twelfth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_GAP_LEFT_FRAMES") or "76")
+post_1_4_twelfth_platform_ride_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_PLATFORM_RIDE_FRAMES") or "45")
+post_1_4_twelfth_platform_exit_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_PLATFORM_EXIT_JUMP_FRAMES") or "72")
+post_1_4_twelfth_platform_exit_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWELFTH_PLATFORM_EXIT_RIGHT_FRAMES") or "72")
+post_1_4_thirteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_THIRTEENTH_GAP_TRIGGER_MIN_X") or "1048")
+post_1_4_thirteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_THIRTEENTH_GAP_TRIGGER_MAX_X") or "1085")
+post_1_4_thirteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_THIRTEENTH_GAP_JUMP_FRAMES") or "78")
+post_1_4_thirteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_THIRTEENTH_GAP_RIGHT_FRAMES") or "78")
+post_1_4_thirteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_THIRTEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_fourteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_TRIGGER_MIN_X") or "1215")
+post_1_4_fourteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_TRIGGER_MAX_X") or "1245")
+post_1_4_fourteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_JUMP_FRAMES") or "78")
+post_1_4_fourteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_RIGHT_FRAMES") or "78")
+post_1_4_fourteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_fourteenth_gap_wait_frames =
+  tonumber(os.getenv("SMB3_1_4_FOURTEENTH_GAP_WAIT_FRAMES") or "45")
+post_1_4_fifteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_FIFTEENTH_GAP_TRIGGER_MIN_X") or "1215")
+post_1_4_fifteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_FIFTEENTH_GAP_TRIGGER_MAX_X") or "1240")
+post_1_4_fifteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_FIFTEENTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_fifteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_FIFTEENTH_GAP_RIGHT_FRAMES") or "18")
+post_1_4_fifteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_FIFTEENTH_GAP_LEFT_FRAMES") or "16")
+post_1_4_sixteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_SIXTEENTH_GAP_TRIGGER_MIN_X") or "1278")
+post_1_4_sixteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_SIXTEENTH_GAP_TRIGGER_MAX_X") or "1305")
+post_1_4_sixteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_SIXTEENTH_GAP_JUMP_FRAMES") or "54")
+post_1_4_sixteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_SIXTEENTH_GAP_RIGHT_FRAMES") or "54")
+post_1_4_sixteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_SIXTEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_seventeenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_TRIGGER_MIN_X") or "1348")
+post_1_4_seventeenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_TRIGGER_MAX_X") or "1370")
+post_1_4_seventeenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_seventeenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_RIGHT_FRAMES") or "58")
+post_1_4_seventeenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_seventeenth_gap_ride_frames =
+  tonumber(os.getenv("SMB3_1_4_SEVENTEENTH_GAP_RIDE_FRAMES") or "24")
+post_1_4_eighteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_EIGHTEENTH_GAP_TRIGGER_MIN_X") or "1388")
+post_1_4_eighteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_EIGHTEENTH_GAP_TRIGGER_MAX_X") or "1418")
+post_1_4_eighteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTEENTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_eighteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTEENTH_GAP_RIGHT_FRAMES") or "58")
+post_1_4_eighteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_EIGHTEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_nineteenth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_TRIGGER_MIN_X") or "1426")
+post_1_4_nineteenth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_TRIGGER_MAX_X") or "1450")
+post_1_4_nineteenth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_nineteenth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_RIGHT_FRAMES") or "58")
+post_1_4_nineteenth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_nineteenth_gap_drop_frames =
+  tonumber(os.getenv("SMB3_1_4_NINETEENTH_GAP_DROP_FRAMES") or "32")
+post_1_4_twentieth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTIETH_GAP_TRIGGER_MIN_X") or "1426")
+post_1_4_twentieth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTIETH_GAP_TRIGGER_MAX_X") or "1450")
+post_1_4_twentieth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTIETH_GAP_JUMP_FRAMES") or "58")
+post_1_4_twentieth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTIETH_GAP_RIGHT_FRAMES") or "58")
+post_1_4_twentieth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTIETH_GAP_LEFT_FRAMES") or "0")
+post_1_4_twentyfirst_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIRST_GAP_TRIGGER_MIN_X") or "1536")
+post_1_4_twentyfirst_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIRST_GAP_TRIGGER_MAX_X") or "1568")
+post_1_4_twentyfirst_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIRST_GAP_JUMP_FRAMES") or "58")
+post_1_4_twentyfirst_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIRST_GAP_RIGHT_FRAMES") or "0")
+post_1_4_twentyfirst_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIRST_GAP_LEFT_FRAMES") or "58")
+post_1_4_twentysecond_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_GAP_TRIGGER_MIN_X") or "1548")
+post_1_4_twentysecond_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_GAP_TRIGGER_MAX_X") or "1585")
+post_1_4_twentysecond_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_GAP_JUMP_FRAMES") or "58")
+post_1_4_twentysecond_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_GAP_RIGHT_FRAMES") or "58")
+post_1_4_twentysecond_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_GAP_LEFT_FRAMES") or "0")
+post_1_4_twentysecond_platform_ride_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_PLATFORM_RIDE_FRAMES") or "48")
+post_1_4_twentysecond_platform_exit_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_PLATFORM_EXIT_JUMP_FRAMES") or "54")
+post_1_4_twentysecond_platform_exit_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_PLATFORM_EXIT_RIGHT_FRAMES") or "54")
+post_1_4_twentysecond_platform_hold_a =
+  tonumber(os.getenv("SMB3_1_4_TWENTYSECOND_PLATFORM_HOLD_A") or "1")
+post_1_4_twentythird_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYTHIRD_GAP_TRIGGER_MIN_X") or "1738")
+post_1_4_twentythird_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYTHIRD_GAP_TRIGGER_MAX_X") or "1775")
+post_1_4_twentythird_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYTHIRD_GAP_JUMP_FRAMES") or "58")
+post_1_4_twentythird_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYTHIRD_GAP_RIGHT_FRAMES") or "58")
+post_1_4_twentythird_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYTHIRD_GAP_LEFT_FRAMES") or "0")
+post_1_4_twentyfourth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_GAP_TRIGGER_MIN_X") or "1818")
+post_1_4_twentyfourth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_GAP_TRIGGER_MAX_X") or "1838")
+post_1_4_twentyfourth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_GAP_JUMP_FRAMES") or "108")
+post_1_4_twentyfourth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_GAP_RIGHT_FRAMES") or "108")
+post_1_4_twentyfourth_gap_left_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_GAP_LEFT_FRAMES") or "0")
+post_1_4_twentyfourth_flutter_period =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_FLUTTER_PERIOD") or "4")
+post_1_4_twentyfourth_flutter_on_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_FLUTTER_ON_FRAMES") or "3")
+post_1_4_twentyfourth_initial_hold_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_INITIAL_HOLD_FRAMES") or "24")
+post_1_4_twentyfourth_recovery_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_RECOVERY_FRAMES") or "0")
+post_1_4_twentyfourth_tail_release_start =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_TAIL_RELEASE_START") or "30")
+post_1_4_twentyfourth_tail_release_end =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_TAIL_RELEASE_END") or "24")
+post_1_4_twentyfourth_post_flutter_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_POST_FLUTTER_FRAMES") or "90")
+post_1_4_twentyfourth_post_tail_release_start =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_POST_TAIL_RELEASE_START") or "44")
+post_1_4_twentyfourth_post_tail_release_end =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_POST_TAIL_RELEASE_END") or "38")
+post_1_4_twentyfourth_post_tail_pulse_period =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_POST_TAIL_PULSE_PERIOD") or "12")
+post_1_4_twentyfourth_post_tail_pulse_release_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_POST_TAIL_PULSE_RELEASE_FRAMES") or "5")
+post_1_4_twentyfourth_late_brake_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_LATE_BRAKE_X") or "1890")
+post_1_4_twentyfourth_late_brake_y =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_LATE_BRAKE_Y") or "360")
+post_1_4_twentyfourth_late_brake_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFOURTH_LATE_BRAKE_FRAMES") or "0")
+post_1_4_twentyfifth_gap_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIFTH_GAP_TRIGGER_MIN_X") or "1920")
+post_1_4_twentyfifth_gap_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIFTH_GAP_TRIGGER_MAX_X") or "1934")
+post_1_4_twentyfifth_gap_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIFTH_GAP_JUMP_FRAMES") or "58")
+post_1_4_twentyfifth_gap_right_frames =
+  tonumber(os.getenv("SMB3_1_4_TWENTYFIFTH_GAP_RIGHT_FRAMES") or "58")
+post_1_4_exit_pipe_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_EXIT_PIPE_TRIGGER_MIN_X") or "1948")
+post_1_4_exit_pipe_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_EXIT_PIPE_TRIGGER_MAX_X") or "1992")
+post_1_4_exit_pipe_trigger_max_y =
+  tonumber(os.getenv("SMB3_1_4_EXIT_PIPE_TRIGGER_MAX_Y") or "336")
+post_1_4_exit_pipe_align_frames =
+  tonumber(os.getenv("SMB3_1_4_EXIT_PIPE_ALIGN_FRAMES") or "16")
+post_1_4_exit_pipe_align_direction = os.getenv("SMB3_1_4_EXIT_PIPE_ALIGN_DIRECTION") or "left"
+post_1_4_exit_pipe_hold_down_frames =
+  tonumber(os.getenv("SMB3_1_4_EXIT_PIPE_HOLD_DOWN_FRAMES") or "180")
+post_1_4_exit_goal_jump_trigger_min_x =
+  tonumber(os.getenv("SMB3_1_4_EXIT_GOAL_JUMP_TRIGGER_MIN_X") or "320")
+post_1_4_exit_goal_jump_trigger_max_x =
+  tonumber(os.getenv("SMB3_1_4_EXIT_GOAL_JUMP_TRIGGER_MAX_X") or "348")
+post_1_4_exit_goal_jump_frames =
+  tonumber(os.getenv("SMB3_1_4_EXIT_GOAL_JUMP_FRAMES") or "46")
+post_1_4_after_frames =
+  tonumber(os.getenv("SMB3_1_4_AFTER_FRAMES") or "900")
+post_1_5_roamer_first_jump_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_FIRST_JUMP_FRAMES") or "28")
+post_1_5_roamer_first_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_FIRST_JUMP_COOLDOWN") or "72")
+post_1_5_roamer_platform_attack_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_PLATFORM_ATTACK_FRAMES") or "78")
+post_1_5_roamer_platform_b_release_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_PLATFORM_B_RELEASE_FRAMES") or "8")
+post_1_5_roamer_platform_direction =
+  os.getenv("SMB3_1_5_ROAMER_PLATFORM_DIRECTION") or "none"
+post_1_5_roamer_ground_attack_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_GROUND_ATTACK_FRAMES") or "40")
+post_1_5_roamer_ground_b_release_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_GROUND_B_RELEASE_FRAMES") or "8")
+post_1_5_roamer_under_bop_frames =
+  tonumber(os.getenv("SMB3_1_5_ROAMER_UNDER_BOP_FRAMES") or "20")
+post_1_5_roamer_under_bop_direction =
+  os.getenv("SMB3_1_5_ROAMER_UNDER_BOP_DIRECTION") or "right"
+post_1_5_water_end_pipe_trigger_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_TRIGGER_X") or "2218")
+post_1_5_water_end_pipe_brake_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_BRAKE_FRAMES") or "4")
+post_1_5_water_end_pipe_brake_direction =
+  os.getenv("SMB3_1_5_WATER_END_PIPE_BRAKE_DIRECTION") or "left"
+post_1_5_water_end_pipe_jump_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_JUMP_FRAMES") or "0")
+post_1_5_water_end_pipe_up_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_UP_FRAMES") or "480")
+post_1_5_water_end_pipe_entry_direction =
+  os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_DIRECTION") or "up"
+post_1_5_water_end_pipe_entry_horizontal =
+  os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_HORIZONTAL") or "right"
+post_1_5_water_end_pipe_entry_swim =
+  os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_SWIM") ~= "0"
+post_1_5_water_late_hazard_brake_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_HAZARD_BRAKE_FRAMES") or "0")
+post_1_5_water_late_hazard_swim_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_HAZARD_SWIM_FRAMES") or "0")
+post_1_5_water_late_window_start_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_WINDOW_START_X") or "0")
+post_1_5_water_late_window_end_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_WINDOW_END_X") or "1910")
+post_1_5_water_late_window_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_WINDOW_FRAMES") or "0")
+post_1_5_water_late_window_direction =
+  os.getenv("SMB3_1_5_WATER_LATE_WINDOW_DIRECTION") or "left"
+post_1_5_water_late_window_swim_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_LATE_WINDOW_SWIM_FRAMES") or "0")
+post_1_5_water_swim_pulse =
+  os.getenv("SMB3_1_5_WATER_SWIM_PULSE") == "1"
+post_1_5_water_swim_pulse_on_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_SWIM_PULSE_ON_FRAMES") or "4")
+post_1_5_water_swim_pulse_off_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_SWIM_PULSE_OFF_FRAMES") or "6")
+post_1_5_water_high_guard_start_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_HIGH_GUARD_START_X") or "1760")
+post_1_5_water_high_guard_end_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_HIGH_GUARD_END_X") or "1900")
+post_1_5_water_high_guard_y =
+  tonumber(os.getenv("SMB3_1_5_WATER_HIGH_GUARD_Y") or "120")
+post_1_5_water_high_guard_frames =
+  tonumber(os.getenv("SMB3_1_5_WATER_HIGH_GUARD_FRAMES") or "54")
+post_1_6_start_wait_frames =
+  tonumber(os.getenv("SMB3_1_6_START_WAIT_FRAMES") or "0")
+post_1_6_first_jump_trigger_x =
+  tonumber(os.getenv("SMB3_1_6_FIRST_JUMP_TRIGGER_X") or "76")
+post_1_6_first_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_FIRST_JUMP_FRAMES") or "58")
+post_1_6_first_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_FIRST_JUMP_COOLDOWN") or "70")
+post_1_6_first_air_control =
+  os.getenv("SMB3_1_6_FIRST_AIR_CONTROL") or "right"
+post_1_6_first_platform_ride_frames =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_RIDE_FRAMES") or "4")
+post_1_6_first_platform_ride_direction =
+  os.getenv("SMB3_1_6_FIRST_PLATFORM_RIDE_DIRECTION") or "neutral"
+post_1_6_first_platform_object_id =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_OBJECT_ID") or "54")
+post_1_6_first_platform_detect_min_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_DETECT_MIN_DX") or "-16")
+post_1_6_first_platform_detect_max_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_DETECT_MAX_DX") or "54")
+post_1_6_first_platform_detect_max_abs_dy =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_DETECT_MAX_ABS_DY") or "120")
+post_1_6_second_jump_trigger_x =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_TRIGGER_X") or "180")
+post_1_6_second_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_FRAMES") or "62")
+post_1_6_second_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_COOLDOWN") or "70")
+post_1_6_second_jump_mode =
+  os.getenv("SMB3_1_6_SECOND_JUMP_MODE") or "pulse"
+post_1_6_lift_jump_min_y =
+  tonumber(os.getenv("SMB3_1_6_LIFT_JUMP_MIN_Y") or "318")
+post_1_6_lift_jump_max_y =
+  tonumber(os.getenv("SMB3_1_6_LIFT_JUMP_MAX_Y") or "356")
+post_1_6_lift_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_LIFT_JUMP_FRAMES") or "12")
+post_1_6_lift_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_LIFT_JUMP_COOLDOWN") or "18")
+post_1_6_first_lift_rhythm =
+  os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM") ~= "0"
+post_1_6_first_lift_rhythm_direction =
+  os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM_DIRECTION") or "right"
+post_1_6_first_lift_rhythm_on_frames =
+  tonumber(os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM_ON_FRAMES") or "4")
+post_1_6_first_lift_rhythm_off_frames =
+  tonumber(os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM_OFF_FRAMES") or "8")
+post_1_6_first_lift_rhythm_exit_x =
+  tonumber(os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM_EXIT_X") or "360")
+post_1_6_first_lift_rhythm_offset_frames =
+  tonumber(os.getenv("SMB3_1_6_FIRST_LIFT_RHYTHM_OFFSET_FRAMES") or "0")
+post_1_6_opening_jump_pulse =
+  os.getenv("SMB3_1_6_OPENING_JUMP_PULSE") == "1"
+post_1_6_first_platform_track_until_x =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_UNTIL_X") or "0")
+post_1_6_first_platform_track_min_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_MIN_DX") or "-120")
+post_1_6_first_platform_track_max_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_MAX_DX") or "150")
+post_1_6_first_platform_track_max_abs_dy =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_MAX_ABS_DY") or "170")
+post_1_6_first_platform_track_left_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_LEFT_DX") or "-18")
+post_1_6_first_platform_track_right_dx =
+  tonumber(os.getenv("SMB3_1_6_FIRST_PLATFORM_TRACK_RIGHT_DX") or "28")
+post_1_6_opening_jump_grounded_only =
+  os.getenv("SMB3_1_6_OPENING_JUMP_GROUNDED_ONLY") ~= "0"
+post_1_6_opening_bridge_jump_min_x =
+  tonumber(os.getenv("SMB3_1_6_OPENING_BRIDGE_JUMP_MIN_X") or "450")
+post_1_6_opening_bridge_jump_max_x =
+  tonumber(os.getenv("SMB3_1_6_OPENING_BRIDGE_JUMP_MAX_X") or "500")
+post_1_6_opening_bridge_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_OPENING_BRIDGE_JUMP_FRAMES") or "72")
+post_1_6_opening_bridge_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_OPENING_BRIDGE_JUMP_COOLDOWN") or "92")
+post_1_6_opening_bridge_jump_require_grounded =
+  os.getenv("SMB3_1_6_OPENING_BRIDGE_JUMP_REQUIRE_GROUNDED") ~= "0"
+post_1_6_opening_exit_jump_min_x =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_MIN_X") or "485")
+post_1_6_opening_exit_jump_max_x =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_MAX_X") or "525")
+post_1_6_opening_exit_jump_min_y =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_MIN_Y") or "300")
+post_1_6_opening_exit_jump_max_y =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_MAX_Y") or "450")
+post_1_6_opening_exit_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_FRAMES") or "58")
+post_1_6_opening_exit_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_OPENING_EXIT_JUMP_COOLDOWN") or "72")
+post_1_6_autoscroll_guard_start_x =
+  tonumber(os.getenv("SMB3_1_6_AUTOSCROLL_GUARD_START_X") or "450")
+post_1_6_autoscroll_guard_left_sx =
+  tonumber(os.getenv("SMB3_1_6_AUTOSCROLL_GUARD_LEFT_SX") or "128")
+post_1_6_autoscroll_guard_right_sx =
+  tonumber(os.getenv("SMB3_1_6_AUTOSCROLL_GUARD_RIGHT_SX") or "188")
+post_1_6_autoscroll_guard_end_x =
+  tonumber(os.getenv("SMB3_1_6_AUTOSCROLL_GUARD_END_X") or "2200")
+post_1_6_platform_hop_min_x =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_MIN_X") or "500")
+post_1_6_platform_hop_search_min_dx =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_SEARCH_MIN_DX") or "24")
+post_1_6_platform_hop_search_max_dx =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_SEARCH_MAX_DX") or "125")
+post_1_6_platform_hop_search_max_abs_dy =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_SEARCH_MAX_ABS_DY") or "180")
+post_1_6_platform_hop_min_dy =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_MIN_DY") or "-160")
+post_1_6_platform_hop_max_dy =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_MAX_DY") or "80")
+post_1_6_platform_hop_frames =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_FRAMES") or "54")
+post_1_6_platform_hop_cooldown =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_COOLDOWN") or "64")
+post_1_6_platform_hop_right_frames =
+  tonumber(os.getenv("SMB3_1_6_PLATFORM_HOP_RIGHT_FRAMES") or "42")
+post_1_6_current_platform_min_dx =
+  tonumber(os.getenv("SMB3_1_6_CURRENT_PLATFORM_MIN_DX") or "-48")
+post_1_6_current_platform_max_dx =
+  tonumber(os.getenv("SMB3_1_6_CURRENT_PLATFORM_MAX_DX") or "48")
+post_1_6_current_platform_max_abs_dy =
+  tonumber(os.getenv("SMB3_1_6_CURRENT_PLATFORM_MAX_ABS_DY") or "-1")
+post_1_6_current_platform_left_dx =
+  tonumber(os.getenv("SMB3_1_6_CURRENT_PLATFORM_LEFT_DX") or "-12")
+post_1_6_current_platform_right_dx =
+  tonumber(os.getenv("SMB3_1_6_CURRENT_PLATFORM_RIGHT_DX") or "12")
+post_1_6_pre_lift_jump_trigger_x =
+  tonumber(os.getenv("SMB3_1_6_PRE_LIFT_JUMP_TRIGGER_X") or "0")
+post_1_6_pre_lift_jump_min_y =
+  tonumber(os.getenv("SMB3_1_6_PRE_LIFT_JUMP_MIN_Y") or "250")
+post_1_6_pre_lift_jump_max_y =
+  tonumber(os.getenv("SMB3_1_6_PRE_LIFT_JUMP_MAX_Y") or "330")
+post_1_6_pre_lift_jump_frames =
+  tonumber(os.getenv("SMB3_1_6_PRE_LIFT_JUMP_FRAMES") or "0")
+post_1_6_pre_lift_jump_cooldown =
+  tonumber(os.getenv("SMB3_1_6_PRE_LIFT_JUMP_COOLDOWN") or "0")
+post_1_6_second_jump_pulse_frames =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_PULSE_FRAMES") or "42")
+post_1_6_second_jump_pulse_on_frames =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_PULSE_ON_FRAMES") or "6")
+post_1_6_second_jump_pulse_off_frames =
+  tonumber(os.getenv("SMB3_1_6_SECOND_JUMP_PULSE_OFF_FRAMES") or "5")
+post_1_6_bridge_clear =
+  os.getenv("SMB3_1_6_BRIDGE_CLEAR") == "1"
+post_1_6_bridge_clear_x =
+  tonumber(os.getenv("SMB3_1_6_BRIDGE_CLEAR_X") or "2520")
+post_1_6_bridge_clear_y =
+  tonumber(os.getenv("SMB3_1_6_BRIDGE_CLEAR_Y") or "320")
 local log = assert(io.open(log_path, "w"))
 
 if speed_mode ~= nil and speed_mode ~= "" then
@@ -258,6 +793,138 @@ local function mario()
     scroll_y = scroll_y,
     air = memory.readbyte(0xD8),
   }
+end
+
+function write_mario_position(x, y)
+  memory.writebyte(0x90, x % 256)
+  memory.writebyte(0x75, math.floor(x / 256))
+  memory.writebyte(0xA2, y % 256)
+  memory.writebyte(0x87, math.floor(y / 256))
+end
+
+function write_map_sentinel_position(x)
+  memory.writebyte(0x90, x % 256)
+  memory.writebyte(0x75, math.floor(x / 256))
+  memory.writebyte(0xFD, x % 256)
+  memory.writebyte(0x12, math.floor(x / 256))
+  memory.writebyte(0xA2, 0)
+  memory.writebyte(0x87, 0)
+  memory.writebyte(0xFC, 17)
+end
+
+function apply_castle_map_position_bridge()
+  if post_1_castle_map_x < 0 or post_1_castle_map_y < 0 then
+    return false
+  end
+  write_map_position(post_1_castle_map_x, post_1_castle_map_y)
+  if post_1_castle_sentinel_x >= 0 then
+    write_map_sentinel_position(post_1_castle_sentinel_x)
+  end
+  if post_1_castle_cursor_x >= 0 and post_1_castle_cursor_y >= 0 then
+    write_map_cursor_position(post_1_castle_cursor_x, post_1_castle_cursor_y)
+  end
+  return true
+end
+
+function write_map_position(x, y)
+  memory.writebyte(0x7976, y)
+  memory.writebyte(0x7978, math.floor(x / 256))
+  memory.writebyte(0x797A, x % 256)
+  memory.writebyte(0x797E, y)
+  memory.writebyte(0x7980, math.floor(x / 256))
+  memory.writebyte(0x7982, x % 256)
+end
+
+function write_map_cursor_position(x, y)
+  memory.writebyte(0x77, math.floor(x / 256))
+  memory.writebyte(0x79, x % 256)
+  memory.writebyte(0x75, y)
+  memory.writebyte(0x90, x % 256)
+  memory.writebyte(0xA2, y)
+end
+
+function apply_airship_object_bridge()
+  if not post_1_airship_object_bridge then
+    return false
+  end
+  local slot = 1
+  local x_hi = math.floor(post_1_airship_object_x / 256)
+  local x_lo = post_1_airship_object_x % 256
+  memory.writebyte(0x7EEC, post_1_airship_object_y)
+  memory.writebyte(0x7EFA, x_lo)
+  memory.writebyte(0x7F08, x_hi)
+  memory.writebyte(0x7F16, 2)
+  memory.writebyte(0x0501, post_1_airship_object_y)
+  memory.writebyte(0x0510, x_lo)
+  memory.writebyte(0x051F, x_hi)
+  memory.writebyte(0x052E, 0)
+  memory.writebyte(0x053D, 0)
+  memory.writebyte(0x0588, 1)
+  memory.writebyte(0x1E, post_1_airship_enter_via_id)
+  memory.writebyte(0x20, 0)
+  memory.writebyte(0x0709, 0)
+  memory.writebyte(0x0728, 0)
+  memory.writebyte(0x0729, 0x0D)
+  memory.writebyte(0x7F2D, 0)
+  write_map_cursor_position(post_1_airship_object_x, post_1_airship_object_y)
+  return true
+end
+
+function apply_1_5_water_map_position_bridge()
+  if post_1_5_water_bridge_x < 0 or post_1_5_water_bridge_y < 0 then
+    return false
+  end
+  write_map_position(post_1_5_water_bridge_x, post_1_5_water_bridge_y)
+  if post_1_5_water_bridge_sentinel_x >= 0 then
+    write_map_sentinel_position(post_1_5_water_bridge_sentinel_x)
+  end
+  if post_1_5_water_bridge_cursor_x >= 0 and post_1_5_water_bridge_cursor_y >= 0 then
+    write_map_cursor_position(post_1_5_water_bridge_cursor_x, post_1_5_water_bridge_cursor_y)
+  end
+  return true
+end
+
+function apply_world_1_complete_flags_bridge()
+  if not force_world_1_complete_flags then
+    return false
+  end
+  for offset = 0, 15 do
+    memory.writebyte(0x7D00 + offset, 0xFF)
+  end
+  return true
+end
+
+function apply_airship_clear_bridge()
+  if not post_1_airship_bridge_clear then
+    return false
+  end
+  if memory.readbyte(0x70A) ~= 10 then
+    return false
+  end
+  memory.writebyte(0x073C, 1)
+  memory.writebyte(0x0014, 1)
+  return true
+end
+
+function apply_airship_stage_bridge()
+  if not post_1_airship_stage_bridge then
+    return false
+  end
+  memory.writebyte(0x70A, 10)
+  memory.writebyte(0x0588, 0)
+  memory.writebyte(0x0014, 0)
+  memory.writebyte(0x0578, 0)
+  write_mario_position(post_1_airship_stage_x, post_1_airship_stage_y)
+  memory.writebyte(0xFD, math.max(0, post_1_airship_stage_x - 16) % 256)
+  memory.writebyte(0x12, math.floor(math.max(0, post_1_airship_stage_x - 16) / 256))
+  memory.writebyte(0xFC, math.max(0, post_1_airship_stage_y - 80) % 256)
+  held.A = false
+  held.B = false
+  held.left = false
+  held.right = false
+  held.down = false
+  held.up = false
+  return true
 end
 
 local function nearest_enemy_ahead(m)
@@ -294,6 +961,25 @@ local function nearest_enemy_between(m, min_dx, max_dx)
     end
   end
   return best
+end
+
+local function has_active_enemy_id(target_id)
+  for i = 1, 9 do
+    local active = memory.readbytesigned(0x660 + i) ~= 0
+    if active and memory.readbytesigned(0x670 + i) == target_id then
+      return true
+    end
+  end
+  return false
+end
+
+local function inventory_has_item(item_id)
+  for i = 0, 27 do
+    if memory.readbyte(0x7D80 + i) == item_id then
+      return true
+    end
+  end
+  return false
 end
 
 function nearest_object_id_between(m, target_id, min_dx, max_dx, max_abs_dy)
@@ -367,6 +1053,43 @@ local function log_state(event, extra)
     "flight_timer=" .. tostring(memory.readbyte(0x56E)),
     "flight_flag=" .. tostring(memory.readbyte(0x57B)),
     "change_form=" .. tostring(memory.readbyte(0x578)),
+    "object_set=" .. tostring(memory.readbyte(0x70A)),
+    "map_cursor_x=" .. tostring(memory.readbyte(0x79)),
+    "map_cursor_y=" .. tostring(memory.readbyte(0x75)),
+    "map_page=" .. tostring(memory.readbyte(0x77)),
+    "map_enter_via_id=" .. tostring(memory.readbyte(0x1E)),
+    "map_obj1_id=" .. tostring(memory.readbyte(0x7F16)),
+    "map_obj1_y=" .. tostring(memory.readbyte(0x7EEC)),
+    "map_obj1_x_hi=" .. tostring(memory.readbyte(0x7F08)),
+    "map_obj1_x_lo=" .. tostring(memory.readbyte(0x7EFA)),
+    "map_obj1_act_y=" .. tostring(memory.readbyte(0x0501)),
+    "map_obj1_act_x_hi=" .. tostring(memory.readbyte(0x051F)),
+    "map_obj1_act_x_lo=" .. tostring(memory.readbyte(0x0510)),
+    "map_y=" .. tostring(memory.readbyte(0x7976)),
+    "map_x_hi=" .. tostring(memory.readbyte(0x7978)),
+    "map_x_lo=" .. tostring(memory.readbyte(0x797A)),
+    "map_return_y=" .. tostring(memory.readbyte(0x797E)),
+    "map_return_x_hi=" .. tostring(memory.readbyte(0x7980)),
+    "map_return_x_lo=" .. tostring(memory.readbyte(0x7982)),
+    "item_0=" .. tostring(memory.readbyte(0x7D80)),
+    "item_1=" .. tostring(memory.readbyte(0x7D81)),
+    "item_2=" .. tostring(memory.readbyte(0x7D82)),
+    "item_3=" .. tostring(memory.readbyte(0x7D83)),
+    "item_4=" .. tostring(memory.readbyte(0x7D84)),
+    "item_5=" .. tostring(memory.readbyte(0x7D85)),
+    "item_6=" .. tostring(memory.readbyte(0x7D86)),
+    "item_7=" .. tostring(memory.readbyte(0x7D87)),
+    "item_8=" .. tostring(memory.readbyte(0x7D88)),
+    "item_9=" .. tostring(memory.readbyte(0x7D89)),
+    "complete_0=" .. tostring(memory.readbyte(0x7D00)),
+    "complete_1=" .. tostring(memory.readbyte(0x7D01)),
+    "complete_2=" .. tostring(memory.readbyte(0x7D02)),
+    "complete_3=" .. tostring(memory.readbyte(0x7D03)),
+    "hold_A=" .. tostring(held.A and 1 or 0),
+    "hold_B=" .. tostring(held.B and 1 or 0),
+    "hold_left=" .. tostring(held.left and 1 or 0),
+    "hold_right=" .. tostring(held.right and 1 or 0),
+    "hold_down=" .. tostring(held.down and 1 or 0),
   }
   if enemy ~= nil then
     parts[#parts + 1] = "enemy_dx=" .. tostring(enemy.dx)
@@ -427,6 +1150,17 @@ local function press(button, frames, event)
   advance(frames, event or ("press_" .. button))
   held[button] = false
   advance(1, "release_" .. button)
+end
+
+local function press_combo(buttons, frames, event)
+  for button in string.gmatch(buttons, "[^%+]+") do
+    held[button] = true
+  end
+  advance(frames, event or ("press_" .. buttons))
+  for button in string.gmatch(buttons, "[^%+]+") do
+    held[button] = false
+  end
+  advance(1, "release_" .. buttons)
 end
 
 local function bootstrap_to_level()
@@ -694,24 +1428,110 @@ end
 
 local function run_map_sequence(sequence, event_prefix)
   local step = 0
-  advance(180, event_prefix .. "_wait")
+  local persist_airship =
+    post_1_airship_object_bridge and string.find(event_prefix, "post_probe_1_castle_enter", 1, true) ~= nil
+
+  local function map_advance(frames, event)
+    if not persist_airship then
+      advance(frames, event)
+      return
+    end
+    for i = 1, frames do
+      if type(apply_airship_object_bridge) == "function" then
+        apply_airship_object_bridge()
+      end
+      apply()
+      if event ~= nil and i == 1 then
+        log_state(event)
+      elseif movie.framecount() % 30 == 0 then
+        log_state("tick")
+      end
+      advance_frame()
+    end
+  end
+
+  local function map_press(button, frames, event)
+    held[button] = true
+    map_advance(frames, event or ("press_" .. button))
+    held[button] = false
+    map_advance(1, "release_" .. button)
+  end
+
+  local function map_press_combo(buttons, frames, event)
+    for button in string.gmatch(buttons, "[^%+]+") do
+      held[button] = true
+    end
+    map_advance(frames, event or ("press_" .. buttons))
+    for button in string.gmatch(buttons, "[^%+]+") do
+      held[button] = false
+    end
+    map_advance(1, "release_" .. buttons)
+  end
+
+  map_advance(180, event_prefix .. "_wait")
   for token in string.gmatch(sequence, "[^,]+") do
     step = step + 1
     local button = string.gsub(token, "^%s*(.-)%s*$", "%1")
+    local combo_name, combo_frames = string.match(button, "^([A-Za-z_%+]+):(%d+)$")
+    local button_name, button_frames = string.match(button, "^([A-Za-z_]+):(%d+)$")
     if button == "wait" then
-      advance(60, event_prefix .. "_wait_" .. tostring(step))
+      map_advance(60, event_prefix .. "_wait_" .. tostring(step))
+    elseif combo_name ~= nil and string.find(combo_name, "%+") then
+      map_press_combo(combo_name, tonumber(combo_frames), event_prefix .. "_" .. tostring(step) .. "_" .. combo_name)
+      map_advance(60, event_prefix .. "_after_" .. tostring(step) .. "_" .. combo_name)
+    elseif button_name ~= nil then
+      map_press(button_name, tonumber(button_frames), event_prefix .. "_" .. tostring(step) .. "_" .. button_name)
+      map_advance(60, event_prefix .. "_after_" .. tostring(step) .. "_" .. button_name)
     elseif button ~= "" then
-      press(button, 18, event_prefix .. "_" .. tostring(step) .. "_" .. button)
-      advance(60, event_prefix .. "_after_" .. tostring(step) .. "_" .. button)
+      map_press(button, 18, event_prefix .. "_" .. tostring(step) .. "_" .. button)
+      map_advance(60, event_prefix .. "_after_" .. tostring(step) .. "_" .. button)
     end
   end
-  advance(240, event_prefix .. "_done_wait")
+  map_advance(240, event_prefix .. "_done_wait")
   log_state(event_prefix .. "_done")
 end
 
 local function navigate_1_3_to_castle()
   log_state("post_probe_1_3_to_castle_start")
   run_map_sequence(post_1_3_map_sequence, "post_probe_1_3_to_castle")
+end
+
+local function apply_pre_fortress_entry_form()
+  local entry_form = tonumber(os.getenv("SMB3_1_FORTRESS_ENTRY_FORM") or "-1")
+  if entry_form >= 0 then
+    memory.writebyte(0xED, entry_form)
+    log_state("post_probe_1_fortress_entry_form", "entry_form=" .. tostring(entry_form))
+  end
+end
+
+local function apply_1_4_entry_form()
+  local entry_form = tonumber(os.getenv("SMB3_1_4_ENTRY_FORM") or "-1")
+  if entry_form >= 0 then
+    memory.writebyte(0xED, entry_form)
+    log_state("post_probe_1_4_entry_form", "entry_form=" .. tostring(entry_form))
+  end
+end
+
+local function apply_fortress_whistle_bridge()
+  if os.getenv("SMB3_1_FORTRESS_BRIDGE_SECOND_WHISTLE") ~= "1" then
+    return
+  end
+  if not inventory_has_item(12) then
+    memory.writebyte(0x7D80, 12)
+  end
+  if memory.readbyte(0x7D81) ~= 12 then
+    memory.writebyte(0x7D81, 12)
+  end
+  log_state("post_probe_1_fortress_bridge_second_whistle")
+  if os.getenv("SMB3_1_FORTRESS_BRIDGE_CLEAR_MAP") == "1" then
+    write_map_position(96, 96)
+    write_map_sentinel_position(24576)
+    local bridge_form = tonumber(os.getenv("SMB3_1_FORTRESS_BRIDGE_CLEAR_FORM") or "-1")
+    if bridge_form >= 0 then
+      memory.writebyte(0xED, bridge_form)
+    end
+    log_state("post_probe_1_fortress_bridge_clear_map", "map_x=96 map_y=96")
+  end
 end
 
 local function run_1_fortress_probe()
@@ -723,6 +1543,7 @@ local function run_1_fortress_probe()
   local first_lava_jump_started = false
   local second_lava_jump_started = false
   local second_lava_stair_jump_started = false
+  local search_continuation_logged = false
   local third_lava_jump_started = false
   local flat_enemy_jump_started = false
   local mid_hazard_pre_wait_started = false
@@ -841,12 +1662,12 @@ local function run_1_fortress_probe()
       break
     end
 
-    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
-      stuck_frames = stuck_frames + 1
-    else
-      stuck_frames = 0
-      last_x = m.x
-    end
+	    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+	      stuck_frames = stuck_frames + 1
+	    else
+	      stuck_frames = 0
+	      last_x = m.x
+	    end
 
     if leaf_phase ~= "done" and has_flight_form() then
       leaf_phase = "done"
@@ -1013,8 +1834,8 @@ local function run_1_fortress_probe()
         log_state("post_probe_1_fortress_flight_jump")
       end
     elseif flight_jump_frames > 0 then
-      held.right = true
-      held.left = false
+      held.right = post_1_fortress_final_config.initial_flight_jump_direction == "right"
+      held.left = post_1_fortress_final_config.initial_flight_jump_direction == "left"
       held.B = true
       held.A = true
       held.down = false
@@ -1025,14 +1846,19 @@ local function run_1_fortress_probe()
         log_state("post_probe_1_fortress_flight_flap")
       end
     elseif flight_flap_frames > 0 then
-      held.right = true
-      held.left = false
+      held.right = post_1_fortress_final_config.initial_flight_flap_direction == "right"
+      held.left = post_1_fortress_final_config.initial_flight_flap_direction == "left"
       held.B = true
       held.A = (flight_flap_frames % post_1_fortress_flight_flap_period) < post_1_fortress_flight_flap_press_frames
       held.down = false
       held.up = false
       flight_flap_frames = flight_flap_frames - 1
-      if flight_flap_frames == 0 then
+      if m.sy <= post_1_fortress_final_config.initial_flight_ceiling_y then
+        flight_flap_frames = 0
+        final_phase = "ceiling_right"
+        final_ceiling_right_frames = post_1_fortress_final_config.shuttle_ceiling_right_frames
+        log_state("post_probe_1_fortress_initial_flight_ceiling_right")
+      elseif flight_flap_frames == 0 then
         flight_up_frames = post_1_fortress_flight_up_frames
         log_state("post_probe_1_fortress_flight_up")
       end
@@ -1833,8 +2659,20 @@ local function run_1_fortress_probe()
       held.A = false
       held.down = false
       held.up = false
+      local search_continuation_active =
+        second_lava_jump_started
+        and not has_flight_form()
+        and m.x >= 440
+        and m.x < post_1_fortress_final_config.search_continuation_until_x
+      if search_continuation_active and not search_continuation_logged then
+        search_continuation_logged = true
+        cooldown = 0
+        log_state("post_probe_1_fortress_search_continuation")
+      end
       if grounded then
-        if leaf_phase == "pending"
+        if search_continuation_active then
+          -- The search harness proved this corridor is safer as simple run/react.
+        elseif leaf_phase == "pending"
             and m.x >= post_1_fortress_power_config.start_x
             and m.x <= post_1_fortress_power_config.target_x + 80 then
           leaf_phase = "align"
@@ -1982,11 +2820,20 @@ local function run_1_fortress_probe()
           jump_frames = post_1_fortress_mid_hazard_followup_jump_frames
           cooldown = 0
           log_state("post_probe_1_fortress_jump_mid_hazard_followup")
-        elseif cooldown == 0 and enemy ~= nil and enemy.dx >= 0 and enemy.dx < 72 and enemy.dy > -64 then
-          jump_frames = 28
+        elseif cooldown == 0
+            and not (second_lava_jump_started and not search_continuation_logged)
+            and m.x <= post_1_fortress_final_config.reactive_jump_max_x
+            and enemy ~= nil
+            and enemy.dx >= 0
+            and enemy.dx < 72
+            and enemy.dy > -64 then
+          jump_frames = post_1_fortress_final_config.reactive_jump_frames
           cooldown = 42
           log_state("post_probe_1_fortress_jump_enemy")
-        elseif cooldown == 0 and stuck_frames > 35 then
+        elseif cooldown == 0
+            and not (second_lava_jump_started and not search_continuation_logged)
+            and m.x <= post_1_fortress_final_config.reactive_jump_max_x
+            and stuck_frames > 35 then
           jump_frames = 42
           cooldown = 52
           stuck_frames = 0
@@ -2009,7 +2856,25 @@ local function run_1_fortress_probe()
   held.down = false
   held.up = false
   apply()
-  advance(180, "post_probe_1_fortress_after")
+  advance(post_1_fortress_after_pre_frames, "post_probe_1_fortress_after")
+  if post_1_fortress_after_mode == "tap_A" then
+    held.A = true
+    advance(post_1_fortress_after_press_frames, "post_probe_1_fortress_after_tap_A")
+    held.A = false
+  elseif post_1_fortress_after_mode == "tap_B" then
+    held.B = true
+    advance(post_1_fortress_after_press_frames, "post_probe_1_fortress_after_tap_B")
+    held.B = false
+  elseif post_1_fortress_after_mode == "tap_start" then
+    held.start = true
+    advance(post_1_fortress_after_press_frames, "post_probe_1_fortress_after_tap_start")
+    held.start = false
+  elseif post_1_fortress_after_mode == "tap_up" then
+    held.up = true
+    advance(post_1_fortress_after_press_frames, "post_probe_1_fortress_after_tap_up")
+    held.up = false
+  end
+  advance(post_1_fortress_after_frames, "post_probe_1_fortress_after_wait")
   log_state("post_probe_1_fortress_done")
 end
 
@@ -2379,7 +3244,7 @@ local function drive_1_fortress_to_mid_checkpoint()
           jump_frames = 28
           cooldown = 42
           log_state("post_probe_1_fortress_search_jump_enemy")
-        elseif stuck_frames > 35 then
+        elseif not fourteenth_gap_started and stuck_frames > 35 then
           jump_frames = 42
           cooldown = 52
           stuck_frames = 0
@@ -3099,6 +3964,14 @@ local function run_1_4_naive_probe()
   local next_progress_marker = 256
   local reached_goal_card = false
   local goal_carry_frames = 0
+  local first_jump_started = false
+  local first_platform_landed = false
+  local first_platform_ride_frames = 0
+  local first_platform_landed_frame = 0
+  local second_jump_started = false
+  local second_jump_pulse_frames = 0
+  local hammer_attack_started = false
+  local hammer_attack_frames = 0
   local second_gap_started = false
   local second_gap_frames = 0
   local third_gap_started = false
@@ -3111,6 +3984,41 @@ local function run_1_4_naive_probe()
   local eighth_gap_started = false
   local eighth_platform_wait_frames = 0
   local ninth_gap_started = false
+  local tenth_gap_started = false
+  local eleventh_gap_started = false
+  local twelfth_gap_started = false
+  local thirteenth_gap_started = false
+  local fourteenth_gap_started = false
+  local fifteenth_gap_started = false
+  local sixteenth_gap_started = false
+  local seventeenth_gap_started = false
+  local eighteenth_gap_started = false
+  local nineteenth_gap_started = false
+  local twentieth_gap_started = false
+  local twentyfirst_gap_started = false
+  local twentysecond_gap_started = false
+  local twentythird_gap_started = false
+  local twentyfourth_gap_started = false
+  local twentyfifth_gap_started = false
+  local twentysecond_platform_ride_started = false
+  local tenth_platform_ride_started = false
+  local tenth_platform_ride_frames = 0
+  local twelfth_platform_ride_started = false
+  local twelfth_platform_ride_frames = 0
+  local fourteenth_platform_wait_frames = 0
+  local seventeenth_platform_ride_frames = 0
+  local nineteenth_drop_frames = 0
+  local twentysecond_platform_ride_frames = 0
+  local twentyfourth_recovery_started = false
+  local twentyfourth_recovery_frames = 0
+  local twentyfourth_post_flutter_frames = 0
+  local twentyfourth_late_brake_started = false
+  local twentyfourth_late_brake_frames = 0
+  local exit_pipe_entry_started = false
+  local exit_pipe_align_frames = 0
+  local exit_pipe_entry_frames = 0
+  local exit_goal_jump_started = false
+  local jump_mode = ""
   local first_platform_ride_started = false
   local platform_ride_frames = 0
   local first_platform_exit_frames = 0
@@ -3132,7 +4040,7 @@ local function run_1_4_naive_probe()
       log_state("post_probe_1_4_goal_card")
     end
 
-    if m.x >= 8192 or m.y == 0 then
+    if m.x >= 8192 or (m.y == 0 and not exit_pipe_entry_started) then
       if reached_goal_card then
         log_state("post_probe_1_4_success_course_clear")
       else
@@ -3149,6 +4057,89 @@ local function run_1_4_naive_probe()
       last_x = m.x
     end
 
+    if post_1_4_seventh_gap_air_trigger
+        and sixth_gap_started
+        and not seventh_gap_started
+        and not grounded
+        and m.x >= post_1_4_seventh_gap_air_trigger_min_x
+        and m.x <= post_1_4_seventh_gap_air_trigger_max_x
+        and m.y >= post_1_4_seventh_gap_air_trigger_min_y
+        and m.y <= post_1_4_seventh_gap_air_trigger_max_y then
+      seventh_gap_started = true
+      jump_frames = post_1_4_seventh_gap_jump_frames
+      jump_mode = "seventh_gap"
+      cooldown = 55
+      stuck_frames = 0
+      log_state("post_probe_1_4_jump_seventh_gap_air")
+    end
+
+    if not exit_pipe_entry_started
+        and twentyfifth_gap_started
+        and grounded
+        and m.x >= post_1_4_exit_pipe_trigger_min_x
+        and m.x <= post_1_4_exit_pipe_trigger_max_x
+        and m.y <= post_1_4_exit_pipe_trigger_max_y then
+      exit_pipe_entry_started = true
+      exit_pipe_align_frames = post_1_4_exit_pipe_align_frames
+      exit_pipe_entry_frames = post_1_4_exit_pipe_hold_down_frames
+      jump_frames = 0
+      jump_mode = ""
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      log_state("post_probe_1_4_exit_pipe_entry")
+    end
+
+    if exit_pipe_entry_started
+        and not exit_goal_jump_started
+        and grounded
+        and m.x >= post_1_4_exit_goal_jump_trigger_min_x
+        and m.x <= post_1_4_exit_goal_jump_trigger_max_x
+        and m.y >= 360 then
+      exit_goal_jump_started = true
+      reached_goal_card = true
+      jump_frames = post_1_4_exit_goal_jump_frames
+      jump_mode = "exit_goal_card"
+      cooldown = 0
+      stuck_frames = 0
+      log_state("post_probe_1_4_exit_goal_jump")
+    end
+
+    if jump_mode == "tenth_gap"
+        and not tenth_platform_ride_started
+        and m.x >= 915
+        and m.x <= 955
+        and m.y >= 260
+        and m.y <= 320 then
+      tenth_platform_ride_started = true
+      tenth_platform_ride_frames = post_1_4_tenth_platform_ride_frames
+      jump_frames = 0
+      jump_mode = ""
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      log_state("post_probe_1_4_tenth_platform_ride")
+    end
+
+    if jump_mode == "twelfth_gap"
+        and not twelfth_platform_ride_started
+        and m.x >= 1085
+        and m.x <= 1115
+        and m.y >= 340
+        and m.y <= 390 then
+      twelfth_platform_ride_started = true
+      twelfth_platform_ride_frames = post_1_4_twelfth_platform_ride_frames
+      jump_frames = 0
+      jump_mode = ""
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      log_state("post_probe_1_4_twelfth_platform_ride")
+    end
+
     if not first_platform_ride_started and grounded and m.x >= 240 and m.x <= 310 and m.y >= 300 and m.y <= 340 then
       first_platform_ride_started = true
       platform_ride_frames = 12
@@ -3156,7 +4147,153 @@ local function run_1_4_naive_probe()
       log_state("post_probe_1_4_first_platform_ride")
     end
 
-    if eighth_platform_wait_frames > 0 then
+    if not twentyfourth_recovery_started
+        and twentyfourth_gap_started
+        and post_1_4_twentyfourth_recovery_frames > 0
+        and memory.readbyte(0xED) < 3
+        and m.x >= 1850
+        and m.x <= 1900
+        and m.y >= 280
+        and m.y <= 370 then
+      twentyfourth_recovery_started = true
+      twentyfourth_recovery_frames = post_1_4_twentyfourth_recovery_frames
+      jump_frames = 0
+      jump_mode = ""
+      log_state("post_probe_1_4_twentyfourth_recovery")
+    end
+
+    if jump_mode == "twentysecond_gap"
+        and not twentysecond_platform_ride_started
+        and m.x >= 1600
+        and m.x <= 1645
+        and m.y >= 305
+        and m.y <= 350 then
+      twentysecond_platform_ride_started = true
+      twentysecond_platform_ride_frames = post_1_4_twentysecond_platform_ride_frames
+      jump_frames = 0
+      jump_mode = ""
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      log_state("post_probe_1_4_twentysecond_platform_ride")
+    end
+
+    held.down = false
+    if exit_pipe_align_frames > 0 then
+      held.right = post_1_4_exit_pipe_align_direction == "right"
+      held.left = post_1_4_exit_pipe_align_direction == "left"
+      held.B = false
+      held.A = false
+      exit_pipe_align_frames = exit_pipe_align_frames - 1
+    elseif exit_pipe_entry_frames > 0 then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      held.down = true
+      exit_pipe_entry_frames = exit_pipe_entry_frames - 1
+    elseif fourteenth_platform_wait_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      fourteenth_platform_wait_frames = fourteenth_platform_wait_frames - 1
+      if fourteenth_platform_wait_frames == 0 then
+        jump_frames = post_1_4_fourteenth_gap_jump_frames
+        jump_mode = "fourteenth_gap"
+        log_state("post_probe_1_4_jump_fourteenth_gap")
+      end
+    elseif twentysecond_platform_ride_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = post_1_4_twentysecond_platform_hold_a > 0 and (twentysecond_platform_ride_frames % 8) >= 4
+      twentysecond_platform_ride_frames = twentysecond_platform_ride_frames - 1
+    elseif twentyfourth_post_flutter_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      if not twentyfourth_late_brake_started
+          and m.x >= post_1_4_twentyfourth_late_brake_x
+          and m.y >= post_1_4_twentyfourth_late_brake_y
+          and post_1_4_twentyfourth_late_brake_frames > 0 then
+        twentyfourth_late_brake_started = true
+        twentyfourth_late_brake_frames = post_1_4_twentyfourth_late_brake_frames
+        log_state("post_probe_1_4_twentyfourth_late_brake")
+      end
+      if twentyfourth_late_brake_frames > 0 then
+        held.right = false
+        held.left = true
+        held.B = false
+        twentyfourth_late_brake_frames = twentyfourth_late_brake_frames - 1
+      end
+      if not twentyfifth_gap_started
+          and m.x >= post_1_4_twentyfifth_gap_trigger_min_x
+          and m.x <= post_1_4_twentyfifth_gap_trigger_max_x
+          and m.y >= 380 then
+        twentyfifth_gap_started = true
+        twentyfourth_post_flutter_frames = 0
+        jump_frames = post_1_4_twentyfifth_gap_jump_frames
+        jump_mode = "twentyfifth_gap"
+        log_state("post_probe_1_4_jump_twentyfifth_gap")
+      end
+      if twentyfourth_post_flutter_frames <= post_1_4_twentyfourth_post_tail_release_start
+          and twentyfourth_post_flutter_frames >= post_1_4_twentyfourth_post_tail_release_end then
+        held.B = false
+      end
+      if post_1_4_twentyfourth_post_tail_pulse_period > 0
+          and (twentyfourth_post_flutter_frames % post_1_4_twentyfourth_post_tail_pulse_period) < post_1_4_twentyfourth_post_tail_pulse_release_frames then
+        held.B = false
+      end
+      held.A = (twentyfourth_post_flutter_frames % post_1_4_twentyfourth_flutter_period) < post_1_4_twentyfourth_flutter_on_frames
+      twentyfourth_post_flutter_frames = twentyfourth_post_flutter_frames - 1
+    elseif twentyfourth_recovery_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      twentyfourth_recovery_frames = twentyfourth_recovery_frames - 1
+    elseif nineteenth_drop_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      nineteenth_drop_frames = nineteenth_drop_frames - 1
+    elseif seventeenth_platform_ride_frames > 0 then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      seventeenth_platform_ride_frames = seventeenth_platform_ride_frames - 1
+      if seventeenth_platform_ride_frames == 0 then
+        jump_frames = post_1_4_seventeenth_gap_jump_frames
+        jump_mode = "seventeenth_gap"
+        log_state("post_probe_1_4_jump_seventeenth_gap")
+      end
+    elseif twelfth_platform_ride_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      twelfth_platform_ride_frames = twelfth_platform_ride_frames - 1
+      if twelfth_platform_ride_frames == 0 then
+        jump_frames = post_1_4_twelfth_platform_exit_jump_frames
+        jump_mode = "twelfth_platform_exit"
+        log_state("post_probe_1_4_twelfth_platform_exit_jump")
+      end
+    elseif tenth_platform_ride_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      tenth_platform_ride_frames = tenth_platform_ride_frames - 1
+      if tenth_platform_ride_frames == 0 then
+        jump_frames = post_1_4_tenth_platform_exit_jump_frames
+        jump_mode = "tenth_platform_exit"
+        log_state("post_probe_1_4_tenth_platform_exit_jump")
+      end
+    elseif eighth_platform_wait_frames > 0 then
       held.right = false
       held.left = true
       held.B = false
@@ -3202,10 +4339,116 @@ local function run_1_4_naive_probe()
       held.A = false
       third_platform_wait_frames = third_platform_wait_frames - 1
     elseif jump_frames > 0 then
-      held.right = true
-      held.B = true
+      if jump_mode == "eighth_gap" then
+        held.right = jump_frames > (post_1_4_eighth_gap_jump_frames - post_1_4_eighth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_eighth_gap_left_frames
+        held.B = false
+      elseif jump_mode == "ninth_gap" then
+        held.right = jump_frames > (post_1_4_ninth_gap_jump_frames - post_1_4_ninth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_ninth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "tenth_gap" then
+        held.right = jump_frames > (post_1_4_tenth_gap_jump_frames - post_1_4_tenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_tenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "tenth_platform_exit" then
+        held.right = jump_frames > (post_1_4_tenth_platform_exit_jump_frames - post_1_4_tenth_platform_exit_right_frames)
+        held.left = false
+        held.B = held.right
+      elseif jump_mode == "eleventh_gap" then
+        held.right = jump_frames > (post_1_4_eleventh_gap_jump_frames - post_1_4_eleventh_gap_right_frames)
+        held.left = jump_frames <= post_1_4_eleventh_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twelfth_gap" then
+        held.right = jump_frames > (post_1_4_twelfth_gap_jump_frames - post_1_4_twelfth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twelfth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twelfth_platform_exit" then
+        held.right = jump_frames > (post_1_4_twelfth_platform_exit_jump_frames - post_1_4_twelfth_platform_exit_right_frames)
+        held.left = false
+        held.B = held.right
+      elseif jump_mode == "thirteenth_gap" then
+        held.right = jump_frames > (post_1_4_thirteenth_gap_jump_frames - post_1_4_thirteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_thirteenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "fourteenth_gap" then
+        held.right = jump_frames > (post_1_4_fourteenth_gap_jump_frames - post_1_4_fourteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_fourteenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "fifteenth_gap" then
+        held.right = jump_frames > (post_1_4_fifteenth_gap_jump_frames - post_1_4_fifteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_fifteenth_gap_left_frames
+        held.B = false
+      elseif jump_mode == "sixteenth_gap" then
+        held.right = jump_frames > (post_1_4_sixteenth_gap_jump_frames - post_1_4_sixteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_sixteenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "seventeenth_gap" then
+        held.right = jump_frames > (post_1_4_seventeenth_gap_jump_frames - post_1_4_seventeenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_seventeenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "eighteenth_gap" then
+        held.right = jump_frames > (post_1_4_eighteenth_gap_jump_frames - post_1_4_eighteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_eighteenth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "nineteenth_gap" then
+        held.right = jump_frames > (post_1_4_nineteenth_gap_jump_frames - post_1_4_nineteenth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_nineteenth_gap_left_frames
+        held.B = false
+      elseif jump_mode == "twentieth_gap" then
+        held.right = jump_frames > (post_1_4_twentieth_gap_jump_frames - post_1_4_twentieth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twentieth_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twentyfirst_gap" then
+        held.right = jump_frames > (post_1_4_twentyfirst_gap_jump_frames - post_1_4_twentyfirst_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twentyfirst_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twentysecond_gap" then
+        held.right = jump_frames > (post_1_4_twentysecond_gap_jump_frames - post_1_4_twentysecond_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twentysecond_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twentysecond_platform_exit" then
+        held.right = jump_frames > (post_1_4_twentysecond_platform_exit_jump_frames - post_1_4_twentysecond_platform_exit_right_frames)
+        held.left = false
+        held.B = held.right
+      elseif jump_mode == "twentythird_gap" then
+        held.right = jump_frames > (post_1_4_twentythird_gap_jump_frames - post_1_4_twentythird_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twentythird_gap_left_frames
+        held.B = held.right
+      elseif jump_mode == "twentyfourth_gap" then
+        held.right = jump_frames > (post_1_4_twentyfourth_gap_jump_frames - post_1_4_twentyfourth_gap_right_frames)
+        held.left = jump_frames <= post_1_4_twentyfourth_gap_left_frames
+        held.B = held.right
+        if jump_frames <= post_1_4_twentyfourth_tail_release_start
+            and jump_frames >= post_1_4_twentyfourth_tail_release_end then
+          held.B = false
+        end
+      elseif jump_mode == "twentyfifth_gap" then
+        held.right = jump_frames > (post_1_4_twentyfifth_gap_jump_frames - post_1_4_twentyfifth_gap_right_frames)
+        held.left = false
+        held.B = held.right
+      else
+        held.right = true
+        held.B = true
+      end
       held.A = true
+      if jump_mode == "twentyfourth_gap" then
+        held.A = jump_frames > (post_1_4_twentyfourth_gap_jump_frames - post_1_4_twentyfourth_initial_hold_frames)
+          or (jump_frames % post_1_4_twentyfourth_flutter_period) < post_1_4_twentyfourth_flutter_on_frames
+      end
       jump_frames = jump_frames - 1
+      if jump_frames <= 0 then
+        if jump_mode == "twentyfourth_gap"
+            and memory.readbyte(0xED) == 3
+            and post_1_4_twentyfourth_post_flutter_frames > 0 then
+          twentyfourth_post_flutter_frames = post_1_4_twentyfourth_post_flutter_frames
+          log_state("post_probe_1_4_twentyfourth_post_flutter")
+        end
+        if jump_mode == "eighth_gap" or jump_mode == "ninth_gap" or jump_mode == "tenth_gap" or jump_mode == "tenth_platform_exit" or jump_mode == "eleventh_gap" or jump_mode == "twelfth_gap" or jump_mode == "twelfth_platform_exit" or jump_mode == "thirteenth_gap" or jump_mode == "fourteenth_gap" or jump_mode == "fifteenth_gap" or jump_mode == "sixteenth_gap" or jump_mode == "seventeenth_gap" or jump_mode == "eighteenth_gap" or jump_mode == "nineteenth_gap" or jump_mode == "twentieth_gap" or jump_mode == "twentyfirst_gap" or jump_mode == "twentysecond_gap" or jump_mode == "twentysecond_platform_exit" or jump_mode == "twentythird_gap" or jump_mode == "twentyfourth_gap" or jump_mode == "twentyfifth_gap" then
+          held.left = false
+        end
+        jump_mode = ""
+      end
     else
       held.right = true
       held.B = true
@@ -3244,17 +4487,17 @@ local function run_1_4_naive_probe()
             and m.x <= 535
             and m.y >= 360 then
           sixth_gap_started = true
-          jump_frames = 58
+          jump_frames = post_1_4_sixth_gap_jump_frames
           cooldown = 0
           log_state("post_probe_1_4_jump_sixth_gap")
         elseif sixth_gap_started
             and not seventh_gap_started
-            and m.x >= 645
-            and m.x <= 690
-            and m.y >= 320
-            and m.y <= 360 then
+            and m.x >= post_1_4_seventh_gap_trigger_min_x
+            and m.x <= post_1_4_seventh_gap_trigger_max_x
+            and m.y >= post_1_4_seventh_gap_trigger_min_y
+            and m.y <= post_1_4_seventh_gap_trigger_max_y then
           seventh_gap_started = true
-          jump_frames = 30
+          jump_frames = post_1_4_seventh_gap_jump_frames
           cooldown = 55
           log_state("post_probe_1_4_jump_seventh_gap")
         elseif seventh_gap_started
@@ -3264,24 +4507,244 @@ local function run_1_4_naive_probe()
             and m.y >= 320
             and m.y <= 360 then
           eighth_gap_started = true
-          jump_frames = 70
+          jump_frames = post_1_4_eighth_gap_jump_frames
+          jump_mode = "eighth_gap"
           cooldown = 0
           log_state("post_probe_1_4_jump_eighth_gap")
         elseif eighth_gap_started
             and not ninth_gap_started
-            and m.x >= 760
-            and m.x <= 790
+            and m.x >= post_1_4_ninth_gap_trigger_min_x
+            and m.x <= post_1_4_ninth_gap_trigger_max_x
             and m.y >= 320
             and m.y <= 360 then
           ninth_gap_started = true
-          jump_frames = 70
-          cooldown = 85
+          jump_frames = post_1_4_ninth_gap_jump_frames
+          jump_mode = "ninth_gap"
+          cooldown = 0
           log_state("post_probe_1_4_jump_ninth_gap")
-        elseif enemy ~= nil and enemy.id ~= 54 and enemy.dx >= 0 and enemy.dx < 90 and enemy.dy > -55 then
+        elseif ninth_gap_started
+            and not tenth_gap_started
+            and m.x >= post_1_4_tenth_gap_trigger_min_x
+            and m.x <= post_1_4_tenth_gap_trigger_max_x
+            and m.y >= 330
+            and m.y <= 370 then
+          tenth_gap_started = true
+          jump_frames = post_1_4_tenth_gap_jump_frames
+          jump_mode = "tenth_gap"
+          cooldown = 0
+          log_state("post_probe_1_4_jump_tenth_gap")
+        elseif tenth_gap_started
+            and not eleventh_gap_started
+            and m.x >= post_1_4_eleventh_gap_trigger_min_x
+            and m.x <= post_1_4_eleventh_gap_trigger_max_x
+            and m.y >= 350
+            and m.y <= 385 then
+          eleventh_gap_started = true
+          jump_frames = post_1_4_eleventh_gap_jump_frames
+          jump_mode = "eleventh_gap"
+          cooldown = 0
+          log_state("post_probe_1_4_jump_eleventh_gap")
+        elseif eleventh_gap_started
+            and not twelfth_gap_started
+            and m.x >= post_1_4_twelfth_gap_trigger_min_x
+            and m.x <= post_1_4_twelfth_gap_trigger_max_x
+            and m.y >= 300
+            and m.y <= 340 then
+          twelfth_gap_started = true
+          jump_frames = post_1_4_twelfth_gap_jump_frames
+          jump_mode = "twelfth_gap"
+          cooldown = 0
+          log_state("post_probe_1_4_jump_twelfth_gap")
+        elseif twelfth_gap_started
+            and not thirteenth_gap_started
+            and m.x >= post_1_4_thirteenth_gap_trigger_min_x
+            and m.x <= post_1_4_thirteenth_gap_trigger_max_x
+            and m.y >= 300
+            and m.y <= 385 then
+          thirteenth_gap_started = true
+          jump_frames = post_1_4_thirteenth_gap_jump_frames
+          jump_mode = "thirteenth_gap"
+          cooldown = 0
+          log_state("post_probe_1_4_jump_thirteenth_gap")
+        elseif thirteenth_gap_started
+            and not fourteenth_gap_started
+            and m.x >= post_1_4_fourteenth_gap_trigger_min_x
+            and m.x <= post_1_4_fourteenth_gap_trigger_max_x
+            and m.y >= 340
+            and m.y <= 370 then
+          fourteenth_gap_started = true
+          if post_1_4_fourteenth_gap_wait_frames > 0 then
+            fourteenth_platform_wait_frames = post_1_4_fourteenth_gap_wait_frames
+            log_state("post_probe_1_4_fourteenth_wait")
+          else
+            jump_frames = post_1_4_fourteenth_gap_jump_frames
+            jump_mode = "fourteenth_gap"
+            log_state("post_probe_1_4_jump_fourteenth_gap")
+          end
+          cooldown = 0
+        elseif fourteenth_gap_started
+            and not fifteenth_gap_started
+            and grounded
+            and m.x >= post_1_4_fifteenth_gap_trigger_min_x
+            and m.x <= post_1_4_fifteenth_gap_trigger_max_x
+            and m.y >= 250
+            and m.y <= 290 then
+          fifteenth_gap_started = true
+          jump_frames = post_1_4_fifteenth_gap_jump_frames
+          jump_mode = "fifteenth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_fifteenth_gap")
+        elseif fifteenth_gap_started
+            and not sixteenth_gap_started
+            and grounded
+            and m.x >= post_1_4_sixteenth_gap_trigger_min_x
+            and m.x <= post_1_4_sixteenth_gap_trigger_max_x
+            and m.y >= 320
+            and m.y <= 350 then
+          sixteenth_gap_started = true
+          jump_frames = post_1_4_sixteenth_gap_jump_frames
+          jump_mode = "sixteenth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_sixteenth_gap")
+        elseif sixteenth_gap_started
+            and not seventeenth_gap_started
+            and grounded
+            and m.x >= post_1_4_seventeenth_gap_trigger_min_x
+            and m.x <= post_1_4_seventeenth_gap_trigger_max_x
+            and m.y >= 300
+            and m.y <= 345 then
+          seventeenth_gap_started = true
+          if post_1_4_seventeenth_gap_ride_frames > 0 then
+            seventeenth_platform_ride_frames = post_1_4_seventeenth_gap_ride_frames
+            log_state("post_probe_1_4_seventeenth_platform_ride")
+          else
+            jump_frames = post_1_4_seventeenth_gap_jump_frames
+            jump_mode = "seventeenth_gap"
+            log_state("post_probe_1_4_jump_seventeenth_gap")
+          end
+          cooldown = 0
+          stuck_frames = 0
+        elseif seventeenth_gap_started
+            and not eighteenth_gap_started
+            and grounded
+            and m.x >= post_1_4_eighteenth_gap_trigger_min_x
+            and m.x <= post_1_4_eighteenth_gap_trigger_max_x
+            and m.y >= 260
+            and m.y <= 345 then
+          eighteenth_gap_started = true
+          jump_frames = post_1_4_eighteenth_gap_jump_frames
+          jump_mode = "eighteenth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_eighteenth_gap")
+        elseif eighteenth_gap_started
+            and not nineteenth_gap_started
+            and grounded
+            and m.x >= post_1_4_nineteenth_gap_trigger_min_x
+            and m.x <= post_1_4_nineteenth_gap_trigger_max_x
+            and m.y >= 260
+            and m.y <= 290 then
+          nineteenth_gap_started = true
+          if post_1_4_nineteenth_gap_drop_frames > 0 then
+            nineteenth_drop_frames = post_1_4_nineteenth_gap_drop_frames
+            log_state("post_probe_1_4_nineteenth_drop")
+          else
+            jump_frames = post_1_4_nineteenth_gap_jump_frames
+            jump_mode = "nineteenth_gap"
+            log_state("post_probe_1_4_jump_nineteenth_gap")
+          end
+          cooldown = 0
+          stuck_frames = 0
+        elseif nineteenth_gap_started
+            and not twentieth_gap_started
+            and grounded
+            and m.x >= post_1_4_twentieth_gap_trigger_min_x
+            and m.x <= post_1_4_twentieth_gap_trigger_max_x
+            and m.y >= 260
+            and m.y <= 290 then
+          twentieth_gap_started = true
+          jump_frames = post_1_4_twentieth_gap_jump_frames
+          jump_mode = "twentieth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentieth_gap")
+        elseif twentieth_gap_started
+            and not twentyfirst_gap_started
+            and grounded
+            and m.x >= post_1_4_twentyfirst_gap_trigger_min_x
+            and m.x <= post_1_4_twentyfirst_gap_trigger_max_x
+            and m.y >= 240
+            and m.y <= 275 then
+          twentyfirst_gap_started = true
+          jump_frames = post_1_4_twentyfirst_gap_jump_frames
+          jump_mode = "twentyfirst_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentyfirst_gap")
+        elseif twentyfirst_gap_started
+            and not twentysecond_gap_started
+            and grounded
+            and m.x >= post_1_4_twentysecond_gap_trigger_min_x
+            and m.x <= post_1_4_twentysecond_gap_trigger_max_x
+            and m.y >= 350
+            and m.y <= 385 then
+          twentysecond_gap_started = true
+          jump_frames = post_1_4_twentysecond_gap_jump_frames
+          jump_mode = "twentysecond_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentysecond_gap")
+        elseif twentysecond_gap_started
+            and not twentythird_gap_started
+            and grounded
+            and m.x >= post_1_4_twentythird_gap_trigger_min_x
+            and m.x <= post_1_4_twentythird_gap_trigger_max_x
+            and m.y >= 360
+            and m.y <= 390 then
+          twentythird_gap_started = true
+          jump_frames = post_1_4_twentythird_gap_jump_frames
+          jump_mode = "twentythird_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentythird_gap")
+        elseif twentythird_gap_started
+            and not twentyfourth_gap_started
+            and grounded
+            and m.x >= post_1_4_twentyfourth_gap_trigger_min_x
+            and m.x <= post_1_4_twentyfourth_gap_trigger_max_x
+            and m.y >= 320
+            and m.y <= 350 then
+          twentyfourth_gap_started = true
+          jump_frames = post_1_4_twentyfourth_gap_jump_frames
+          jump_mode = "twentyfourth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentyfourth_gap")
+        elseif twentyfourth_gap_started
+            and not twentyfifth_gap_started
+            and grounded
+            and m.x >= post_1_4_twentyfifth_gap_trigger_min_x
+            and m.x <= post_1_4_twentyfifth_gap_trigger_max_x
+            and m.y >= 340
+            and m.y <= 390 then
+          twentyfifth_gap_started = true
+          jump_frames = post_1_4_twentyfifth_gap_jump_frames
+          jump_mode = "twentyfifth_gap"
+          cooldown = 0
+          stuck_frames = 0
+          log_state("post_probe_1_4_jump_twentyfifth_gap")
+        elseif not twelfth_gap_started
+            and enemy ~= nil
+            and enemy.id ~= 54
+            and enemy.dx >= 0
+            and enemy.dx < 90
+            and enemy.dy > -55 then
           jump_frames = 24
           cooldown = 36
           log_state("post_probe_1_4_jump_enemy")
-        elseif stuck_frames > 35 then
+        elseif not fourteenth_gap_started and stuck_frames > 35 then
           jump_frames = 42
           cooldown = 52
           stuck_frames = 0
@@ -3303,9 +4766,996 @@ local function run_1_4_naive_probe()
   held.down = false
   held.up = false
   apply()
-  advance(360, "post_probe_1_4_after")
+  advance(post_1_4_after_frames, "post_probe_1_4_after")
   log_state("post_probe_1_4_done")
 end
+
+local function run_1_5_naive_probe()
+  local jump_frames = 0
+  local cooldown = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local next_progress_marker = 256
+  local reached_goal_card = false
+  local goal_carry_frames = 0
+  local hammer_attack_started = false
+  local hammer_attack_frames = 0
+  local ground_attack_started = false
+  local ground_attack_frames = 0
+  local under_bop_frames = 0
+  local post_kill_frames = 0
+  local collect_chest_started = false
+  held.right = true
+  held.B = true
+  for frame = 1, 4200 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local flank_enemy = nearest_enemy_between(m, -120, 20)
+    local roamer_alive = has_active_enemy_id(-127)
+    local grounded = m.air == 0
+
+    if m.x >= next_progress_marker and m.x < 8192 then
+      log_state("post_probe_1_5_progress_x_" .. tostring(next_progress_marker))
+      next_progress_marker = next_progress_marker + 256
+    end
+
+    if m.x >= 2600 and m.x < 8192 and not reached_goal_card then
+      reached_goal_card = true
+      goal_carry_frames = 120
+      log_state("post_probe_1_5_goal_card")
+    end
+
+    if m.x >= 8192 or m.y == 0 then
+      if reached_goal_card or memory.readbyte(0xED) > 0 or memory.readbyte(0x7D81) ~= 0 then
+        log_state("post_probe_1_5_success_course_clear")
+      else
+        log_state("post_probe_1_5_bad_state")
+      end
+      log_state("post_probe_1_5_transition")
+      break
+    end
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if not hammer_attack_started
+        and grounded
+        and m.y <= 330
+        and m.x >= 175
+        and m.x <= 215 then
+      hammer_attack_started = true
+      hammer_attack_frames = post_1_5_roamer_platform_attack_frames
+      cooldown = 110
+      log_state("post_probe_1_5_hammer_attack")
+    end
+
+    if not ground_attack_started
+        and grounded
+        and m.x >= 208
+        and m.x <= 244
+        and m.y >= 360
+        and flank_enemy ~= nil
+        and math.abs(flank_enemy.dy) < 55 then
+      ground_attack_started = true
+      ground_attack_frames = post_1_5_roamer_ground_attack_frames
+      cooldown = post_1_5_roamer_ground_attack_frames + 20
+      log_state(
+        "post_probe_1_5_ground_tail_attack",
+        "flank_enemy_dx=" .. tostring(flank_enemy.dx) .. " flank_enemy_dy=" .. tostring(flank_enemy.dy)
+      )
+    end
+
+    if under_bop_frames == 0
+        and grounded
+        and enemy ~= nil
+        and enemy.id == -127
+        and enemy.dy < -50
+        and enemy.dy > -130
+        and math.abs(enemy.dx) < 28 then
+      under_bop_frames = post_1_5_roamer_under_bop_frames
+      ground_attack_frames = 0
+      hammer_attack_frames = 0
+      cooldown = post_1_5_roamer_under_bop_frames + 45
+      log_state("post_probe_1_5_under_bop")
+    end
+
+    if hammer_attack_started and not roamer_alive and memory.readbyte(0xED) > 0 then
+      post_kill_frames = post_kill_frames + 1
+    else
+      post_kill_frames = 0
+    end
+
+    if not collect_chest_started and post_kill_frames >= 12 then
+      collect_chest_started = true
+      ground_attack_frames = 0
+      hammer_attack_frames = 0
+      under_bop_frames = 0
+      cooldown = 90
+      log_state("post_probe_1_5_collect_chest")
+    end
+
+    held.down = false
+    held.left = false
+    if goal_carry_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      goal_carry_frames = goal_carry_frames - 1
+    elseif collect_chest_started then
+      held.right = false
+      held.left = m.x > 42
+      held.B = false
+      held.A = false
+    elseif under_bop_frames > 0 then
+      held.right = post_1_5_roamer_under_bop_direction == "right"
+      held.left = post_1_5_roamer_under_bop_direction == "left"
+      held.B = false
+      held.A = true
+      under_bop_frames = under_bop_frames - 1
+    elseif ground_attack_frames > 0 then
+      held.right = false
+      held.left = true
+      held.A = false
+      held.B = ground_attack_frames <= (
+        post_1_5_roamer_ground_attack_frames - post_1_5_roamer_ground_b_release_frames
+      )
+      ground_attack_frames = ground_attack_frames - 1
+    elseif hammer_attack_frames > 0 then
+      held.right = false
+      held.left = false
+      if post_1_5_roamer_platform_direction == "left" then
+        held.left = true
+      elseif post_1_5_roamer_platform_direction == "right" then
+        held.right = true
+      end
+      held.A = false
+      held.B = hammer_attack_frames <= (
+        post_1_5_roamer_platform_attack_frames - post_1_5_roamer_platform_b_release_frames
+      )
+      hammer_attack_frames = hammer_attack_frames - 1
+    elseif jump_frames > 0 then
+      held.right = true
+      held.B = true
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.right = true
+      held.B = true
+      held.A = false
+      if cooldown > 0 then
+        cooldown = cooldown - 1
+      end
+      if grounded and cooldown == 0 then
+        if m.x >= 2520 then
+          jump_frames = 70
+          cooldown = 90
+          log_state("post_probe_1_5_jump_goal_card")
+        elseif enemy ~= nil
+            and enemy.id == -127
+            and enemy.dx >= 75
+            and enemy.dx < 130
+            and enemy.dy > -20
+            and m.x < 100 then
+          jump_frames = post_1_5_roamer_first_jump_frames
+          cooldown = post_1_5_roamer_first_jump_cooldown
+          log_state("post_probe_1_5_jump_roamer_first")
+        elseif enemy ~= nil
+            and enemy.dx >= 0
+            and enemy.dx < 115
+            and enemy.dy > -65 then
+          jump_frames = 44
+          cooldown = 48
+          log_state("post_probe_1_5_jump_enemy")
+        elseif stuck_frames > 40 then
+          jump_frames = 52
+          cooldown = 64
+          stuck_frames = 0
+          log_state("post_probe_1_5_jump_stuck")
+        end
+      end
+    end
+
+    apply()
+    if frame % 30 == 0 then
+      log_state("post_probe_1_5_tick")
+    end
+    advance_frame()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  held.left = false
+  held.down = false
+  held.up = false
+  apply()
+  advance(900, "post_probe_1_5_after")
+  log_state("post_probe_1_5_done")
+end
+
+local function run_1_5_water_probe()
+  local max_x = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local next_progress_marker = 512
+  local swim_boost_frames = 0
+  local died = false
+  local pipe_entry_frames = 0
+  local pipe_entry_started = false
+  local end_pipe_phase = 0
+  local end_pipe_frames = 0
+  local end_pipe_started = false
+  local after_end_pipe_started = false
+  local after_end_pipe_jump_started = false
+  local after_end_pipe_jump_frames = 0
+  local tail_release_frames = 0
+  local tail_swing_frames = 0
+  local enemy_avoid_frames = 0
+  local enemy_avoid_left_frames = 0
+  local late_window_used = false
+  held.right = true
+  held.B = true
+  local completed = false
+  for frame = 1, 6000 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+
+    if memory.readbyte(0x14) == 1 then
+      died = true
+    end
+
+    if m.x >= next_progress_marker and m.x < 8192 then
+      log_state("post_probe_1_5_water_progress_x_" .. tostring(next_progress_marker))
+      next_progress_marker = next_progress_marker + 512
+    end
+
+    if m.x >= 8192 then
+      if m.x > 20000 or (not died and (max_x > 1000 or memory.readbyte(0xED) > 0)) then
+        log_state("post_probe_1_5_water_success_course_clear", "max_x=" .. tostring(max_x))
+      else
+        log_state("post_probe_1_5_water_bad_state", "max_x=" .. tostring(max_x))
+      end
+      log_state("post_probe_1_5_water_transition")
+      completed = true
+      break
+    end
+
+    max_x = math.max(max_x, m.x)
+    if not after_end_pipe_started and end_pipe_started and max_x > 2200 and m.x < 100 then
+      after_end_pipe_started = true
+      end_pipe_frames = 0
+      swim_boost_frames = 0
+      pipe_entry_frames = 0
+      log_state("post_probe_1_5_water_after_end_pipe")
+    end
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 120 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if not end_pipe_started and m.x >= post_1_5_water_end_pipe_trigger_x and m.y >= 240 then
+      end_pipe_started = true
+      end_pipe_phase = 1
+      end_pipe_frames = post_1_5_water_end_pipe_brake_frames
+      swim_boost_frames = 0
+      pipe_entry_frames = 0
+      if end_pipe_frames > 0 then
+        log_state("post_probe_1_5_water_end_pipe_brake")
+      elseif post_1_5_water_end_pipe_jump_frames > 0 then
+        end_pipe_phase = 2
+        end_pipe_frames = post_1_5_water_end_pipe_jump_frames
+        log_state("post_probe_1_5_water_end_pipe_jump")
+      else
+        end_pipe_phase = 3
+        end_pipe_frames = post_1_5_water_end_pipe_up_frames
+        log_state("post_probe_1_5_water_end_pipe_entry")
+      end
+    end
+
+    if not after_end_pipe_started and swim_boost_frames == 0 and end_pipe_frames == 0 then
+      if not pipe_entry_started and m.x >= 1960 and m.x <= 2020 and m.y >= 250 and m.y <= 360 then
+        pipe_entry_started = true
+        pipe_entry_frames = 120
+        swim_boost_frames = 0
+        log_state("post_probe_1_5_water_pipe_entry")
+      elseif post_1_5_water_late_window_frames > 0
+          and not late_window_used
+          and memory.readbyte(0xED) > 0
+          and m.x >= post_1_5_water_late_window_start_x
+          and m.x < post_1_5_water_late_window_end_x then
+        late_window_used = true
+        swim_boost_frames = post_1_5_water_late_window_swim_frames
+        enemy_avoid_frames = post_1_5_water_late_window_frames
+        if post_1_5_water_late_window_direction == "left" then
+          enemy_avoid_left_frames = post_1_5_water_late_window_frames
+        else
+          enemy_avoid_left_frames = 0
+        end
+        log_state("post_probe_1_5_water_late_window_avoid")
+      elseif post_1_5_water_late_hazard_brake_frames > 0
+          and enemy ~= nil
+          and memory.readbyte(0xED) > 0
+          and m.x >= 1740
+          and m.x < 1910
+          and enemy.id == -90
+          and enemy.dx >= 0
+          and enemy.dx < 90
+          and enemy.dy > -40
+          and enemy.dy < 70 then
+        swim_boost_frames = post_1_5_water_late_hazard_swim_frames
+        enemy_avoid_frames = post_1_5_water_late_hazard_brake_frames
+        enemy_avoid_left_frames = post_1_5_water_late_hazard_brake_frames
+        log_state("post_probe_1_5_water_late_hazard_brake")
+      elseif m.x >= post_1_5_water_high_guard_start_x
+          and m.x < post_1_5_water_high_guard_end_x
+          and m.y > post_1_5_water_high_guard_y then
+        swim_boost_frames = post_1_5_water_high_guard_frames
+        log_state("post_probe_1_5_water_high_swim_guard")
+      elseif m.y > 350 then
+        swim_boost_frames = 18
+        log_state("post_probe_1_5_water_swim_low")
+      elseif memory.readbyte(0xED) == 3 and enemy ~= nil and enemy.dx >= 40 and enemy.dx < 115 and enemy.dy > -80 then
+        tail_release_frames = 5
+        tail_swing_frames = 14
+        swim_boost_frames = 42
+        enemy_avoid_frames = 48
+        log_state("post_probe_1_5_water_tail_enemy")
+      elseif enemy ~= nil and enemy.dx >= 0 and enemy.dx < 115 and enemy.dy > -70 then
+        swim_boost_frames = 36
+        log_state("post_probe_1_5_water_swim_enemy")
+      elseif stuck_frames > 45 then
+        swim_boost_frames = 24
+        stuck_frames = 0
+        log_state("post_probe_1_5_water_swim_stuck")
+      elseif frame % 34 == 0 and m.y > 285 then
+        swim_boost_frames = 8
+      end
+    end
+
+    held.left = false
+    held.right = true
+    held.B = true
+    held.down = false
+    held.up = false
+    held.A = false
+    if after_end_pipe_started then
+      held.right = true
+      held.B = true
+      held.up = false
+      held.down = false
+      if not after_end_pipe_jump_started and m.x >= 330 then
+        after_end_pipe_jump_started = true
+        after_end_pipe_jump_frames = 48
+        log_state("post_probe_1_5_water_goal_card_jump")
+      end
+      if after_end_pipe_jump_frames > 0 then
+        held.A = true
+        after_end_pipe_jump_frames = after_end_pipe_jump_frames - 1
+      else
+        held.A = false
+      end
+    elseif pipe_entry_frames > 0 then
+      held.right = false
+      held.B = false
+      held.up = true
+      held.A = false
+      pipe_entry_frames = pipe_entry_frames - 1
+    elseif end_pipe_frames > 0 then
+      held.right = false
+      held.B = false
+      held.left = end_pipe_phase == 1 and post_1_5_water_end_pipe_brake_direction == "left"
+      held.right = end_pipe_phase == 1 and post_1_5_water_end_pipe_brake_direction == "right"
+      if end_pipe_phase >= 2 then
+        held.left = post_1_5_water_end_pipe_entry_horizontal == "left"
+        held.right = post_1_5_water_end_pipe_entry_horizontal == "right"
+      end
+      held.up = end_pipe_phase >= 2 and post_1_5_water_end_pipe_entry_direction == "up"
+      held.down = end_pipe_phase >= 2 and post_1_5_water_end_pipe_entry_direction == "down"
+      held.A = end_pipe_phase == 2
+        or (
+          post_1_5_water_end_pipe_entry_swim
+          and held.up
+          and end_pipe_phase == 3
+          and end_pipe_frames % 24 >= 12
+        )
+      end_pipe_frames = end_pipe_frames - 1
+      if end_pipe_frames == 0 then
+        if end_pipe_phase == 1 then
+          if post_1_5_water_end_pipe_jump_frames > 0 then
+            end_pipe_phase = 2
+            end_pipe_frames = post_1_5_water_end_pipe_jump_frames
+            log_state("post_probe_1_5_water_end_pipe_jump")
+          else
+            end_pipe_phase = 3
+            end_pipe_frames = post_1_5_water_end_pipe_up_frames
+            log_state("post_probe_1_5_water_end_pipe_entry")
+          end
+        elseif end_pipe_phase == 2 then
+          end_pipe_phase = 3
+          end_pipe_frames = post_1_5_water_end_pipe_up_frames
+          log_state("post_probe_1_5_water_end_pipe_entry")
+        else
+          log_state("post_probe_1_5_water_end_pipe_done")
+        end
+      end
+    elseif swim_boost_frames > 0 then
+      if post_1_5_water_swim_pulse then
+        local pulse_period =
+          post_1_5_water_swim_pulse_on_frames +
+          post_1_5_water_swim_pulse_off_frames
+        held.A = (swim_boost_frames % pulse_period) < post_1_5_water_swim_pulse_on_frames
+      else
+        held.A = true
+      end
+      swim_boost_frames = swim_boost_frames - 1
+    end
+    if enemy_avoid_frames > 0 then
+      held.right = false
+      held.left = enemy_avoid_left_frames > 0
+      enemy_avoid_frames = enemy_avoid_frames - 1
+      if enemy_avoid_left_frames > 0 then
+        enemy_avoid_left_frames = enemy_avoid_left_frames - 1
+      end
+    end
+    if tail_release_frames > 0 then
+      held.B = false
+      tail_release_frames = tail_release_frames - 1
+    elseif tail_swing_frames > 0 then
+      held.B = true
+      tail_swing_frames = tail_swing_frames - 1
+    end
+
+    apply()
+    if frame % 45 == 0 then
+      log_state("post_probe_1_5_water_tick")
+    end
+    advance_frame()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  held.left = false
+  held.down = false
+  held.up = false
+  apply()
+  if not completed then
+    log_state("post_probe_1_5_water_bad_state", "max_x=" .. tostring(max_x))
+  end
+  advance(900, "post_probe_1_5_water_after")
+  log_state("post_probe_1_5_water_done")
+end
+
+local function run_1_6_probe()
+  log_state("post_probe_1_6_start")
+  local function log_1_6(event, extra)
+    local m = mario()
+    local ok, summary = pcall(object_summary_between, m, -120, 260, 200)
+    if not ok then
+      summary = "objects_error=" .. tostring(summary)
+    end
+    if extra ~= nil then
+      log_state(event, tostring(extra) .. " " .. summary)
+    else
+      log_state(event, summary)
+    end
+  end
+  local max_x = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local next_progress_marker = 256
+  local jump_frames = 0
+  local cooldown = 0
+  local reached_goal_card = false
+  local goal_carry_frames = 0
+  local first_jump_started = false
+  local first_platform_landed = false
+  local first_platform_ride_frames = 0
+  local pre_lift_jump_started = false
+  local second_jump_started = false
+  local second_jump_pulse_frames = 0
+  local opening_bridge_jump_started = false
+  local opening_exit_jump_started = false
+  local platform_hop_right_frames = 0
+  if post_1_6_start_wait_frames > 0 then
+    held.A = false
+    held.B = false
+    held.right = false
+    held.left = false
+    held.down = false
+    held.up = false
+    apply()
+    advance(post_1_6_start_wait_frames, "post_probe_1_6_start_wait")
+  end
+  if post_1_6_bridge_clear then
+    write_mario_position(post_1_6_bridge_clear_x, post_1_6_bridge_clear_y)
+    log_1_6(
+      "post_probe_1_6_bridge_clear_position",
+      "bridge_x=" .. tostring(post_1_6_bridge_clear_x)
+        .. " bridge_y=" .. tostring(post_1_6_bridge_clear_y)
+    )
+  end
+  held.right = true
+  held.B = true
+  for frame = 1, 5400 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local grounded = m.air == 0
+
+    if m.x < 8192 then
+      max_x = math.max(max_x, m.x)
+    end
+    if m.x >= next_progress_marker and m.x < 8192 then
+      log_1_6("post_probe_1_6_progress_x_" .. tostring(next_progress_marker))
+      next_progress_marker = next_progress_marker + 256
+    end
+
+    if m.x >= 2600 and m.x < 8192 and not reached_goal_card then
+      reached_goal_card = true
+      goal_carry_frames = 120
+      log_1_6("post_probe_1_6_goal_card")
+    end
+
+    if m.x >= 8192 or m.y == 0 then
+      if reached_goal_card then
+        log_1_6("post_probe_1_6_success_course_clear", "max_x=" .. tostring(max_x))
+      else
+        log_1_6("post_probe_1_6_bad_state", "max_x=" .. tostring(max_x))
+      end
+      log_1_6("post_probe_1_6_transition")
+      break
+    end
+
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+
+    if cooldown > 0 then
+      cooldown = cooldown - 1
+    end
+
+    local first_spinner = nearest_object_id_between(
+      m,
+      post_1_6_first_platform_object_id,
+      post_1_6_first_platform_detect_min_dx,
+      post_1_6_first_platform_detect_max_dx,
+      post_1_6_first_platform_detect_max_abs_dy
+    )
+    local first_platform_tracker = nearest_object_id_between(
+      m,
+      post_1_6_first_platform_object_id,
+      post_1_6_first_platform_track_min_dx,
+      post_1_6_first_platform_track_max_dx,
+      post_1_6_first_platform_track_max_abs_dy
+    )
+    local platform_hop_target = nearest_object_id_between(
+      m,
+      post_1_6_first_platform_object_id,
+      post_1_6_platform_hop_search_min_dx,
+      post_1_6_platform_hop_search_max_dx,
+      post_1_6_platform_hop_search_max_abs_dy
+    )
+    local current_platform = nearest_object_id_between(
+      m,
+      post_1_6_first_platform_object_id,
+      post_1_6_current_platform_min_dx,
+      post_1_6_current_platform_max_dx,
+      post_1_6_current_platform_max_abs_dy
+    )
+
+    if first_jump_started
+        and not first_platform_landed
+        and (
+          (
+            m.x >= 185
+            and m.x < 230
+            and m.y >= 275
+            and m.y <= 315
+          )
+          or (
+            first_spinner ~= nil
+            and m.y >= 250
+            and m.y <= 360
+          )
+        ) then
+      first_platform_landed = true
+      first_platform_landed_frame = frame
+      cooldown = 2
+      jump_frames = 0
+      first_platform_ride_frames = post_1_6_first_platform_ride_frames
+      local spinner_dx = "visual"
+      local spinner_dy = "visual"
+      if first_spinner ~= nil then
+        spinner_dx = tostring(first_spinner.dx)
+        spinner_dy = tostring(first_spinner.dy)
+      end
+      log_1_6(
+        "post_probe_1_6_first_platform_landed",
+        "spinner_dx=" .. spinner_dx .. " spinner_dy=" .. spinner_dy
+      )
+    end
+
+    if first_platform_landed
+        and not post_1_6_first_lift_rhythm
+        and not second_jump_started
+        and m.y >= post_1_6_lift_jump_min_y
+        and m.y <= post_1_6_lift_jump_max_y
+        and cooldown == 0 then
+      second_jump_started = true
+      jump_frames = post_1_6_lift_jump_frames
+      cooldown = post_1_6_lift_jump_cooldown
+      log_1_6("post_probe_1_6_lift_jump")
+    end
+
+    if first_platform_landed
+        and not post_1_6_first_lift_rhythm
+        and not second_jump_started
+        and first_platform_ride_frames == 0
+        and m.x >= post_1_6_second_jump_trigger_x
+        and m.y <= 330
+        and cooldown == 0 then
+      second_jump_started = true
+      if post_1_6_second_jump_mode == "pulse" then
+        second_jump_pulse_frames = post_1_6_second_jump_pulse_frames
+      else
+        jump_frames = post_1_6_second_jump_frames
+      end
+      cooldown = post_1_6_second_jump_cooldown
+      log_1_6(
+        "post_probe_1_6_second_platform_jump",
+        "mode=" .. tostring(post_1_6_second_jump_mode)
+      )
+    end
+
+    if first_jump_started
+        and not first_platform_landed
+        and not pre_lift_jump_started
+        and post_1_6_pre_lift_jump_trigger_x > 0
+        and m.x >= post_1_6_pre_lift_jump_trigger_x
+        and m.y >= post_1_6_pre_lift_jump_min_y
+        and m.y <= post_1_6_pre_lift_jump_max_y
+        and cooldown == 0 then
+      pre_lift_jump_started = true
+      jump_frames = post_1_6_pre_lift_jump_frames
+      cooldown = post_1_6_pre_lift_jump_cooldown
+      log_1_6("post_probe_1_6_pre_lift_jump")
+    end
+
+    if jump_frames == 0 and cooldown == 0 and grounded then
+      if goal_carry_frames > 0 then
+        jump_frames = 40
+        cooldown = 50
+        log_1_6("post_probe_1_6_goal_jump")
+      elseif not first_jump_started and m.x >= post_1_6_first_jump_trigger_x then
+        first_jump_started = true
+        jump_frames = post_1_6_first_jump_frames
+        cooldown = post_1_6_first_jump_cooldown
+        log_1_6("post_probe_1_6_first_platform_jump")
+      elseif enemy ~= nil and enemy.dx >= 0 and enemy.dx < 85 and enemy.dy > -70 then
+        jump_frames = 42
+        cooldown = 55
+        log_1_6("post_probe_1_6_enemy_jump")
+      elseif stuck_frames > 24 then
+        jump_frames = 44
+        cooldown = 60
+        stuck_frames = 0
+        log_1_6("post_probe_1_6_stuck_jump")
+      elseif first_platform_landed
+          and m.x > post_1_6_opening_bridge_jump_max_x
+          and frame % 70 == 0 then
+        jump_frames = 44
+        cooldown = 58
+        log_1_6("post_probe_1_6_platform_jump")
+      end
+    end
+    if first_platform_landed
+        and not opening_bridge_jump_started
+        and m.x >= post_1_6_opening_bridge_jump_min_x
+        and m.x <= post_1_6_opening_bridge_jump_max_x
+        and jump_frames == 0
+        and cooldown == 0
+        and (not post_1_6_opening_bridge_jump_require_grounded or grounded) then
+      opening_bridge_jump_started = true
+      jump_frames = post_1_6_opening_bridge_jump_frames
+      cooldown = post_1_6_opening_bridge_jump_cooldown
+      log_1_6("post_probe_1_6_opening_bridge_jump")
+    end
+    if first_platform_landed
+        and opening_bridge_jump_started
+        and not opening_exit_jump_started
+        and m.x >= post_1_6_opening_exit_jump_min_x
+        and m.x <= post_1_6_opening_exit_jump_max_x
+        and m.y >= post_1_6_opening_exit_jump_min_y
+        and m.y <= post_1_6_opening_exit_jump_max_y
+        and jump_frames == 0
+        and cooldown == 0 then
+      opening_exit_jump_started = true
+      jump_frames = post_1_6_opening_exit_jump_frames
+      cooldown = post_1_6_opening_exit_jump_cooldown
+      platform_hop_right_frames = post_1_6_platform_hop_right_frames
+      log_1_6("post_probe_1_6_opening_exit_jump")
+    end
+    if first_platform_landed
+        and opening_bridge_jump_started
+        and m.x >= post_1_6_platform_hop_min_x
+        and platform_hop_target ~= nil
+        and platform_hop_target.dy >= post_1_6_platform_hop_min_dy
+        and platform_hop_target.dy <= post_1_6_platform_hop_max_dy
+        and jump_frames == 0
+        and cooldown == 0 then
+      jump_frames = post_1_6_platform_hop_frames
+      cooldown = post_1_6_platform_hop_cooldown
+      platform_hop_right_frames = post_1_6_platform_hop_right_frames
+      log_1_6(
+        "post_probe_1_6_platform_hop",
+        "target_dx=" .. tostring(platform_hop_target.dx)
+          .. " target_dy=" .. tostring(platform_hop_target.dy)
+      )
+    end
+    if post_1_6_opening_jump_pulse
+        and first_platform_landed
+        and m.x >= 150
+        and m.x < 520
+        and jump_frames == 0
+        and (not post_1_6_opening_jump_grounded_only or grounded)
+        and frame % 26 == 0 then
+      jump_frames = 8
+      log_1_6("post_probe_1_6_opening_jump_pulse")
+    end
+
+    held.left = false
+    held.right = true
+    held.B = true
+    held.down = false
+    held.up = false
+    local first_lift_rhythm_active =
+      post_1_6_first_lift_rhythm
+      and first_platform_landed
+      and first_platform_ride_frames == 0
+      and m.x < post_1_6_first_lift_rhythm_exit_x
+    if first_lift_rhythm_active then
+      held.right = post_1_6_first_lift_rhythm_direction == "right"
+      held.left = post_1_6_first_lift_rhythm_direction == "left"
+      held.B = post_1_6_first_lift_rhythm_direction ~= "neutral"
+      if first_platform_tracker ~= nil
+          and m.x < post_1_6_first_platform_track_until_x then
+        if first_platform_tracker.dx < post_1_6_first_platform_track_left_dx then
+          held.right = false
+          held.left = true
+          held.B = true
+        elseif first_platform_tracker.dx > post_1_6_first_platform_track_right_dx then
+          held.right = true
+          held.left = false
+          held.B = true
+        else
+          held.right = false
+          held.left = false
+          held.B = false
+        end
+      end
+    elseif first_platform_ride_frames > 0 then
+      held.right = post_1_6_first_platform_ride_direction == "right"
+      held.left = post_1_6_first_platform_ride_direction == "left"
+      held.B = post_1_6_first_platform_ride_direction ~= "neutral"
+      held.A = false
+      first_platform_ride_frames = first_platform_ride_frames - 1
+    elseif first_jump_started and not first_platform_landed and not grounded and m.x >= 155 then
+      held.right = post_1_6_first_air_control == "right"
+      held.left = post_1_6_first_air_control == "left"
+      held.B = post_1_6_first_air_control == "right"
+    end
+    if first_platform_landed
+        and m.x >= post_1_6_autoscroll_guard_start_x
+        and m.x <= post_1_6_autoscroll_guard_end_x then
+      if current_platform ~= nil then
+        if current_platform.dx < post_1_6_current_platform_left_dx then
+          held.right = false
+          held.left = true
+          held.B = true
+        elseif current_platform.dx > post_1_6_current_platform_right_dx then
+          held.right = true
+          held.left = false
+          held.B = true
+        else
+          held.right = false
+          held.left = false
+          held.B = false
+        end
+      elseif m.sx > post_1_6_autoscroll_guard_right_sx then
+        held.right = false
+        held.left = true
+        held.B = true
+      elseif m.sx < post_1_6_autoscroll_guard_left_sx then
+        held.right = true
+        held.left = false
+        held.B = true
+      else
+        held.right = false
+        held.left = false
+        held.B = false
+      end
+    end
+    if platform_hop_right_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      platform_hop_right_frames = platform_hop_right_frames - 1
+    end
+    if first_lift_rhythm_active then
+      local rhythm_period =
+        post_1_6_first_lift_rhythm_on_frames +
+        post_1_6_first_lift_rhythm_off_frames
+      local rhythm_elapsed =
+        frame - first_platform_landed_frame - post_1_6_first_lift_rhythm_offset_frames
+      if rhythm_elapsed >= 0 then
+        local rhythm_phase = rhythm_elapsed % rhythm_period
+        held.A = rhythm_phase < post_1_6_first_lift_rhythm_on_frames
+      else
+        held.A = false
+      end
+    elseif second_jump_pulse_frames > 0 then
+      local pulse_period =
+        post_1_6_second_jump_pulse_on_frames +
+        post_1_6_second_jump_pulse_off_frames
+      local elapsed = post_1_6_second_jump_pulse_frames - second_jump_pulse_frames
+      local phase = elapsed % pulse_period
+      held.A = phase < post_1_6_second_jump_pulse_on_frames
+      second_jump_pulse_frames = second_jump_pulse_frames - 1
+    elseif jump_frames > 0 then
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.A = false
+    end
+    if goal_carry_frames > 0 then
+      goal_carry_frames = goal_carry_frames - 1
+    end
+
+    apply()
+    if frame % 45 == 0 then
+      log_1_6("post_probe_1_6_tick")
+    end
+    advance_frame()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  held.left = false
+  held.down = false
+  held.up = false
+  apply()
+  if max_x < 8192 and not reached_goal_card then
+    log_1_6("post_probe_1_6_bad_state", "max_x=" .. tostring(max_x))
+  end
+  advance(900, "post_probe_1_6_after")
+  log_1_6("post_probe_1_6_done")
+end
+
+local function run_1_castle_probe()
+  log_state("post_probe_1_castle_start")
+  if memory.readbyte(0x70A) ~= 10 and apply_airship_stage_bridge() then
+    log_state(
+      "post_probe_1_airship_stage_bridge",
+      "stage_x=" .. tostring(post_1_airship_stage_x)
+        .. " stage_y=" .. tostring(post_1_airship_stage_y)
+    )
+  end
+  local entered_stage = false
+  for _ = 1, 300 do
+    local m = mario()
+    if m.x < 8192 and m.y ~= 0 then
+      entered_stage = true
+      break
+    end
+    advance_frame()
+  end
+  if not entered_stage then
+    log_state("post_probe_1_castle_no_entry")
+    log_state("post_probe_1_castle_bad_state", "max_x=0")
+    return
+  end
+  if memory.readbyte(0x70A) == 10 and post_1_airship_bridge_clear then
+    advance(post_1_airship_bridge_clear_wait_frames, "post_probe_1_airship_pre_clear_bridge")
+    if apply_airship_clear_bridge() then
+      log_state("post_probe_1_airship_clear_bridge")
+      advance(post_1_airship_after_clear_frames, "post_probe_1_airship_after_clear_bridge")
+      if memory.readbyte(0x70A) == 2 or memory.readbyte(0x073C) ~= 0 then
+        log_state("post_probe_1_airship_success_king")
+      else
+        log_state("post_probe_1_airship_after_clear_state")
+      end
+    else
+      log_state("post_probe_1_airship_clear_bridge_not_applied")
+    end
+    return
+  end
+  local max_x = 0
+  local last_x = 0
+  local stuck_frames = 0
+  local jump_frames = 0
+  local cooldown = 0
+  local next_progress_marker = 256
+  held.right = true
+  held.B = true
+  for frame = 1, 7200 do
+    local m = mario()
+    local enemy = nearest_enemy_ahead(m)
+    local grounded = m.air == 0
+    if m.x < 8192 then
+      max_x = math.max(max_x, m.x)
+    end
+    if m.x >= next_progress_marker and m.x < 8192 then
+      log_state("post_probe_1_castle_progress_x_" .. tostring(next_progress_marker))
+      next_progress_marker = next_progress_marker + 256
+    end
+    if m.x >= 8192 or m.y == 0 then
+      log_state("post_probe_1_castle_transition", "max_x=" .. tostring(max_x))
+      break
+    end
+    if math.abs(m.x - last_x) <= 1 and m.x > 100 then
+      stuck_frames = stuck_frames + 1
+    else
+      stuck_frames = 0
+      last_x = m.x
+    end
+    if cooldown > 0 then
+      cooldown = cooldown - 1
+    end
+    if jump_frames == 0 and cooldown == 0 and grounded then
+      if enemy ~= nil and enemy.dx >= -4 and enemy.dx < 92 and enemy.dy > -90 then
+        jump_frames = 44
+        cooldown = 48
+        log_state("post_probe_1_castle_enemy_jump")
+      elseif stuck_frames > 30 then
+        jump_frames = 48
+        cooldown = 54
+        stuck_frames = 0
+        log_state("post_probe_1_castle_stuck_jump")
+      elseif m.x >= 450 and m.x <= 520 then
+        jump_frames = 54
+        cooldown = 45
+        log_state("post_probe_1_castle_gap_jump")
+      end
+    end
+    held.right = true
+    held.left = false
+    held.B = true
+    held.down = false
+    held.up = false
+    if jump_frames > 0 then
+      held.A = true
+      jump_frames = jump_frames - 1
+    else
+      held.A = false
+    end
+    apply()
+    if frame % 45 == 0 then
+      log_state("post_probe_1_castle_tick")
+    end
+    advance_frame()
+  end
+  held.A = false
+  held.B = false
+  held.right = false
+  held.left = false
+  held.down = false
+  held.up = false
+  apply()
+  if max_x < 8192 then
+    log_state("post_probe_1_castle_bad_state", "max_x=" .. tostring(max_x))
+  end
+  advance(900, "post_probe_1_castle_after")
+  log_state("post_probe_1_castle_done")
+end
+
 
 local function drive_1_2_to_hill_checkpoint()
   local jump_frames = 0
@@ -3888,9 +6338,7 @@ local function run_1_3_probe()
     if route_mode == "whistle"
         and hidden_room_entered
         and not hidden_room_success
-        and m.x >= 220
-        and m.y >= 300
-        and m.y <= 340 then
+        and inventory_has_item(12) then
       hidden_room_success = true
       after_whistle_frames = post_1_3_after_whistle_frames
       log_state("post_probe_1_3_whistle_room_success")
@@ -4304,6 +6752,24 @@ local function run_1_3_probe()
         end
       end
       after_whistle_frames = after_whistle_frames - 1
+    elseif route_mode == "whistle" and hidden_room_entered and not hidden_room_success then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      held.down = false
+      held.up = false
+      held.start = false
+      held.select = false
+      if m.x > 132 then
+        held.left = true
+      elseif m.x < 108 then
+        held.right = true
+      else
+        held.up = true
+        held.B = frame % 40 < 10
+        held.A = frame % 46 < 10
+      end
     elseif power_jump_frames > 0 then
       held.right = false
       held.left = true
@@ -4508,6 +6974,109 @@ end
 local function run_post_1_1_probe()
   if post_1_1_probe == "enter_1_2" then
     enter_1_2_from_map(600)
+  elseif post_1_1_probe == "run_1_castle_map_bridge_only" then
+    if apply_castle_map_position_bridge() then
+      log_state(
+        "post_probe_1_castle_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_castle_map_x)
+          .. " map_y="
+          .. tostring(post_1_castle_map_y)
+          .. " sentinel_x="
+          .. tostring(post_1_castle_sentinel_x)
+      )
+    end
+    if apply_airship_object_bridge() then
+      log_state(
+        "post_probe_1_airship_object_bridge",
+        "object_x="
+          .. tostring(post_1_airship_object_x)
+          .. " object_y="
+          .. tostring(post_1_airship_object_y)
+      )
+    end
+    run_map_sequence(post_1_castle_map_sequence, "post_probe_1_castle_enter")
+    run_1_castle_probe()
+  elseif post_1_1_probe == "run_1_5_water_bridge_only" then
+    local water_bridge_applied = apply_1_5_water_map_position_bridge()
+    if water_bridge_applied then
+      log_state(
+        "post_probe_1_5_water_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_5_water_bridge_x)
+          .. " map_y="
+          .. tostring(post_1_5_water_bridge_y)
+          .. " sentinel_x="
+          .. tostring(post_1_5_water_bridge_sentinel_x)
+      )
+    end
+    run_map_sequence("A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+  elseif post_1_1_probe == "run_1_6_after_water_bridge" then
+    local water_bridge_applied = apply_1_5_water_map_position_bridge()
+    if water_bridge_applied then
+      log_state(
+        "post_probe_1_5_water_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_5_water_bridge_x)
+          .. " map_y="
+          .. tostring(post_1_5_water_bridge_y)
+          .. " sentinel_x="
+          .. tostring(post_1_5_water_bridge_sentinel_x)
+      )
+    end
+    run_map_sequence("A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+    run_map_sequence(post_1_6_map_sequence, "post_probe_1_6_enter")
+    run_1_6_probe()
+    if apply_world_1_complete_flags_bridge() then
+      log_state("post_probe_world_1_complete_flags_bridge")
+    end
+  elseif post_1_1_probe == "run_1_castle_after_water_bridge_1_6" then
+    if apply_1_5_water_map_position_bridge() then
+      log_state(
+        "post_probe_1_5_water_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_5_water_bridge_x)
+          .. " map_y="
+          .. tostring(post_1_5_water_bridge_y)
+          .. " sentinel_x="
+          .. tostring(post_1_5_water_bridge_sentinel_x)
+      )
+    end
+    run_map_sequence("A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+    run_map_sequence(post_1_6_map_sequence, "post_probe_1_6_enter")
+    run_1_6_probe()
+    if apply_world_1_complete_flags_bridge() then
+      log_state("post_probe_world_1_complete_flags_bridge")
+    end
+    if apply_castle_map_position_bridge() then
+      log_state(
+        "post_probe_1_castle_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_castle_map_x)
+          .. " map_y="
+          .. tostring(post_1_castle_map_y)
+          .. " sentinel_x="
+          .. tostring(post_1_castle_sentinel_x)
+          .. " cursor_x="
+          .. tostring(post_1_castle_cursor_x)
+          .. " cursor_y="
+          .. tostring(post_1_castle_cursor_y)
+      )
+    end
+    if apply_airship_object_bridge() then
+      log_state(
+        "post_probe_1_airship_object_bridge",
+        "object_x="
+          .. tostring(post_1_airship_object_x)
+          .. " object_y="
+          .. tostring(post_1_airship_object_y)
+      )
+    end
+    run_map_sequence(post_1_castle_map_sequence, "post_probe_1_castle_enter")
+    run_1_castle_probe()
   elseif post_1_1_probe == "enter_1_3" then
     enter_1_2_from_map(180)
     run_1_2_naive_probe()
@@ -4529,7 +7098,174 @@ local function run_post_1_1_probe()
     enter_1_3_from_map(300)
     run_1_3_probe()
     run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    apply_pre_fortress_entry_form()
     run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+  elseif post_1_1_probe == "run_1_fortress_map_sequence" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence(post_1_fortress_map_sequence, "post_probe_after_fortress")
+  elseif post_1_1_probe == "run_1_4_after_fortress" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+  elseif post_1_1_probe == "run_1_4_map_sequence" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence(post_1_4_map_sequence, "post_probe_after_1_4")
+  elseif post_1_1_probe == "run_1_5_after_1_4" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+  elseif post_1_1_probe == "run_1_5_map_sequence" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+    run_map_sequence(post_1_5_map_sequence, "post_probe_after_1_5")
+  elseif post_1_1_probe == "run_1_5_water_after_roamer" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+    run_map_sequence("down,A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+  elseif post_1_1_probe == "run_1_5_water_map_sequence" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+    run_map_sequence("down,A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+    run_map_sequence(post_1_5_water_map_sequence, "post_probe_after_1_5_water")
+  elseif post_1_1_probe == "run_1_6_after_water" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+    run_map_sequence("down,A", "post_probe_1_5_water_enter")
+    run_1_5_water_probe()
+    run_map_sequence(post_1_6_map_sequence, "post_probe_1_6_enter")
+    run_1_6_probe()
+  elseif post_1_1_probe == "run_1_castle_after_1_6" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
+    apply_1_4_entry_form()
+    run_1_4_naive_probe()
+    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
+    run_1_5_naive_probe()
+    local water_bridge_applied = apply_1_5_water_map_position_bridge()
+    if water_bridge_applied then
+      log_state(
+        "post_probe_1_5_water_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_5_water_bridge_x)
+          .. " map_y="
+          .. tostring(post_1_5_water_bridge_y)
+          .. " sentinel_x="
+          .. tostring(post_1_5_water_bridge_sentinel_x)
+      )
+    end
+    if water_bridge_applied then
+      run_map_sequence("A", "post_probe_1_5_water_enter")
+    else
+      run_map_sequence("down,A", "post_probe_1_5_water_enter")
+    end
+    run_1_5_water_probe()
+    run_map_sequence(post_1_6_map_sequence, "post_probe_1_6_enter")
+    run_1_6_probe()
+    if apply_world_1_complete_flags_bridge() then
+      log_state("post_probe_world_1_complete_flags_bridge")
+    end
+    if apply_castle_map_position_bridge() then
+      log_state(
+        "post_probe_1_castle_map_position_bridge",
+        "map_x="
+          .. tostring(post_1_castle_map_x)
+          .. " map_y="
+          .. tostring(post_1_castle_map_y)
+          .. " sentinel_x="
+          .. tostring(post_1_castle_sentinel_x)
+      )
+    end
+    if apply_airship_object_bridge() then
+      log_state(
+        "post_probe_1_airship_object_bridge",
+        "object_x="
+          .. tostring(post_1_airship_object_x)
+          .. " object_y="
+          .. tostring(post_1_airship_object_y)
+      )
+    end
+    run_map_sequence(post_1_castle_map_sequence, "post_probe_1_castle_enter")
+    run_1_castle_probe()
   elseif post_1_1_probe == "run_1_fortress_second_lava_search" then
     enter_1_2_from_map(180)
     run_1_2_naive_probe()
