@@ -395,323 +395,284 @@ def _page(*, title: str, body: str) -> str:
   <title>{_esc(title)}</title>
   <style>
     :root {{
-      color-scheme: dark;
-      --bg: #0b1020;
-      --panel: rgba(17, 24, 39, .94);
-      --panel-soft: rgba(23, 32, 51, .94);
-      --panel-elevated: rgba(31, 41, 55, .96);
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --line: rgba(148, 163, 184, .24);
-      --mario-red: #e53935;
-      --mario-blue: #1e88e5;
-      --grass-green: #43a047;
-      --coin-gold: #fbbf24;
-      --block-orange: #f97316;
-      --status-works: #22c55e;
-      --status-review: #f59e0b;
-      --status-blocked: #ef4444;
-      --status-unknown: #94a3b8;
-      --status-bridged: #60a5fa;
+      color-scheme: light;
+      --paper: #fffaf0;
+      --paper-deep: #f2e7c9;
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d7c7a2;
+      --screen: #1b2426;
+      --screen-soft: #2f3a3d;
+      --red: #d7352a;
+      --blue: #2868b7;
+      --green: #2f8f46;
+      --gold: #d99a20;
+      --brown: #7c4f29;
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
       background:
-        radial-gradient(circle at top left, rgba(30,136,229,.22), transparent 35%),
-        radial-gradient(circle at top right, rgba(251,191,36,.14), transparent 30%),
-        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
-        var(--bg);
-      background-size: auto, auto, 24px 24px, 24px 24px, auto;
-      color: var(--text);
+        linear-gradient(rgba(124,79,41,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,79,41,.045) 1px, transparent 1px),
+        var(--paper);
+      background-size: 22px 22px;
+      color: var(--ink);
       font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     h1, h2, h3, p {{ margin-top: 0; }}
-    h1 {{ font-size: 28px; line-height: 1.05; margin-bottom: 5px; letter-spacing: 0; }}
-    h2 {{ font-size: 16px; margin-bottom: 0; letter-spacing: 0; }}
+    h1 {{ font-size: 26px; line-height: 1.05; margin-bottom: 4px; letter-spacing: 0; }}
+    h2 {{ font-size: 16px; margin-bottom: 2px; letter-spacing: 0; }}
     h3 {{ font-size: 15px; margin-bottom: 4px; letter-spacing: 0; }}
     a {{ color: inherit; }}
     button {{
-      border: 1px solid rgba(96, 165, 250, .55);
-      background: rgba(30, 136, 229, .88);
+      border: 1px solid #8f251f;
+      background: var(--red);
       color: #fff;
-      border-radius: 8px;
-      padding: 9px 12px;
+      border-radius: 6px;
+      padding: 8px 12px;
       font-weight: 750;
       cursor: pointer;
-      min-height: 38px;
+      min-height: 36px;
     }}
-    button:hover {{ background: rgba(30, 136, 229, 1); }}
-    button.secondary {{
-      background: rgba(15, 23, 42, .85);
-      border-color: rgba(148, 163, 184, .34);
-      color: #e2e8f0;
-    }}
-    button.primary {{
-      background: linear-gradient(180deg, #e53935, #b91c1c);
-      border-color: rgba(248, 113, 113, .7);
-      box-shadow: 0 10px 24px rgba(229, 57, 53, .22);
+    button:hover {{ filter: brightness(.96); }}
+    button.quiet {{
+      background: #fff;
+      border-color: var(--line);
+      color: var(--ink);
     }}
     textarea, select {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px;
+      border-radius: 6px;
+      padding: 8px;
       font: inherit;
-      background: rgba(15, 23, 42, .92);
-      color: var(--text);
+      background: #fffef9;
+      color: var(--ink);
     }}
-    textarea {{ min-height: 92px; resize: vertical; }}
-    label {{ display: grid; gap: 6px; font-weight: 700; color: #cbd5e1; }}
+    textarea {{ min-height: 118px; resize: vertical; }}
+    label {{ display: grid; gap: 4px; font-weight: 700; color: var(--ink); }}
     code {{
       display: block;
       overflow-x: auto;
-      color: #dbeafe;
+      color: var(--blue);
       white-space: nowrap;
     }}
-    .control-page {{
+    .route-lab {{
       min-height: 100vh;
-      padding: 20px;
+      padding: 14px;
+      max-width: 1760px;
+      margin: 0 auto;
     }}
-    .panel {{
-      background: var(--panel);
+    .paper-panel, .route-index, .evidence-viewer, .teaching-panel {{
+      background: rgba(255, 254, 249, .96);
       border: 1px solid var(--line);
       border-radius: 8px;
-      box-shadow: 0 18px 50px rgba(0,0,0,.28);
+      box-shadow: 0 8px 22px rgba(70, 45, 20, .09);
     }}
-    .mission-header {{
+    .lab-top {{
       display: flex;
       justify-content: space-between;
-      gap: 16px;
+      gap: 14px;
       align-items: center;
-      padding: 18px;
-      border-top: 2px solid rgba(251,191,36,.75);
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,254,249,.96);
     }}
-    .mission-identity, .mission-actions, .section-head, .location-head {{
+    .lab-title, .run-strip, .route-step, .section-title, .location-head {{
       display: flex;
-      gap: 12px;
       align-items: center;
+      gap: 10px;
     }}
-    .mission-identity {{ min-width: 0; }}
-    .mission-actions {{ justify-content: flex-end; flex-wrap: wrap; }}
-    .mission-meta, .meta {{ margin: 0; color: var(--muted); font-size: 12px; }}
-    .eyebrow {{
-      margin: 0 0 4px;
-      color: #fde68a;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
+    .lab-title p, .section-title p, .meta {{ margin: 0; color: var(--muted); font-size: 12px; }}
+    .section-title {{
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
     }}
     .asset-icon {{
-      width: 38px;
-      height: 38px;
+      width: 34px;
+      height: 34px;
       display: inline-grid;
       place-items: center;
       flex: 0 0 auto;
-      border-radius: 8px;
-      border: 1px solid rgba(251,191,36,.42);
-      background: rgba(251,191,36,.12);
-      color: #fde68a;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #f8edd0;
+      color: var(--brown);
       font-weight: 900;
-      font-size: 12px;
+      font-size: 11px;
     }}
     .asset-icon img {{
       width: 100%;
       height: 100%;
       object-fit: contain;
-      border-radius: 7px;
+      border-radius: 5px;
     }}
-    .status-strip {{
+    .run-strip {{
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }}
+    .run-form {{
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }}
-    .status-card {{
-      background: linear-gradient(180deg, rgba(31,41,55,.98), rgba(15,23,42,.98));
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--status-unknown);
-      border-radius: 8px;
-      padding: 13px;
-      min-height: 104px;
-    }}
-    .status-card span {{ color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }}
-    .status-card strong {{ display: block; margin-top: 8px; font-size: 25px; line-height: 1; }}
-    .status-card p {{ margin: 9px 0 0; color: var(--muted); font-size: 12px; }}
-    .status-card.works {{ border-left-color: var(--status-works); }}
-    .status-card.needs-review {{ border-left-color: var(--status-review); }}
-    .status-card.blocked {{ border-left-color: var(--status-blocked); }}
-    .status-card.bridged {{ border-left-color: var(--status-bridged); }}
-    .route-panel, .layout, .lower-grid, .board {{ margin-top: 16px; }}
-    .route-panel {{ padding: 14px; }}
-    .section-head {{ justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }}
-    .quick-filters {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .quick-filters input {{
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
-    }}
-    .quick-filters label {{
-      color: #cbd5e1;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 5px 9px;
-      font-size: 12px;
-      background: rgba(15,23,42,.68);
-      cursor: pointer;
-      display: inline-flex;
-      width: auto;
-      gap: 0;
-    }}
-    .quick-filters label:has(input:checked) {{
-      color: #fff;
-      border-color: rgba(251,191,36,.6);
-      background: rgba(251,191,36,.16);
-    }}
-    .route-rail {{
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      padding: 4px 4px 12px;
-      scrollbar-color: rgba(148,163,184,.45) transparent;
-    }}
-    .route-node {{
-      position: relative;
-      min-width: 112px;
-      min-height: 126px;
-      padding: 12px 10px;
-      border-radius: 8px;
-      background: rgba(15, 23, 42, .94);
-      border: 1px solid rgba(148, 163, 184, .25);
-      text-decoration: none;
-      display: grid;
-      gap: 6px;
-      justify-items: center;
-      text-align: center;
-    }}
-    .route-node::after {{
-      content: "";
-      position: absolute;
-      left: calc(100% + 1px);
-      top: 33px;
-      width: 10px;
-      height: 2px;
-      background: rgba(148, 163, 184, .42);
-    }}
-    .route-node:last-child::after {{ display: none; }}
-    .route-node strong {{ font-size: 14px; }}
-    .route-node span, .route-node small {{ color: var(--muted); font-size: 11px; }}
-    .route-node.works {{ border-color: rgba(34,197,94,.8); box-shadow: 0 0 0 3px rgba(34,197,94,.14); }}
-    .route-node.needs-review {{ border-color: rgba(245,158,11,.8); box-shadow: 0 0 0 3px rgba(245,158,11,.14); }}
-    .route-node.blocked {{ border-color: rgba(239,68,68,.9); box-shadow: 0 0 0 3px rgba(239,68,68,.18); }}
-    .route-node.bridged {{ border-color: rgba(96,165,250,.86); box-shadow: 0 0 0 3px rgba(96,165,250,.16); }}
-    .layout, .lower-grid {{
-      display: grid;
-      grid-template-columns: minmax(0, 1.18fr) minmax(330px, .82fr);
-      gap: 16px;
-    }}
-    .run-panel, .guide-panel, .lower-grid .panel, .board {{ padding: 14px; }}
-    .control-grid {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
+      grid-template-columns: 92px 92px 132px auto;
+      gap: 8px;
       align-items: end;
     }}
-    .button-row {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }}
-    .command-preview {{
-      margin-top: 12px;
+    .run-form label {{ font-size: 12px; }}
+    .last-result {{
+      display: grid;
+      gap: 2px;
+      min-width: 112px;
+      padding-left: 10px;
+      border-left: 1px solid var(--line);
+    }}
+    .last-result span {{ color: var(--muted); font-size: 11px; }}
+    .last-result strong {{ font-size: 13px; }}
+    .lab-main {{
+      display: grid;
+      grid-template-columns: 245px minmax(420px, 1fr) 340px;
+      gap: 14px;
+      margin-top: 14px;
+      align-items: start;
+    }}
+    .route-index, .evidence-viewer, .teaching-panel, .paper-panel {{
+      padding: 12px;
+    }}
+    .route-list {{
+      display: grid;
+      gap: 7px;
+    }}
+    .route-step {{
+      min-height: 52px;
+      padding: 8px;
       border: 1px solid var(--line);
-      background: rgba(15,23,42,.68);
-      border-radius: 8px;
+      border-radius: 7px;
+      text-decoration: none;
+      background: #fffdf6;
+    }}
+    .route-step.selected, .route-step:target {{
+      border-color: var(--blue);
+      box-shadow: inset 4px 0 0 var(--blue);
+    }}
+    .route-copy {{ display: grid; gap: 1px; min-width: 0; }}
+    .route-copy small {{ color: var(--muted); font-size: 11px; }}
+    .clean {{ color: var(--green); }}
+    .learned {{ color: var(--blue); }}
+    .needs-validation {{ color: var(--gold); }}
+    .failed {{ color: var(--red); }}
+    .unknown {{ color: var(--muted); }}
+    .screen-frame {{
+      min-height: 430px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.06) 25%, transparent 25%),
+        linear-gradient(225deg, rgba(255,255,255,.06) 25%, transparent 25%),
+        var(--screen);
+      background-size: 18px 18px;
+      border: 12px solid #293437;
+      border-radius: 10px;
+      box-shadow: inset 0 0 0 2px #101719;
+      overflow: hidden;
+    }}
+    .screen-frame img {{
+      max-width: 100%;
+      max-height: 620px;
+      display: block;
+      object-fit: contain;
+      background: #000;
+    }}
+    .empty-evidence {{
+      display: grid;
+      gap: 6px;
+      text-align: center;
+      color: #e7f6ee;
+      padding: 24px;
+    }}
+    .empty-evidence span {{ color: #bdd4c9; }}
+    .evidence-notes {{
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fffdf6;
       padding: 10px;
     }}
-    .command-preview span {{ display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }}
-    .rule-list {{ display: grid; gap: 10px; }}
-    .rule-list div {{
+    .evidence-notes ul {{
+      list-style: none;
+      margin: 0;
+      padding: 0;
       display: grid;
-      gap: 3px;
-      border-left: 3px solid rgba(67,160,71,.72);
-      padding: 2px 0 2px 10px;
+      gap: 6px;
     }}
-    .rule-list span {{ color: var(--muted); }}
-    .location-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
+    .evidence-notes li {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-top: 1px dashed var(--line);
+      padding-top: 6px;
     }}
-    .location-card {{
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-      min-height: 190px;
-      background: var(--panel-soft);
+    .teach-step {{
       border: 1px solid var(--line);
-      border-radius: 8px;
-      scroll-margin-top: 18px;
+      border-radius: 7px;
+      background: #fffdf6;
+      padding: 9px;
+      margin-bottom: 8px;
+      scroll-margin-top: 16px;
     }}
-    .location-card:target {{
-      border-color: rgba(251,191,36,.85);
-      box-shadow: 0 0 0 4px rgba(251,191,36,.18);
+    .teach-step:target {{
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(40,104,183,.14);
     }}
-    .control-page:has(#filter-open:checked) .location-card:not([data-open="true"]),
-    .control-page:has(#filter-blocked:checked) .location-card:not([data-status="blocked"]),
-    .control-page:has(#filter-needs-review:checked) .location-card:not([data-status="needs-review"]),
-    .control-page:has(#filter-works:checked) .location-card:not([data-status="works"]) {{
-      display: none;
-    }}
-    .location-head {{ justify-content: space-between; align-items: start; }}
-    .location-title {{ display: flex; gap: 9px; align-items: center; min-width: 0; }}
-    .objective {{ color: var(--muted); min-height: 42px; margin-bottom: 0; }}
-    .route-role {{ color: #cbd5e1; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
-    .badges {{ display: flex; flex-wrap: wrap; gap: 5px; }}
-    .badge {{
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid rgba(148,163,184,.28);
-      border-radius: 999px;
-      padding: 4px 8px;
-      font-size: 12px;
-      color: #cbd5e1;
-      background: rgba(15,23,42,.64);
-      font-weight: 750;
-    }}
-    .badge.blocked, .badge.failed, .blocked, .high {{ color: #fecaca; border-color: rgba(239,68,68,.55); background: rgba(239,68,68,.14); }}
-    .badge.needs-review, .badge.medium {{ color: #fde68a; border-color: rgba(245,158,11,.55); background: rgba(245,158,11,.14); }}
-    .badge.works, .badge.passed, .badge.none {{ color: #bbf7d0; border-color: rgba(34,197,94,.55); background: rgba(34,197,94,.14); }}
-    .badge.bridged {{ color: #bfdbfe; border-color: rgba(96,165,250,.55); background: rgba(96,165,250,.14); }}
-    .badge.unknown {{ color: #e2e8f0; }}
-    details.segment-detail {{
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }}
-    details.segment-detail summary {{
+    .teach-step summary {{
       cursor: pointer;
-      color: #dbeafe;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
       font-weight: 800;
     }}
-    details.segment-detail[open] summary {{ margin-bottom: 10px; }}
+    .teach-step p {{ color: var(--muted); margin: 8px 0; }}
     .note-tools {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }}
-    .issue-table {{ display: grid; gap: 8px; }}
+    .mini-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }}
+    .lab-bottom {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, .9fr);
+      gap: 14px;
+      margin-top: 14px;
+    }}
+    .issue-list {{ display: grid; gap: 8px; }}
     .issue, .note-row, .last-command {{
       border-top: 1px solid var(--line);
-      padding: 10px 0;
+      padding: 9px 0;
     }}
     .issue:first-child, .note-row:first-of-type, .last-command:first-child {{ border-top: 0; }}
     .issue {{
       display: grid;
-      grid-template-columns: minmax(90px, .55fr) minmax(90px, .55fr) minmax(0, 2fr) auto;
-      gap: 10px;
-      align-items: start;
+      gap: 6px;
     }}
     .issue p, .note-row p {{ margin-bottom: 0; }}
-    .last-command {{
-      margin-top: 12px;
-      padding-bottom: 0;
-      color: var(--muted);
+    .badges {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 12px;
+      color: var(--ink);
+      background: #fff8df;
+      font-weight: 750;
     }}
+    .badge.high, .badge.failed {{ color: var(--red); border-color: #e8b3ae; background: #fff0ed; }}
+    .badge.medium, .badge.needs-validation {{ color: #92640f; border-color: #e5c989; background: #fff7da; }}
+    .badge.none, .badge.clean, .badge.passed {{ color: var(--green); border-color: #acd7b5; background: #edf9ef; }}
     .artifact-links {{
       display: flex;
       flex-wrap: wrap;
@@ -719,7 +680,7 @@ def _page(*, title: str, body: str) -> str:
       margin: 8px 0;
     }}
     .artifact-links a {{
-      color: #dbeafe;
+      color: var(--blue);
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 4px 8px;
@@ -730,24 +691,24 @@ def _page(*, title: str, body: str) -> str:
       max-height: 190px;
       overflow: auto;
       white-space: pre-wrap;
-      background: rgba(2,6,23,.72);
+      background: #fffdf6;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 9px;
-      color: #dbeafe;
+      color: var(--ink);
     }}
     .empty {{ color: var(--muted); margin-bottom: 0; }}
-    .error {{ border-color: rgba(239,68,68,.55); color: #fecaca; margin: 20px; padding: 14px; }}
-    @media (max-width: 980px) {{
-      .mission-header, .layout, .lower-grid, .control-grid {{ grid-template-columns: 1fr; }}
-      .mission-header {{ display: grid; }}
-      .status-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .issue {{ grid-template-columns: 1fr; }}
+    .error {{ border-color: #e8b3ae; color: var(--red); margin: 20px; padding: 14px; }}
+    @media (max-width: 1180px) {{
+      .lab-main {{ grid-template-columns: 220px minmax(0, 1fr); }}
+      .teaching-panel {{ grid-column: 1 / -1; }}
+      .lab-bottom {{ grid-template-columns: 1fr; }}
     }}
-    @media (max-width: 620px) {{
-      .control-page {{ padding: 12px; }}
-      .status-strip, .location-grid {{ grid-template-columns: 1fr; }}
-      .mission-actions {{ justify-content: flex-start; }}
+    @media (max-width: 760px) {{
+      .route-lab {{ padding: 10px; }}
+      .lab-top {{ display: grid; }}
+      .lab-main, .run-form {{ grid-template-columns: 1fr; }}
+      .screen-frame {{ min-height: 280px; }}
     }}
   </style>
 </head>
@@ -755,63 +716,15 @@ def _page(*, title: str, body: str) -> str:
 </html>"""
 
 
-def _location_card(location: dict[str, object]) -> str:
-    location_id = str(location["id"])
-    label = str(location["label"])
-    objective = str(location.get("objective", ""))
-    status = str(location.get("status", "unknown"))
-    role = _route_role(location)
-    return f"""
-    <article id="{_esc(location_id)}" class="location-card" data-status="{_esc(_status_class(status))}" data-open="{str(bool(location.get('open_issues'))).lower()}">
-      <div class="location-head">
-        <div class="location-title">
-          {_asset_icon(_icon_name_for_location(location), _icon_fallback(location), f'{label} icon')}
-          <div>
-            <h3>{_esc(label)}</h3>
-            <span class="route-role">{_esc(role)}</span>
-          </div>
-        </div>
-        <span id="status-{_esc(_status_class(status))}" class="badge {_status_class(status)}">{_esc(_title_status(status))}</span>
-      </div>
-      <p class="objective">{_esc(objective)}</p>
-      <div class="badges">
-        <span class="badge">{location.get('notes', 0)} notes</span>
-        <span class="badge">{location.get('open_issues', 0)} open</span>
-        <span class="badge">{location.get('proposals', 0)} variants</span>
-      </div>
-      <details class="segment-detail">
-        <summary>Open Detail / Add Note</summary>
-        <p class="meta">Latest evidence: {location.get('issues', 0)} issue records · {location.get('notes', 0)} notes linked.</p>
-        <textarea name="note__{_esc(location_id)}" placeholder="Notes for {_esc(label)}"></textarea>
-        <div class="note-tools">
-          <select name="severity__{_esc(location_id)}">
-            <option value="note">note</option>
-            <option value="harden">harden</option>
-            <option value="bug">bug</option>
-            <option value="objective">objective</option>
-            <option value="map_action">map action</option>
-            <option value="guide_detail">guide detail</option>
-          </select>
-          <select name="anchor__{_esc(location_id)}">
-            <option value="">no anchor</option>
-            <option value="in_game_timer">timer</option>
-            <option value="frame">frame</option>
-            <option value="map_position">map position</option>
-          </select>
-        </div>
-      </details>
-    </article>"""
-
-
 def render_error(message: str) -> str:
     return _page(
-        title="Control Panel Error",
+        title="Mario Route Lab Error",
         body=f"""
-        <div class="control-page">
-          <section class="panel error">
-            <h1>Control Panel Error</h1>
+        <div class="route-lab">
+          <section class="paper-panel error">
+            <h1>Mario Route Lab Error</h1>
             <p>{_esc(message)}</p>
-            <p><a href="/">Return to control panel</a></p>
+            <p><a href="/">Return to Mario Route Lab</a></p>
           </section>
         </div>
         """,
@@ -826,6 +739,7 @@ def build_control_panel_summary() -> dict[str, object]:
         issues: list[dict[str, object]] = []
         proposals: list[dict[str, object]] = []
         session_label = "No active session"
+        session_dir_value = ""
     else:
         notes = _list_dicts(_load_yaml(session_dir / "notes.yaml").get("notes", []))
         issues_path = session_dir / "issues.yaml"
@@ -833,6 +747,7 @@ def build_control_panel_summary() -> dict[str, object]:
         issues = _list_dicts(_load_yaml(issues_path).get("issues", []))
         proposals = _list_dicts(_load_yaml(proposals_path).get("proposals", []))
         session_label = session_dir.name
+        session_dir_value = str(session_dir)
 
     proposal_issue_ids = {str(proposal.get("source_issue")) for proposal in proposals}
     location_rows = []
@@ -854,6 +769,7 @@ def build_control_panel_summary() -> dict[str, object]:
 
     return {
         "session_label": session_label,
+        "session_dir": session_dir_value,
         "locations": location_rows,
         "issues": issues,
         "recent_notes": notes[-12:],
@@ -921,20 +837,115 @@ def _last_command_panel(last_command: dict[str, object]) -> str:
     </div>"""
 
 
-def _route_health(locations: list[dict[str, object]]) -> int:
-    if not locations:
-        return 0
-    total = sum(STATUS_SCORES.get(str(location.get("status", "unknown")), 0.25) for location in locations)
-    return round((total / len(locations)) * 100)
+def _selected_location(locations: list[dict[str, object]]) -> dict[str, object]:
+    for location in locations:
+        if str(location.get("status")) in {"blocked", "needs review"} or location.get("open_issues"):
+            return location
+    return locations[0] if locations else {}
 
 
-def _route_role(location: dict[str, object]) -> str:
-    location_type = str(location.get("type", "segment")).replace("_", " ")
-    if location.get("open_issues"):
-        return f"{location_type} blocker"
-    if str(location.get("status")) == "works":
-        return f"{location_type} solved"
-    return location_type
+def _route_state(location: dict[str, object]) -> str:
+    status = str(location.get("status", "unknown"))
+    if status == "works":
+        return "learned"
+    if status == "blocked" or location.get("open_issues"):
+        return "failed"
+    if status in {"needs review", "bridged", "flaky"}:
+        return "needs validation"
+    return "unknown"
+
+
+def _latest_evidence(
+    summary: dict[str, object],
+    last_command: dict[str, object],
+    selected: dict[str, object],
+) -> dict[str, object]:
+    output = str(last_command.get("stdout") or last_command.get("stderr") or "")
+    candidates = _artifact_paths_from_output(output)
+    session_dir = summary.get("session_dir")
+    if isinstance(session_dir, str) and session_dir:
+        candidates.append(Path(session_dir))
+
+    image = _first_existing_image(candidates)
+    details: list[tuple[str, str]] = [
+        ("Selected location", str(selected.get("label", "Route"))),
+        ("Route state", _title_status(_route_state(selected))),
+    ]
+    artifact_root = _first_existing_path(candidates)
+    if artifact_root is not None:
+        details.append(("Artifact", str(artifact_root)))
+    return {"image": image, "details": details}
+
+
+def _artifact_paths_from_output(output: str) -> list[Path]:
+    paths = []
+    interesting_keys = {
+        "session_dir",
+        "manifest",
+        "review_file",
+        "report",
+        "html",
+        "contact_sheet",
+        "artifacts_dir",
+    }
+    for raw_line in output.splitlines():
+        if "=" not in raw_line:
+            continue
+        key, value = raw_line.split("=", 1)
+        if key.strip() not in interesting_keys:
+            continue
+        path = Path(value.strip()).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        paths.append(path)
+    return paths
+
+
+def _first_existing_path(paths: list[Path]) -> Path | None:
+    for path in paths:
+        if path.exists():
+            return path
+    return None
+
+
+def _first_existing_image(paths: list[Path]) -> Path | None:
+    preferred_names = ("contact_sheet.png", "latest.png", "screenshot.png")
+    search_roots = []
+    for path in paths:
+        if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif"}:
+            return path
+        if path.is_dir():
+            search_roots.append(path)
+    for root in search_roots:
+        for name in preferred_names:
+            candidate = root / name
+            if candidate.is_file():
+                return candidate
+        for candidate in sorted(root.rglob("*")):
+            if candidate.is_file() and candidate.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif"}:
+                return candidate
+    return None
+
+
+def _artifact_url(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        relative = resolved.relative_to(ARTIFACT_DIR.resolve())
+    except ValueError:
+        return resolved.as_uri()
+    return "/artifacts/" + "/".join(relative.parts)
+
+
+def _latest_observed_state(last_command: dict[str, object]) -> str:
+    output = str(last_command.get("stdout") or last_command.get("stderr") or "")
+    if not output:
+        return "No run has been captured from this panel yet."
+    interesting = [
+        line
+        for line in output.splitlines()
+        if any(token in line.lower() for token in ("failed", "success", "metrics_passed", "primary_segment", "session_dir"))
+    ]
+    return interesting[-1] if interesting else output.splitlines()[-1]
 
 
 def _last_command_status(last_command: dict[str, object]) -> str:
@@ -1027,16 +1038,14 @@ def _artifact_links(output: str) -> str:
             break
     if not links:
         return ""
-    rendered = "".join(
-        f'<a href="{_esc(path.resolve().as_uri())}">{_esc(label)}</a>' for label, path in links
-    )
+    rendered = "".join(f'<a href="{_esc(_artifact_url(path))}">{_esc(label)}</a>' for label, path in links)
     return f'<div class="artifact-links">{rendered}</div>'
 
 
 def _run_world_1_from_form(data: dict[str, list[str]]) -> dict[str, object]:
     game_file = os.environ.get("SMB3_GAME_FILE")
     if not game_file:
-        raise LabUiError("Set SMB3_GAME_FILE before running from the control panel.")
+        raise LabUiError("Set SMB3_GAME_FILE before running from Mario Route Lab.")
     speed = _single(data, "speed", default="4")
     attempts = int(_single(data, "attempts", default="1"))
     mode = _single(data, "mode", default="show")

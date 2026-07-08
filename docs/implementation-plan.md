@@ -548,20 +548,23 @@ Pass condition:
   context.
 - Packet includes the expected validation command.
 
-## Phase 7: World 1 Control Panel
+## Phase 7: Mario Route Lab
 
-Goal: replace repetitive CLI note entry with a player-facing World 1 control
-panel over the same session, note, issue, review, and variant artifacts.
+Goal: replace repetitive CLI note entry with an evidence-first Mario Route Lab
+over the same session, note, issue, review, and variant artifacts.
 
 Current status:
 
-- Phase 7 is implemented as a standard-library local web UI.
+- Phase 7 is implemented as a standard-library local web UI named Mario Route
+  Lab.
 - The UI is served by `python -m smb3_agent lab ui`.
 - The UI can also be rendered once with `python -m smb3_agent lab ui-render`.
 - The UI reads/writes the same session, note, issue, proposal, and Codex-task
   artifacts as the CLI.
 - The UI uses the World 1 location model in
   `data/worlds/world_1_locations.yaml`.
+- The visible workflow is Route, Evidence, Teach This Section, Things Mario
+  Still Gets Wrong, and Recent Observations.
 
 ### Step 7.1: Player-facing location model
 
@@ -582,17 +585,18 @@ python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
 
 Pass condition:
 
-- HTML contains the World 1 Control Panel.
+- HTML contains Mario Route Lab, Route, Evidence, and Teach This Section.
 - HTML contains player-facing World 1 locations.
 - HTML does not depend on old route-map labels for the primary workflow.
 
-### Step 7.2: Location note board
+### Step 7.2: Teaching panel
 
 Implementation:
 
-- Let the user add multiple notes across multiple locations. [implemented]
-- Support note types for note, harden, bug, objective, map action, and guide
-  detail. [implemented]
+- Let the user add teaching notes across multiple locations. [implemented]
+- Expose note labels for failure, expected behavior, route instruction,
+  validation note, and positive evidence while writing the existing underlying
+  note severities. [implemented]
 - Submit all notes to the same latest session. [implemented]
 - Run issue grouping after submission. [implemented]
 

@@ -260,21 +260,22 @@ validation:
 
 ## UI Contract
 
-The next UI should not parse route logs directly. It should read and write the
-same structured files the CLI uses.
+Mario Route Lab should not parse route logs directly. It should read and write
+the same structured files the CLI uses.
 
-First UI shape:
+Current UI shape:
 
 ```text
-World 1 control panel
--> choose speed and run mode
+Mario Route Lab
+-> choose speed, attempts, and run mode
 -> run or validate
--> select player-facing location
--> add note
--> mark note as note, harden, bug, objective, map action, or guide detail
--> submit note batch
--> review grouped issues
--> choose proposals to validate
+-> select player-facing route location
+-> inspect latest evidence
+-> teach the selected location
+-> mark note as failure, expected behavior, route instruction, validation note, or positive evidence
+-> submit teaching notes
+-> review grouped issues below the main workflow
+-> create Codex task packets for actionable issues
 ```
 
 Minimum UI data endpoints/files:
@@ -287,8 +288,8 @@ Minimum UI data endpoints/files:
 - variant proposals
 - validation result summaries
 
-The CLI remains the source of truth until the UI exists. The UI is a front end
-over session, note, issue, review, and variant artifacts.
+The CLI remains the source of truth. Mario Route Lab is a front end over
+session, note, issue, review, and variant artifacts.
 
 ## Codex Task Packets
 

@@ -176,9 +176,9 @@ python -m smb3_agent lab propose-variants latest
 python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
-## Control Panel
+## Mario Route Lab
 
-Start the local control panel:
+Start Mario Route Lab:
 
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
@@ -195,13 +195,13 @@ The UI lets you:
 - run World 1 at 1x, 2x, 4x, 10x, 25x, 50x, or 100x
 - choose watch mode or gate mode
 - trigger unit tests, the phase gate, and an HTML render check
-- see World 1 locations using player-facing names
-- add notes across multiple locations
+- inspect Route and Evidence as the primary workflow
+- teach selected World 1 locations using player-facing names
 - submit the batch to the latest session
 - regenerate issues and proposals
 - create Codex task packets for actionable issues
 
-Use location names in the panel:
+Use location names in the lab:
 
 - Map
 - 1-1
@@ -217,4 +217,5 @@ Use location names in the panel:
 - Airship
 - King
 
-The panel intentionally hides backend route labels from the normal workflow.
+Mario Route Lab intentionally hides backend route labels from the normal
+workflow.

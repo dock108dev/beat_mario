@@ -1,14 +1,14 @@
-# Local Control Panel Assets
+# Local Route Lab Assets
 
-The World 1 Mission Control UI can use local-only images from:
+Mario Route Lab can use local-only images from:
 
 ```text
 public/assets/local/
 ```
 
 Files in that directory are ignored by git except `.gitkeep`. This keeps the
-public repo free of copyrighted game assets while allowing a local cockpit to
-use personal reference art.
+public repo free of copyrighted game assets while allowing the local route lab
+to use personal reference art.
 
 Supported optional filenames:
 
@@ -23,5 +23,5 @@ Supported optional filenames:
 - `spade_icon.png`
 - `hammer_bro_icon.png`
 
-If a file is missing, the control panel renders a CSS text fallback and remains
+If a file is missing, Mario Route Lab renders a CSS text fallback and remains
 fully usable.

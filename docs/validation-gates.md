@@ -479,7 +479,7 @@ Pass condition:
   command.
 - Packet is usable by Codex CLI without relying on chat history.
 
-## Gate 28: Control Panel Render
+## Gate 28: Mario Route Lab Render
 
 Command:
 
@@ -490,14 +490,19 @@ Command:
 Pass condition:
 
 - HTML file is written.
-- HTML contains `World 1 Control Panel`.
+- HTML contains `Mario Route Lab`.
+- HTML contains `Route`, `Evidence`, `Teach This Section`, `Things Mario Still
+  Gets Wrong`, and `Recent Observations`.
 - HTML contains player-facing World 1 locations such as `Map`, `1-1`,
   `1-3`, `Fortress`, `Airship`, and `King`.
-- HTML contains run controls for speed, attempts, run mode, unit tests, phase
+- HTML contains run inputs for speed, attempts, run mode, unit tests, phase
   gate, and render check.
-- HTML contains batch note inputs for locations.
+- HTML contains teaching note inputs for locations.
+- HTML does not depend on old top-level labels such as `World 1 Control Panel`,
+  `World 1 Mission Control`, `Run Controls`, `World 1 Notes`, or
+  `Route Health`.
 
-## Gate 29: Control Panel Server
+## Gate 29: Mario Route Lab Server
 
 Command:
 
@@ -508,7 +513,9 @@ Command:
 Pass condition:
 
 - Server prints a local URL.
-- `GET /` returns the World 1 control panel.
+- `GET /` returns Mario Route Lab.
+- `GET /artifacts/...` serves files under the local `artifacts/` tree for
+  evidence review.
 - `POST /notes` appends batch notes to the latest session and regenerates
   issues/proposals.
 - `POST /run` starts a World 1 watch or gate run using the selected speed and
@@ -539,4 +546,4 @@ Pass condition:
 
 - The World 1 location model exists.
 - Required player-facing locations are present.
-- Each location has an objective for the control panel.
+- Each location has an objective for Mario Route Lab.

@@ -18,8 +18,8 @@ The repo currently has:
 - Screenshot/contact-sheet tooling for review.
 - Phase 6 attempt-lab scaffolding for sessions, human notes, route variants,
   and evidence-backed iteration.
-- A World 1 control panel for speed-selected runs, location notes, validation
-  commands, and Codex-task packets.
+- Mario Route Lab, a local evidence-first UI for running World 1, reviewing
+  artifacts, teaching selected locations, and creating Codex-task packets.
 - Parser tests for route summaries and post-probe success markers.
 
 See [docs/route-status.md](docs/route-status.md) for what is solved, bridged,
@@ -116,15 +116,16 @@ python -m smb3_agent lab ui-summary latest
 python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
-Serve the local World 1 control panel:
+Serve Mario Route Lab:
 
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 ```
 
-The panel uses player-facing locations such as `Map`, `1-1`, `1-3`,
-`Fortress`, `Airship`, and `King`. Backend route labels stay out of the normal
-UI workflow.
+Mario Route Lab uses player-facing locations such as `Map`, `1-1`, `1-3`,
+`Fortress`, `Airship`, and `King`. The screen is organized around Route,
+Evidence, Teach This Section, Things Mario Still Gets Wrong, and Recent
+Observations. Backend route labels stay out of the normal UI workflow.
 
 Review an existing log:
 
@@ -143,7 +144,8 @@ python -m smb3_agent task review-fceux-log \
 - [Agent architecture](docs/agent-architecture.md)
 - [Attempt lab](docs/attempt-lab.md)
 - [World 1 lab guide](docs/world-1-lab-guide.md)
-- [Control panel plan](docs/control-panel-plan.md)
+- [Mario Route Lab](docs/mario-route-lab.md)
+- [Local Route Lab assets](docs/local-assets.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Validation gates](docs/validation-gates.md)
 - [Route status](docs/route-status.md)

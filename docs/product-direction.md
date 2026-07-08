@@ -99,12 +99,13 @@ In both cases, the agent should preserve the observation, connect it to evidence
 group related observations into durable issues, try controlled changes, and
 compare the next attempt against the previous one.
 
-The UI direction follows from that artifact model. The first UI should be a
-World control panel where the user sees player-facing locations, adds notes,
-runs the route at a selected speed, triggers validation commands, reviews
-grouped issues, and chooses which proposal to validate. The CLI and artifact
-schema remain the source of truth, but backend route labels should not be the
-normal UI vocabulary.
+The UI direction follows from that artifact model. The first UI is Mario Route
+Lab: an evidence-first route review surface where the user sees the World 1
+path, inspects the latest screenshot/contact sheet or attempt artifact, teaches
+the selected location, runs the route at a selected speed, triggers validation
+commands, reviews grouped issues, and chooses which proposal to validate. The
+CLI and artifact schema remain the source of truth, but backend route labels
+should not be the normal UI vocabulary.
 
 ## Product Thesis
 
