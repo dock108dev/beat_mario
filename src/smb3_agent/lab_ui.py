@@ -117,7 +117,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self._redirect("/")
                 return
             if path == "/codex-task":
-                issue_id = _single(data, "issue_id")
+                issue_id = _issue_id_from_form(data)
                 write_codex_task_latest(issue_id)
                 self._redirect("/")
                 return
@@ -229,7 +229,7 @@ def render_lab_ui() -> str:
         <section class="lower-grid">
           <section class="panel">
             <h2>Open Issues</h2>
-            {''.join(_issue_row(issue, summary) for issue in summary['issues']) or '<p>No issues yet.</p>'}
+            {''.join(_issue_row(issue, summary, index) for index, issue in enumerate(summary['issues'], start=1)) or '<p>No issues yet.</p>'}
           </section>
           <section class="panel">
             <h2>Recent Notes</h2>
@@ -492,14 +492,14 @@ def _location_card(location: dict[str, object]) -> str:
     </article>"""
 
 
-def _issue_row(issue: dict[str, object], summary: dict[str, object]) -> str:
+def _issue_row(issue: dict[str, object], summary: dict[str, object], index: int) -> str:
     priority = str(issue.get("priority", "low"))
     location_label = _label_for_location(summary, str(issue.get("segment_id")))
     action = ""
     if issue.get("actionable"):
         action = f"""
         <form method="post" action="/codex-task">
-          <input type="hidden" name="issue_id" value="{_esc(str(issue['id']))}">
+          <input type="hidden" name="issue_index" value="{index}">
           <button type="submit">Create Codex Task</button>
         </form>"""
     return f"""
@@ -570,6 +570,21 @@ def _test_command(action: str) -> tuple[str, ...]:
     if action == "render_check":
         return (sys.executable, "-m", "smb3_agent", "lab", "ui-render", "--output", "artifacts/ui/latest.html")
     raise LabUiError(f"Unknown test action: {action}")
+
+
+def _issue_id_from_form(data: dict[str, list[str]]) -> str:
+    issue_id = _single(data, "issue_id", default="")
+    if issue_id:
+        return issue_id
+    index = int(_single(data, "issue_index"))
+    summary = build_control_panel_summary()
+    issues = summary.get("issues", [])
+    if not isinstance(issues, list) or index < 1 or index > len(issues):
+        raise LabUiError("Issue selection is no longer available. Refresh the panel and try again.")
+    issue = issues[index - 1]
+    if not isinstance(issue, dict) or not issue.get("id"):
+        raise LabUiError("Issue selection is invalid. Refresh the panel and try again.")
+    return str(issue["id"])
 
 
 def _run_command_capture(action: str, command: tuple[str, ...]) -> subprocess.CompletedProcess[str]:

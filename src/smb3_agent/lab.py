@@ -1169,7 +1169,12 @@ def _issues_from_notes(session_id: str, notes: list[dict[str, Any]]) -> list[dic
         issue_counters[segment_id] = issue_counters.get(segment_id, 0) + 1
         priority = _issue_priority(issue_type, source_notes)
         issue_id = f"issue_{segment_id}_{issue_counters[segment_id]:03d}"
-        actionable = issue_type not in {"positive_evidence", "expected_behavior"}
+        actionable = issue_type not in {
+            "positive_evidence",
+            "expected_behavior",
+            "objective_update",
+            "guide_detail",
+        }
         issues.append(
             {
                 "id": issue_id,
@@ -1195,6 +1200,12 @@ def _group_sort_key(key: tuple[str, str]) -> tuple[int, str, str]:
 def _issue_type_for_note(note: dict[str, Any]) -> str:
     text = str(note.get("text", "")).lower()
     severity = str(note.get("severity", "")).lower()
+    if severity == "objective":
+        return "objective_update"
+    if severity == "map_action":
+        return "map_action"
+    if severity == "guide_detail":
+        return "guide_detail"
     if "expected" in text or "not complete" in text or "not a complete" in text:
         return "expected_behavior"
     if "perfect" in text or "good" in text:
@@ -1215,8 +1226,10 @@ def _issue_priority(issue_type: str, source_notes: list[dict[str, Any]]) -> str:
         return "high"
     if issue_type in {"wrong_route_state", "route_hardening", "input_timing"}:
         return "medium"
-    if issue_type in {"expected_behavior", "positive_evidence"}:
+    if issue_type in {"expected_behavior", "positive_evidence", "objective_update", "guide_detail"}:
         return "none"
+    if issue_type == "map_action":
+        return "medium"
     if any(str(note.get("severity", "")).lower() == "harden" for note in source_notes):
         return "medium"
     return "low"
@@ -1255,6 +1268,12 @@ def _issue_next_step(segment_id: str, issue_type: str) -> str:
         return "Record as expected route behavior and exclude from failure classification."
     if issue_type == "positive_evidence":
         return "Record as passing evidence for this segment."
+    if issue_type == "objective_update":
+        return "Record the objective update for this location."
+    if issue_type == "guide_detail":
+        return "Record the guide detail as route context."
+    if issue_type == "map_action":
+        return "Add or verify the map movement/action before continuing route input."
     return "Review trace evidence and decide whether this should become actionable."
 
 

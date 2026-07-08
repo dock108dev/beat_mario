@@ -460,16 +460,16 @@ Command:
 
 Pass condition:
 
-- Output lists World 1 route segments with note, issue, proposal, and validation
-  state.
-- A UI can render the latest session without parsing raw route logs.
+- Output lists backend World 1 route entries with note, issue, proposal, and
+  validation state.
+- A reviewer can inspect the latest session without parsing raw route logs.
 
 ## Gate 27: Codex Task Packet
 
 Command:
 
 ```bash
-.venv/bin/python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+.venv/bin/python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
 Pass condition:
@@ -479,7 +479,7 @@ Pass condition:
   command.
 - Packet is usable by Codex CLI without relying on chat history.
 
-## Gate 28: Lab UI Render
+## Gate 28: Control Panel Render
 
 Command:
 
@@ -490,11 +490,14 @@ Command:
 Pass condition:
 
 - HTML file is written.
-- HTML contains a World 1 route map.
-- HTML contains batch note inputs for segments.
-- HTML contains issue and proposal sections.
+- HTML contains `World 1 Control Panel`.
+- HTML contains player-facing World 1 locations such as `Map`, `1-1`,
+  `1-3`, `Fortress`, `Airship`, and `King`.
+- HTML contains run controls for speed, attempts, run mode, unit tests, phase
+  gate, and render check.
+- HTML contains batch note inputs for locations.
 
-## Gate 29: Lab UI Server
+## Gate 29: Control Panel Server
 
 Command:
 
@@ -505,7 +508,35 @@ Command:
 Pass condition:
 
 - Server prints a local URL.
-- `GET /` returns the route-map UI.
+- `GET /` returns the World 1 control panel.
 - `POST /notes` appends batch notes to the latest session and regenerates
   issues/proposals.
+- `POST /run` starts a World 1 watch or gate run using the selected speed and
+  attempt count when `SMB3_GAME_FILE` is set.
+- `POST /test` can trigger unit tests, the phase gate, or the render check.
 - `POST /codex-task` creates a Codex task packet for an actionable issue.
+
+## Gate 30: Location Model
+
+Command:
+
+```bash
+.venv/bin/python - <<'PY'
+from pathlib import Path
+import yaml
+
+data = yaml.safe_load(Path("data/worlds/world_1_locations.yaml").read_text())
+labels = {location["label"] for location in data["locations"]}
+required = {"Map", "1-1", "1-2", "1-3", "Fortress", "Airship", "King"}
+missing = sorted(required - labels)
+if missing:
+    raise SystemExit(f"missing labels: {missing}")
+print("valid=true")
+PY
+```
+
+Pass condition:
+
+- The World 1 location model exists.
+- Required player-facing locations are present.
+- Each location has an objective for the control panel.

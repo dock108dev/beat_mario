@@ -156,9 +156,9 @@ issues:
       - note_001
     summary: Mario falls into a hole at 283 on the clock.
     proposed_next_step: Add a safer jump or progress guard near the hazard.
-  - id: issue_world_1_3_whistle_001
+  - id: issue_world_1_3_001
     session_id: 20260706T230000Z_world_1_king
-    segment_id: world_1_3_whistle
+    segment_id: world_1_3
     type: expected_behavior
     priority: none
     status: accepted
@@ -166,9 +166,9 @@ issues:
       - note_002
     summary: Leaving 1-3 through the whistle path is expected.
     proposed_next_step: Do not treat this as a failed course clear.
-  - id: issue_world_1_fortress_whistle_001
+  - id: issue_world_1_fortress_001
     session_id: 20260706T230000Z_world_1_king
-    segment_id: world_1_fortress_whistle
+    segment_id: world_1_fortress
     type: recovery_bug
     priority: high
     status: open
@@ -188,7 +188,7 @@ Supported issue types:
 - `positive_evidence`
 - `unknown`
 
-The reviewer should produce one issue per distinct segment/problem. Positive
+The reviewer should produce one issue per distinct location/problem. Positive
 evidence and expected behavior are useful, but they should not create route
 patch proposals.
 
@@ -203,8 +203,8 @@ Minimum review fields:
 review_id: review_001
 session_id: 20260706T230000Z_world_1_king
 result: issues_identified
-primary_issue: issue_world_1_fortress_whistle_001
-primary_segment: world_1_fortress_whistle
+primary_issue: issue_world_1_fortress_001
+primary_location: world_1_fortress
 issue_count: 3
 actionable_issue_count: 2
 evidence:
@@ -266,10 +266,12 @@ same structured files the CLI uses.
 First UI shape:
 
 ```text
-World 1 route map
--> select segment
+World 1 control panel
+-> choose speed and run mode
+-> run or validate
+-> select player-facing location
 -> add note
--> mark note as harden, positive evidence, expected behavior, or bug
+-> mark note as note, harden, bug, objective, map action, or guide detail
 -> submit note batch
 -> review grouped issues
 -> choose proposals to validate
@@ -278,7 +280,7 @@ World 1 route map
 Minimum UI data endpoints/files:
 
 - latest session manifest
-- segment catalog
+- World 1 location model
 - notes file
 - issue ledger
 - review summary
@@ -310,7 +312,7 @@ Packet contents:
 Planned command:
 
 ```bash
-python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
 The packet should ask for a concrete patch proposal and validation plan. The lab
@@ -326,7 +328,7 @@ python -m smb3_agent lab note latest "1-1 around 320 timer: falls into the hole 
 python -m smb3_agent lab review latest
 python -m smb3_agent lab issues latest
 python -m smb3_agent lab propose-variants latest
-python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 python -m smb3_agent lab run-variant world_1_1_harden_hole_320_a --attempts 10
 python -m smb3_agent lab promote-variant world_1_1_harden_hole_320_a
 ```
@@ -346,7 +348,7 @@ packets, variant validation, and guarded promotion.
 7. Promotion command with backup and rollback metadata.
 8. Issue ledger grouped by segment and problem type.
 9. Multi-proposal generation from actionable issues.
-10. UI-ready session/route-map summary.
+10. UI-ready session/control-panel summary.
 11. Codex task packet generation for selected issues.
 
 ## Validation Philosophy

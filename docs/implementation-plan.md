@@ -501,12 +501,13 @@ Pass condition:
 - Non-actionable evidence issues are skipped.
 - Proposals are independent and can be validated separately.
 
-### Step 6.8: UI-ready route map summary
+### Step 6.8: Backend summary artifact
 
 Implementation:
 
 - Add `lab ui-summary latest`. [implemented]
-- Produce a compact JSON/YAML file for a future UI. [implemented]
+- Produce a compact JSON/YAML file for compatibility and debugging.
+  [implemented]
 - Include route segments, note counts, issue counts, highest priority issue,
   proposal count, validation status, and artifact links.
 
@@ -518,8 +519,8 @@ Validation gate:
 
 Pass condition:
 
-- Output can drive a World 1 route-map UI without parsing raw logs.
-- Each segment shows notes, issues, and proposal state.
+- Output can summarize backend route state without parsing raw logs.
+- Each backend route entry shows notes, issues, and proposal state.
 - The latest session can be reopened from the summary.
 
 ### Step 6.9: Codex task packet
@@ -536,7 +537,7 @@ Implementation:
 Validation gate:
 
 ```bash
-.venv/bin/python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+.venv/bin/python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
 Pass condition:
@@ -547,28 +548,31 @@ Pass condition:
   context.
 - Packet includes the expected validation command.
 
-## Phase 7: Lab UI Prototype
+## Phase 7: World 1 Control Panel
 
-Goal: replace repetitive CLI note entry with a simple route-map UI over the same
-session, note, issue, review, and variant artifacts.
+Goal: replace repetitive CLI note entry with a player-facing World 1 control
+panel over the same session, note, issue, review, and variant artifacts.
 
 Current status:
 
 - Phase 7 is implemented as a standard-library local web UI.
 - The UI is served by `python -m smb3_agent lab ui`.
 - The UI can also be rendered once with `python -m smb3_agent lab ui-render`.
-- The UI reads/writes the same session, note, issue, proposal, UI-summary, and
-  Codex-task artifacts as the CLI.
+- The UI reads/writes the same session, note, issue, proposal, and Codex-task
+  artifacts as the CLI.
+- The UI uses the World 1 location model in
+  `data/worlds/world_1_locations.yaml`.
 
-### Step 7.1: Static route map
+### Step 7.1: Player-facing location model
 
 Implementation:
 
-- Build a minimal local UI that reads the World 1 segment catalog and latest
-  lab session. [implemented]
-- Show route segments as clickable nodes. [implemented]
-- Display note count, issue count, and proposal count per segment. [implemented]
-- Avoid writing game-control logic in the UI; control remains in the CLI/backend. [implemented]
+- Add a World 1 location model with player-facing labels and objectives.
+  [implemented]
+- Render locations such as Map, 1-1, 1-3, Fortress, Airship, and King as the
+  primary UI vocabulary. [implemented]
+- Keep backend route/script identifiers out of the normal UI labels.
+  [implemented]
 
 Validation gate:
 
@@ -578,15 +582,17 @@ python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
 
 Pass condition:
 
-- UI data contains every World 1 segment.
-- Segment status and latest issue/proposal counts are visible.
-- HTML contains the route map, note form, issue list, and proposal list.
+- HTML contains the World 1 Control Panel.
+- HTML contains player-facing World 1 locations.
+- HTML does not depend on old route-map labels for the primary workflow.
 
-### Step 7.2: Batch note submission
+### Step 7.2: Location note board
 
 Implementation:
 
-- Let the user add multiple notes across multiple segments. [implemented]
+- Let the user add multiple notes across multiple locations. [implemented]
+- Support note types for note, harden, bug, objective, map action, and guide
+  detail. [implemented]
 - Submit all notes to the same latest session. [implemented]
 - Run issue grouping after submission. [implemented]
 
@@ -599,10 +605,33 @@ python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 Pass condition:
 
 - A batch note submission creates grouped issues without requiring one command
-  per segment.
+  per location.
 - The UI refreshes issue and proposal artifacts after note submission.
 
-### Step 7.3: Codex task buttons
+### Step 7.3: Run and validation controls
+
+Implementation:
+
+- Add a speed selector for 1x through 100x. [implemented]
+- Add attempts and mode selectors. [implemented]
+- Add Run World 1, Unit Tests, Phase Gate, and Render Check controls.
+  [implemented]
+- Record the last command result in `artifacts/ui/last_command.yaml`.
+  [implemented]
+
+Validation gate:
+
+```bash
+python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
+```
+
+Pass condition:
+
+- The UI exposes run speed, attempt count, run mode, unit-test, phase-gate, and
+  render-check controls.
+- The phase gate uses the same Python interpreter that launched the UI.
+
+### Step 7.4: Codex task buttons
 
 Implementation:
 

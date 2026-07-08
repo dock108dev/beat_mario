@@ -63,7 +63,7 @@ With explicit anchors:
 ```bash
 python -m smb3_agent lab note latest \
   "Castle flight starts too far right and hits ceiling blocks" \
-  --segment world_1_fortress_whistle \
+  --segment fortress \
   --severity harden
 ```
 
@@ -154,10 +154,10 @@ Replace `VARIANT_ID` with the id printed by `lab propose-variant`.
 
 ## Batch Workflow
 
-Use this shape when you have notes across several World 1 segments:
+Use this shape when you have notes across several World 1 locations:
 
 1. Run the route once.
-2. Add notes across many segments.
+2. Add notes across many locations.
 3. Generate an issue ledger.
 4. Review grouped issues.
 5. Generate one proposal per actionable issue.
@@ -169,16 +169,16 @@ Example command flow:
 ```bash
 python -m smb3_agent lab start "show me the route at 4x" --attempts 1
 python -m smb3_agent lab note latest "1-1 falls into hole at 283 on clock." --segment world_1_1 --severity harden
-python -m smb3_agent lab note latest "1-2 and 1-3 are perfect. 1-3 whistle exit is expected." --segment world_1_3_whistle --severity note
-python -m smb3_agent lab note latest "Castle dies first try every time, then carry-over inputs seem to send the route to 1-4." --segment world_1_fortress_whistle --severity harden
+python -m smb3_agent lab note latest "1-2 and 1-3 are perfect. 1-3 whistle exit is expected." --segment world_1_3 --severity note
+python -m smb3_agent lab note latest "Castle dies first try every time, then carry-over inputs seem to send the route to 1-4." --segment fortress --severity harden
 python -m smb3_agent lab issues latest
 python -m smb3_agent lab propose-variants latest
-python -m smb3_agent lab codex-task latest --issue issue_world_1_fortress_whistle_001
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
-## Route Map UI
+## Control Panel
 
-Start the local UI:
+Start the local control panel:
 
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
@@ -192,8 +192,29 @@ http://127.0.0.1:8765
 
 The UI lets you:
 
-- see every World 1 route segment
-- add notes across multiple segments
+- run World 1 at 1x, 2x, 4x, 10x, 25x, 50x, or 100x
+- choose watch mode or gate mode
+- trigger unit tests, the phase gate, and an HTML render check
+- see World 1 locations using player-facing names
+- add notes across multiple locations
 - submit the batch to the latest session
 - regenerate issues and proposals
 - create Codex task packets for actionable issues
+
+Use location names in the panel:
+
+- Map
+- 1-1
+- 1-2
+- 1-3
+- Fortress
+- 1-4
+- Toad House
+- Spade Panel
+- Hammer Brother
+- 1-5
+- 1-6
+- Airship
+- King
+
+The panel intentionally hides backend route labels from the normal workflow.

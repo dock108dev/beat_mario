@@ -39,6 +39,9 @@ def test_control_panel_renders_world_1_locations_and_controls(
     assert 'name="note__world_1_1"' in html
     assert "World 1-3 Whistle" not in html
     assert "World 1 Fortress Whistle" not in html
+    assert "world_1_1_clear" not in html
+    assert "world_1_3_whistle" not in html
+    assert "world_1_fortress_whistle" not in html
 
 
 def test_control_panel_groups_notes_by_human_location(
@@ -74,7 +77,8 @@ def test_control_panel_groups_notes_by_human_location(
     assert locations["world_1_1"]["notes"] == 1
     assert locations["world_1_1"]["open_issues"] == 1
     assert locations["world_1_fortress"]["notes"] == 1
-    assert locations["world_1_fortress"]["open_issues"] == 1
+    assert locations["world_1_fortress"]["issues"] == 1
+    assert locations["world_1_fortress"]["open_issues"] == 0
     assert summary["totals"]["notes"] == 2
 
 
