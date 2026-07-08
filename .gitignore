@@ -17,3 +17,7 @@ data/variants/*.yaml
 data/variants/backups/
 data/variants/promotions/
 !data/variants/.gitkeep
+
+# Optional local UI art. Do not commit copyrighted game assets.
+public/assets/local/*
+!public/assets/local/.gitkeep

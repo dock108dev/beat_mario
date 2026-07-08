@@ -1,0 +1,27 @@
+# Local Control Panel Assets
+
+The World 1 Mission Control UI can use local-only images from:
+
+```text
+public/assets/local/
+```
+
+Files in that directory are ignored by git except `.gitkeep`. This keeps the
+public repo free of copyrighted game assets while allowing a local cockpit to
+use personal reference art.
+
+Supported optional filenames:
+
+- `leaf_icon.png`
+- `map_icon.png`
+- `level_icon.png`
+- `whistle_icon.png`
+- `fortress_icon.png`
+- `airship_icon.png`
+- `king_icon.png`
+- `toad_house_icon.png`
+- `spade_icon.png`
+- `hammer_bro_icon.png`
+
+If a file is missing, the control panel renders a CSS text fallback and remains
+fully usable.

@@ -71,17 +71,34 @@ Guide references used for vocabulary:
 
 ## First Screen
 
-The first screen has four areas:
+The first screen is now a dark mission-control layout with five areas:
 
 ```text
-World 1 Control Panel
--> Run Controls
--> Guide Logic
--> World 1 Notes
--> Open Issues / Recent Notes
+World 1 Mission Control
+-> Mission status strip
+-> Route Map / route rail
+-> Run Console / Route Rules
+-> World 1 Notes segment board
+-> Open Issues / Recent Review Feed
 ```
 
-Run Controls:
+Mission status strip:
+
+- route health percentage
+- solved segment count
+- open issue count
+- active variant count
+- latest gate/result state
+
+Route Map:
+
+- horizontal World 1 route rail
+- player-facing location labels only
+- status-colored nodes for works, needs review, blocked, bridged, and unknown
+- node clicks jump to and highlight the matching segment card
+- segment filters for all, open issues, blocked, needs review, and works
+
+Run Console:
 
 - speed selector: `1x`, `2x`, `4x`, `10x`, `25x`, `50x`, `100x`
 - attempts selector: `1`, `3`, `5`, `10`
@@ -90,6 +107,8 @@ Run Controls:
 - Unit Tests
 - Phase Gate
 - Render Check
+- command preview
+- latest command output and artifact links
 
 World 1 Notes:
 
@@ -99,9 +118,17 @@ World 1 Notes:
 - note count
 - open issue count
 - variant count
-- free-form note textarea
+- compact summary by default
+- expandable detail area with free-form note textarea
 - note type selector
 - optional anchor selector
+
+Local assets:
+
+- optional images live under `public/assets/local/`
+- the directory is ignored by git except `.gitkeep`
+- missing images render CSS text fallbacks
+- see `docs/local-assets.md`
 
 ## Note Types
 

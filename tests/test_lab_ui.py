@@ -27,8 +27,13 @@ def test_control_panel_renders_world_1_locations_and_controls(
     html = render_lab_ui()
 
     assert "World 1 Control Panel" in html
+    assert "World 1 Mission Control" in html
+    assert "Route Map" in html
+    assert "Run Console" in html
     assert "Run Controls" in html
     assert "World 1 Notes" in html
+    assert "Route Health" in html
+    assert 'id="filter-blocked"' in html
     assert "1-1" in html
     assert "1-3" in html
     assert "Fortress" in html
@@ -36,6 +41,8 @@ def test_control_panel_renders_world_1_locations_and_controls(
     assert "King" in html
     assert "Unit Tests" in html
     assert "Phase Gate" in html
+    assert 'href="#world_1_fortress"' in html
+    assert 'data-status="blocked"' in html
     assert 'name="note__world_1_1"' in html
     assert "World 1-3 Whistle" not in html
     assert "World 1 Fortress Whistle" not in html
