@@ -124,8 +124,10 @@ python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 
 Mario Route Lab uses player-facing locations such as `Map`, `1-1`, `1-3`,
 `Fortress`, `Airship`, and `King`. The screen is organized around Route,
-Evidence, Teach This Section, Things Mario Still Gets Wrong, and Recent
-Observations. Backend route labels stay out of the normal UI workflow.
+Evidence, Teach Mario, Active Problems, and Observation History. Backend route
+labels stay out of the normal UI workflow. Its visual system keeps cream as the
+page background, uses white panels, blue selection, and red/green/amber route
+state chips.
 
 Review an existing log:
 

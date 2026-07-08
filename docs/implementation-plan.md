@@ -563,8 +563,11 @@ Current status:
   artifacts as the CLI.
 - The UI uses the World 1 location model in
   `data/worlds/world_1_locations.yaml`.
-- The visible workflow is Route, Evidence, Teach This Section, Things Mario
-  Still Gets Wrong, and Recent Observations.
+- The visible workflow is Route, Evidence, Teach Mario, Active Problems, and
+  Observation History.
+- The visual system uses a warm off-white page background, white panels, blue
+  selected route rows, a navy active teaching segment, and red/green/amber
+  status chips for failed, learned, and validation states.
 
 ### Step 7.1: Player-facing location model
 
@@ -585,7 +588,7 @@ python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
 
 Pass condition:
 
-- HTML contains Mario Route Lab, Route, Evidence, and Teach This Section.
+- HTML contains Mario Route Lab, Route, Evidence, and Teach Mario.
 - HTML contains player-facing World 1 locations.
 - HTML does not depend on old route-map labels for the primary workflow.
 
@@ -594,9 +597,15 @@ Pass condition:
 Implementation:
 
 - Let the user add teaching notes across multiple locations. [implemented]
+- Render only one add-observation form for the selected route location.
+  [implemented]
 - Expose note labels for failure, expected behavior, route instruction,
   validation note, and positive evidence while writing the existing underlying
   note severities. [implemented]
+- Add observation lifecycle actions for edit, delete, resolved, expected,
+  convert-to-issue, and archive. [implemented]
+- Add issue lifecycle actions for resolved, not-a-bug, needs-rerun, Codex task,
+  archive, and delete. [implemented]
 - Submit all notes to the same latest session. [implemented]
 - Run issue grouping after submission. [implemented]
 
@@ -652,6 +661,34 @@ python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 Pass condition:
 
 - UI-created Codex task packets use the same schema as CLI-created packets.
+
+### Step 7.5: Visual polish and render hooks
+
+Implementation:
+
+- Keep the existing Route / Evidence / Teach Mario / bottom review layout.
+  [implemented]
+- Use one strong primary action, `Run World 1`. [implemented]
+- Render secondary and lifecycle actions as quiet controls. [implemented]
+- Render the teaching mode chooser as a segmented control. [implemented]
+- Render selected route rows with a blue left rail and light blue background.
+  [implemented]
+- Expose stable render hooks for visual checks: `primary-button`,
+  `secondary-button`, `segmented-control`, `segment-active`,
+  `route-item-selected`, `status-failed`, `status-learned`, and
+  `status-validation`. [implemented]
+
+Validation gate:
+
+```bash
+python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
+```
+
+Pass condition:
+
+- HTML contains the visual hooks above.
+- HTML contains exactly one primary action.
+- Cards and controls remain in the existing layout.
 
 ## Phase 8: Research Unknown Routes
 

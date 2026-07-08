@@ -491,13 +491,21 @@ Pass condition:
 
 - HTML file is written.
 - HTML contains `Mario Route Lab`.
-- HTML contains `Route`, `Evidence`, `Teach This Section`, `Things Mario Still
-  Gets Wrong`, and `Recent Observations`.
+- HTML contains `Route`, `Evidence`, `Teach Mario`, `Active Problems`, and
+  `Observation History`.
 - HTML contains player-facing World 1 locations such as `Map`, `1-1`,
   `1-3`, `Fortress`, `Airship`, and `King`.
 - HTML contains run inputs for speed, attempts, run mode, unit tests, phase
   gate, and render check.
-- HTML contains teaching note inputs for locations.
+- HTML contains one selected-location teaching note input.
+- HTML renders Active Problems and Observation History as compact rows with
+  `Review` links, not always-visible action stacks.
+- HTML renders lifecycle buttons only inside one selected observation or issue
+  detail area.
+- HTML contains exactly one primary button, `Run World 1`.
+- HTML contains visual hook classes: `primary-button`, `secondary-button`,
+  `segmented-control`, `segment-active`, `route-item-selected`,
+  `status-failed`, `status-learned`, and `status-validation`.
 - HTML does not depend on old top-level labels such as `World 1 Control Panel`,
   `World 1 Mission Control`, `Run Controls`, `World 1 Notes`, or
   `Route Health`.
@@ -518,6 +526,10 @@ Pass condition:
   evidence review.
 - `POST /notes` appends batch notes to the latest session and regenerates
   issues/proposals.
+- `POST /observation-action` edits, deletes, resolves, archives, or converts
+  observations in the latest session.
+- `POST /issue-action` resolves, accepts, archives, deletes, or marks issues as
+  needing rerun in the latest session.
 - `POST /run` starts a World 1 watch or gate run using the selected speed and
   attempt count when `SMB3_GAME_FILE` is set.
 - `POST /test` can trigger unit tests, the phase gate, or the render check.

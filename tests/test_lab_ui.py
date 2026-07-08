@@ -9,7 +9,13 @@ import yaml
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult
 from smb3_agent.lab import add_batch_notes_to_latest, build_issue_ledger_latest, start_session
-from smb3_agent.lab_ui import build_control_panel_summary, render_lab_ui
+from smb3_agent.lab_ui import (
+    _selected_location,
+    _update_issue_latest,
+    _update_observation_latest,
+    build_control_panel_summary,
+    render_lab_ui,
+)
 
 
 def test_route_lab_renders_route_evidence_and_teaching_workflow(
@@ -23,6 +29,10 @@ def test_route_lab_renders_route_evidence_and_teaching_workflow(
         attempts=1,
         artifacts_root=tmp_path / "artifacts/sessions",
     )
+    add_batch_notes_to_latest(
+        [{"segment_id": "world_1_1", "text": "1-1 falls into hole.", "severity": "harden"}]
+    )
+    build_issue_ledger_latest()
 
     html = render_lab_ui()
 
@@ -30,9 +40,14 @@ def test_route_lab_renders_route_evidence_and_teaching_workflow(
     assert "Run World 1" in html
     assert "Route" in html
     assert "Evidence" in html
-    assert "Teach This Section" in html
-    assert "Things Mario Still Gets Wrong" in html
-    assert "Recent Observations" in html
+    assert "Teach Mario" in html
+    assert "Active Problems" in html
+    assert "Observation History" in html
+    assert "Fix Issue" in html
+    assert "No screenshot captured yet" in html
+    assert "Mark Resolved" in html
+    assert "Needs Rerun" in html
+    assert "Create Codex Task" in html
     assert "1-1" in html
     assert "1-3" in html
     assert "Fortress" in html
@@ -40,18 +55,39 @@ def test_route_lab_renders_route_evidence_and_teaching_workflow(
     assert "King" in html
     assert "Unit Tests" in html
     assert "Phase Gate" in html
-    assert 'href="#teach-world_1_fortress"' in html
-    assert 'name="note__world_1_1"' in html
+    assert 'href="/?location=world_1_fortress"' in html
+    assert html.count('class="primary-button"') == 1
+    assert "secondary-button" in html
+    assert "segmented-control" in html
+    assert "segment-active" in html
+    assert "route-item-selected" in html
+    assert "status-failed" in html
+    assert "status-learned" in html
+    assert "status-validation" in html
+    assert html.count("Mark Resolved") == 1
+    assert html.count("Needs Rerun") == 1
+    assert html.count("Create Codex Task") == 1
+    assert "issue-summary-row" in html
+    assert "observation-summary-row" in html
     assert "World 1 Control Panel" not in html
     assert "World 1 Mission Control" not in html
     assert "Run Controls" not in html
     assert "World 1 Notes" not in html
     assert "Route Health" not in html
+    assert "Teach This Section" not in html
+    assert "Things Mario Still Gets Wrong" not in html
     assert "World 1-3 Whistle" not in html
     assert "World 1 Fortress Whistle" not in html
-    assert "world_1_1_clear" not in html
-    assert "world_1_3_whistle" not in html
-    assert "world_1_fortress_whistle" not in html
+
+    notes_html = render_lab_ui(selected_location_id="world_1_1", selected_mode="notes")
+    assert "Convert to Issue" in notes_html
+    assert notes_html.count("Convert to Issue") == 1
+    assert "detail-panel observation-detail" in notes_html
+
+    add_html = render_lab_ui(selected_location_id="world_1_1", selected_mode="add")
+    assert 'name="note__world_1_1"' in add_html
+    assert add_html.count('name="note__') == 1
+    assert "Add Observation" in add_html
 
 
 def test_control_panel_groups_notes_by_human_location(
@@ -87,9 +123,96 @@ def test_control_panel_groups_notes_by_human_location(
     assert locations["world_1_1"]["notes"] == 1
     assert locations["world_1_1"]["open_issues"] == 1
     assert locations["world_1_fortress"]["notes"] == 1
-    assert locations["world_1_fortress"]["issues"] == 1
+    assert locations["world_1_fortress"]["issues"] == 0
     assert locations["world_1_fortress"]["open_issues"] == 0
     assert summary["totals"]["notes"] == 2
+
+
+def test_route_lab_defaults_to_first_open_issue_location(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _prepare_ui_lab(monkeypatch, tmp_path)
+    start_session(
+        "show me the route at 4x",
+        game_path=tmp_path / "local-game-file",
+        attempts=1,
+        artifacts_root=tmp_path / "artifacts/sessions",
+    )
+    add_batch_notes_to_latest(
+        [{"segment_id": "world_1_1", "text": "1-1 falls into hole.", "severity": "harden"}]
+    )
+    build_issue_ledger_latest()
+
+    summary = build_control_panel_summary()
+    selected = _selected_location(summary["locations"])
+
+    assert selected["id"] == "world_1_1"
+
+
+def test_observation_lifecycle_delete_and_resolve(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _prepare_ui_lab(monkeypatch, tmp_path)
+    start_session(
+        "show me the route at 4x",
+        game_path=tmp_path / "local-game-file",
+        attempts=1,
+        artifacts_root=tmp_path / "artifacts/sessions",
+    )
+    add_batch_notes_to_latest(
+        [
+            {"segment_id": "world_1_1", "text": "delete me", "severity": "harden"},
+            {"segment_id": "world_1_fortress", "text": "resolve me", "severity": "harden"},
+        ]
+    )
+    build_issue_ledger_latest()
+
+    _update_observation_latest("note_001", "delete", {})
+    _update_observation_latest("note_002", "resolved", {})
+
+    notes = yaml.safe_load(_latest_session_file("notes.yaml").read_text())["notes"]
+    issues = yaml.safe_load(_latest_session_file("issues.yaml").read_text())["issues"]
+
+    assert [note["id"] for note in notes] == ["note_002"]
+    assert notes[0]["ui_state"] == "resolved"
+    assert all("note_001" not in issue.get("source_notes", []) for issue in issues)
+    assert any(issue["status"] == "resolved" for issue in issues)
+
+
+def test_issue_lifecycle_resolved_and_expected_behavior(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _prepare_ui_lab(monkeypatch, tmp_path)
+    start_session(
+        "show me the route at 4x",
+        game_path=tmp_path / "local-game-file",
+        attempts=1,
+        artifacts_root=tmp_path / "artifacts/sessions",
+    )
+    add_batch_notes_to_latest(
+        [
+            {"segment_id": "world_1_1", "text": "1-1 falls into hole.", "severity": "harden"},
+            {"segment_id": "world_1_fortress", "text": "Fortress fails.", "severity": "bug"},
+        ]
+    )
+    build_issue_ledger_latest()
+
+    issues = yaml.safe_load(_latest_session_file("issues.yaml").read_text())["issues"]
+    first_issue_id = issues[0]["id"]
+    second_issue_id = issues[1]["id"]
+
+    _update_issue_latest(first_issue_id, "resolved")
+    _update_issue_latest(second_issue_id, "expected_behavior")
+
+    updated = {issue["id"]: issue for issue in yaml.safe_load(_latest_session_file("issues.yaml").read_text())["issues"]}
+    assert updated[first_issue_id]["status"] == "resolved"
+    assert updated[first_issue_id]["actionable"] is False
+    assert updated[second_issue_id]["status"] == "accepted"
+    assert updated[second_issue_id]["type"] == "expected_behavior"
+    assert updated[second_issue_id]["actionable"] is False
 
 
 def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -163,6 +286,11 @@ def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("smb3_agent.lab.load_goal_contract", lambda path: SimpleNamespace(id="world_1_king"))
     monkeypatch.setattr("smb3_agent.lab.resolve_goal_path", lambda goal: Path(f"data/goals/{goal}.yaml"))
     monkeypatch.setattr("smb3_agent.lab.run_goal_contract", _fake_run_goal_contract)
+
+
+def _latest_session_file(name: str) -> Path:
+    session_dir = Path("artifacts/sessions/latest.txt").read_text().strip()
+    return Path(session_dir) / name
 
 
 def _fake_run_goal_contract(

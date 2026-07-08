@@ -56,13 +56,13 @@ Main:
 - left route index: Map, 1-1, 1-2, 1-3, Fortress, 1-4, Toad House,
   Spade Panel, Hammer Brother, 1-5, 1-6, Airship, King
 - center evidence viewer with latest screenshot/contact sheet when available
-- right teaching panel for notes attached to route locations
+- right `Teach Mario` panel for the selected route location only
 
 Bottom:
 
-- timeline / attempt log
-- Things Mario Still Gets Wrong
-- Recent Observations
+- Latest Attempt
+- Active Problems
+- Observation History
 
 ## Language Rule
 
@@ -105,7 +105,8 @@ Panel, Hammer Brother, Airship, Koopaling, wand, and King.
 
 ## Teaching Notes
 
-The teaching panel saves notes to the latest session. UI labels map to the
+The teaching panel renders one add-observation form for the selected location.
+It must not render a form for every route location. UI labels map to the
 existing note severities:
 
 - failure -> `bug`
@@ -113,6 +114,31 @@ existing note severities:
 - route instruction -> `map_action`
 - validation note -> `harden`
 - positive evidence -> `guide_detail`
+
+Existing observations are operable, not write-only. Each observation supports:
+
+- edit
+- delete
+- mark resolved
+- mark expected behavior
+- convert to issue
+- archive
+
+Those controls are progressively disclosed. Default observation rows are compact
+summaries with a `Review` link. Full controls appear only for the selected
+observation in Review Notes mode.
+
+Active issues support:
+
+- mark resolved
+- mark expected behavior / not a bug
+- mark needs rerun
+- create Codex task
+- archive
+- delete
+
+Default issue rows are compact summaries with a `Review` link. Full controls
+appear only for the selected issue in Fix Issue mode.
 
 Examples:
 
@@ -134,10 +160,44 @@ attempt log.
 If no image exists, the center pane shows:
 
 ```text
-Run World 1 to capture evidence
+No screenshot captured yet
 ```
 
-That empty state is acceptable only before evidence exists.
+That empty state stays compact so it does not dominate the screen before real
+evidence exists.
+
+## Visual System
+
+Cream is only the page background. Cards, inputs, and secondary buttons use
+white or near-white surfaces so the panels read clearly on top of the grid.
+
+The UI uses these roles:
+
+- primary text: dark charcoal
+- secondary text: muted slate
+- cards: true white
+- internal surfaces: near-white
+- selected route and active review rows: blue-tinted background with a blue
+  left rail
+- active teaching mode: dark navy filled segment with white text
+- failed state: red chip/text only
+- learned state: green chip/text
+- needs validation: amber chip/text
+
+`Run World 1` is the only strong primary button. Other actions are secondary or
+quiet controls. Destructive lifecycle actions remain small quiet buttons rather
+than red blocks.
+
+Render tests assert stable visual hooks instead of exact color values:
+
+- `primary-button`
+- `secondary-button`
+- `segmented-control`
+- `segment-active`
+- `route-item-selected`
+- `status-failed`
+- `status-learned`
+- `status-validation`
 
 ## Local Assets
 
@@ -165,9 +225,15 @@ The rendered HTML should contain:
 - `Run World 1`
 - `Route`
 - `Evidence`
-- `Teach This Section`
-- `Things Mario Still Gets Wrong`
-- `Recent Observations`
+- `Teach Mario`
+- `Active Problems`
+- `Observation History`
+- compact issue rows with `Review`
+- compact observation rows with `Review`
+- one selected detail area with lifecycle actions
+- exactly one primary button: `Run World 1`
+- visual hooks for primary, secondary, segmented-control, active segment,
+  selected route, failed, learned, and validation states
 
 The rendered HTML should not require old dashboard labels such as:
 
