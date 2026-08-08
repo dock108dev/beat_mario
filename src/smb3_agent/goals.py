@@ -12,7 +12,7 @@ from smb3_agent.presets import WORLD_1_KING_ENV
 
 
 SUPPORTED_PRESETS = {"fceux_world_1_king"}
-SUPPORTED_METRIC_TYPES = {"summary_field", "final_event"}
+SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
 SUPPORTED_SUMMARY_FIELDS = {
     "success_count",
     "bad_state_count",
@@ -199,6 +199,10 @@ def _metric_passes(metric: dict[str, Any], summary: BatchSummary) -> bool:
     metric_type = metric["type"]
     if metric_type == "final_event":
         return summary.post_probe_last_event == metric["value"]
+    if metric_type == "event_present":
+        return metric["value"] in summary.post_probe_events
+    if metric_type == "event_absent":
+        return metric["value"] not in summary.post_probe_events
     if metric_type == "summary_field":
         actual = getattr(summary, metric["field"])
         expected = metric["equals"]
@@ -218,7 +222,7 @@ def _validate_metric(index: int, metric: Any) -> None:
         _require_fields(metric, ("field", "equals"))
         if metric["field"] not in SUPPORTED_SUMMARY_FIELDS:
             raise GoalValidationError(f"Unsupported summary field: {metric['field']}")
-    if metric["type"] == "final_event":
+    if metric["type"] in {"final_event", "event_present", "event_absent"}:
         _require_fields(metric, ("value",))
 
 

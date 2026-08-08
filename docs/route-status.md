@@ -83,7 +83,7 @@ python -m smb3_agent goal status world_1_king
 | World 1-1 clear | solved | `fceux-1-1 --attempts 10 --require-perfect` | Strongest current base gate. |
 | World 1-2 clear | solved | `run_1_2_naive` post-probe | Cataloged but still implemented as a post-probe script. |
 | World 1-3 whistle | solved | Whistle inventory marker | Route uses white-block whistle path. |
-| World 1 fortress whistle | bridged | Second whistle bridge marker | Real flight/whistle play is not fully solved. |
+| World 1 fortress whistle | in progress | `post_probe_1_fortress_whistle_room_success` | Goal is the secret whistle via raccoon flight above the ceiling; normal level completion does not count. |
 | World 1-4 | flaky | Watchable demo failed here | Reliability gate may skip/bridge around parts; visible throttled run exposed instability. |
 | World 1-5 / water path | bridged | Water map-position bridge | Needs real route implementation or explicit bridge policy. |
 | World 1-6 | bridged | 1-6 clear bridge | Used to reach later World 1 state. |

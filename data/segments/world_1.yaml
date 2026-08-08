@@ -84,7 +84,7 @@ segments:
 
   - id: world_1_fortress_whistle
     name: World 1 fortress whistle
-    status: bridged
+    status: flaky
     start_condition:
       type: map_entry
       target: world_1_fortress
@@ -96,11 +96,11 @@ segments:
       - type: timeout
         seconds: 300
     current_method:
-      type: known_transition_bridge
-      probe: run_1_fortress_map_sequence
+      type: post_probe_script
+      probe: run_1_fortress_probe
     evidence:
-      - second whistle bridge marker
-    notes: Real fortress flight and whistle play are not fully solved yet.
+      - post_probe_1_fortress_whistle_room_success without bridge marker
+    notes: "Target is the secret whistle: preserve or collect raccoon form, build P-speed, fly above the ceiling, enter the hidden room, and collect the whistle. Normal level completion is not the goal."
 
   - id: world_1_4_clear
     name: World 1-4 clear
@@ -124,7 +124,7 @@ segments:
 
   - id: world_1_5_water_path
     name: World 1-5 water path
-    status: bridged
+    status: solved
     start_condition:
       type: map_entry
       target: world_1_5
@@ -136,11 +136,11 @@ segments:
       - type: timeout
         seconds: 240
     current_method:
-      type: known_transition_bridge
-      env_prefix: SMB3_1_5_WATER_BRIDGE
+      type: post_probe_script
+      probe: run_1_5_clear_after_fortress
     evidence:
-      - water map-position bridge
-    notes: Needs real route implementation or explicit long-term bridge policy.
+      - post_probe_1_5_water_success_course_clear with max_x above 2000
+    notes: "Real route: after the Fortress whistle navigate left, down, down to map cursor 64,160; recover from an optional roaming Bro encounter; enter 1-5; traverse the level and collect the goal card. The historical water label is retained for compatibility."
 
   - id: world_1_6_clear
     name: World 1-6 clear
@@ -181,4 +181,3 @@ segments:
     evidence:
       - post_probe_1_airship_success_king
     notes: Current gate reaches king marker with explicit transition support.
-

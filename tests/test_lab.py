@@ -64,6 +64,29 @@ def test_lab_note_latest_preserves_raw_text_and_infers_anchor(
     assert notes["notes"][0]["text"] == text
 
 
+def test_lab_note_extracts_artifact_evidence_without_creating_actionable_issue(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _prepare_lab(monkeypatch, tmp_path)
+    start_session(
+        "show me the route at 4x",
+        game_path=tmp_path / "local-game-file",
+        attempts=1,
+        artifacts_root=tmp_path / "artifacts/sessions",
+    )
+
+    result = add_note_to_latest(
+        "Captured guidance sheet: artifacts/fceux/1_5_capture/plant_wait.png",
+        segment_id="world_1_5",
+    )
+    ledger = build_issue_ledger_latest()
+
+    assert result.note["evidence_paths"] == ["artifacts/fceux/1_5_capture/plant_wait.png"]
+    assert ledger.issues[0]["type"] == "evidence_attachment"
+    assert ledger.issues[0]["actionable"] is False
+    assert ledger.issues[0]["evidence_paths"] == ["artifacts/fceux/1_5_capture/plant_wait.png"]
+
+
 def test_lab_review_and_variant_proposal_link_note_evidence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -191,6 +214,43 @@ def test_multi_proposals_skip_non_actionable_issues(monkeypatch: pytest.MonkeyPa
     assert proposals.proposals[0]["source_issue"] == issues.issues[0]["id"]
     assert proposals.proposals[0]["variant_id"].startswith("world_1_fortress_whistle_recovery_")
     assert all("source_issue" in proposal for proposal in proposals.proposals)
+
+
+def test_issue_ledger_respects_explicit_failure_and_positive_severity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _prepare_lab(monkeypatch, tmp_path)
+    start_session(
+        "show me the route at 4x",
+        game_path=tmp_path / "local-game-file",
+        attempts=1,
+        artifacts_root=tmp_path / "artifacts/sessions",
+    )
+    add_note_to_latest(
+        "Expected: cross the gap without falling or relying on recovery.",
+        segment_id="world_1_1_clear",
+        severity="harden",
+    )
+    add_note_to_latest(
+        "1-1 and 1-2 are good.",
+        segment_id="world_1_2_clear",
+        severity="positive",
+    )
+    add_note_to_latest(
+        "Fortress falls in fire. Expected: fail cleanly without leaking inputs toward 1-4.",
+        segment_id="world_1_fortress_whistle",
+        severity="failure",
+    )
+
+    result = build_issue_ledger_latest()
+    by_segment = {issue["segment_id"]: issue for issue in result.issues}
+
+    assert by_segment["world_1_1_clear"]["type"] == "route_hardening"
+    assert by_segment["world_1_1_clear"]["actionable"] is True
+    assert by_segment["world_1_2_clear"]["type"] == "positive_evidence"
+    assert by_segment["world_1_2_clear"]["actionable"] is False
+    assert by_segment["world_1_fortress_whistle"]["type"] == "recovery_bug"
+    assert by_segment["world_1_fortress_whistle"]["priority"] == "high"
 
 
 def test_ui_summary_and_codex_task_packet(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

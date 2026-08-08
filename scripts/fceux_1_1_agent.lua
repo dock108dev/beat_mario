@@ -107,15 +107,15 @@ post_1_5_water_bridge_cursor_y =
 force_world_1_complete_flags =
   os.getenv("SMB3_WORLD1_FORCE_COMPLETE_FLAGS") == "1"
 post_1_fortress_second_lava_wait_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_WAIT_FRAMES") or "24")
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_WAIT_FRAMES") or "63")
 post_1_fortress_second_lava_backup_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_BACKUP_FRAMES") or "0")
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_BACKUP_FRAMES") or "4")
 post_1_fortress_first_lava_start = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_START") or "250")
 post_1_fortress_first_lava_end = tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_END") or "285")
 post_1_fortress_first_lava_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_FIRST_LAVA_JUMP_FRAMES") or "58")
 post_1_fortress_second_lava_accel_frames =
-  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_ACCEL_FRAMES") or "6")
+  tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_ACCEL_FRAMES") or "0")
 post_1_fortress_second_lava_jump_frames =
   tonumber(os.getenv("SMB3_1_FORTRESS_SECOND_LAVA_JUMP_FRAMES") or "100")
 post_1_fortress_second_lava_drift_left_frames =
@@ -581,7 +581,7 @@ post_1_5_water_end_pipe_brake_frames =
 post_1_5_water_end_pipe_brake_direction =
   os.getenv("SMB3_1_5_WATER_END_PIPE_BRAKE_DIRECTION") or "left"
 post_1_5_water_end_pipe_jump_frames =
-  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_JUMP_FRAMES") or "0")
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_JUMP_FRAMES") or "42")
 post_1_5_water_end_pipe_up_frames =
   tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_UP_FRAMES") or "480")
 post_1_5_water_end_pipe_entry_direction =
@@ -2670,9 +2670,7 @@ local function run_1_fortress_probe()
         log_state("post_probe_1_fortress_search_continuation")
       end
       if grounded then
-        if search_continuation_active then
-          -- The search harness proved this corridor is safer as simple run/react.
-        elseif leaf_phase == "pending"
+        if leaf_phase == "pending"
             and m.x >= post_1_fortress_power_config.start_x
             and m.x <= post_1_fortress_power_config.target_x + 80 then
           leaf_phase = "align"
@@ -3966,6 +3964,7 @@ local function run_1_4_naive_probe()
   local goal_carry_frames = 0
   local first_jump_started = false
   local first_platform_landed = false
+  local first_platform_landed_frame = 0
   local first_platform_ride_frames = 0
   local first_platform_landed_frame = 0
   local second_jump_started = false
@@ -4785,6 +4784,7 @@ local function run_1_5_naive_probe()
   local under_bop_frames = 0
   local post_kill_frames = 0
   local collect_chest_started = false
+  local roamer_life_lost = false
   held.right = true
   held.B = true
   for frame = 1, 4200 do
@@ -4793,6 +4793,10 @@ local function run_1_5_naive_probe()
     local flank_enemy = nearest_enemy_between(m, -120, 20)
     local roamer_alive = has_active_enemy_id(-127)
     local grounded = m.air == 0
+
+    if memory.readbyte(0x14) == 1 and roamer_alive then
+      roamer_life_lost = true
+    end
 
     if m.x >= next_progress_marker and m.x < 8192 then
       log_state("post_probe_1_5_progress_x_" .. tostring(next_progress_marker))
@@ -4974,6 +4978,104 @@ local function run_1_5_naive_probe()
   apply()
   advance(900, "post_probe_1_5_after")
   log_state("post_probe_1_5_done")
+  if roamer_life_lost then
+    return "life_lost"
+  end
+  return "cleared"
+end
+
+local function resolve_world_1_roamer_if_present(step_name)
+  local object_set = memory.readbyte(0x70A)
+  if object_set ~= 3 and not has_active_enemy_id(-127) then
+    log_state("post_probe_world_1_roamer_not_present", "step=" .. step_name)
+    return false
+  end
+
+  log_state("post_probe_world_1_roamer_detected", "step=" .. step_name)
+  local outcome = run_1_5_naive_probe()
+  advance(180, "post_probe_world_1_roamer_map_return_wait")
+  if outcome == "life_lost" then
+    log_state("post_probe_world_1_roamer_life_lost", "step=" .. step_name)
+  else
+    log_state("post_probe_world_1_roamer_defeated", "step=" .. step_name)
+  end
+  return outcome
+end
+
+local function navigate_fortress_to_1_5_map()
+  log_state("post_probe_fortress_to_1_5_start")
+
+  local target_x = 64
+  local target_y = 160
+  for step = 1, 6 do
+    local cursor_x = memory.readbyte(0x79)
+    local cursor_y = memory.readbyte(0x75)
+    if cursor_x == target_x and cursor_y == target_y then
+      break
+    end
+
+    local direction = nil
+    if cursor_x > target_x then
+      direction = "left"
+    elseif cursor_x < target_x then
+      direction = "right"
+    elseif cursor_y < target_y then
+      direction = "down"
+    elseif cursor_y > target_y then
+      direction = "up"
+    end
+
+    if direction == nil then
+      break
+    end
+    run_map_sequence(direction, "post_probe_fortress_to_1_5_" .. direction)
+    resolve_world_1_roamer_if_present(direction)
+  end
+
+  held.A = false
+  held.B = false
+  held.left = false
+  held.right = false
+  held.down = false
+  held.up = false
+  apply()
+  local cursor_x = memory.readbyte(0x79)
+  local cursor_y = memory.readbyte(0x75)
+  if cursor_x == target_x and cursor_y == target_y then
+    log_state("post_probe_1_5_map_ready")
+    return true
+  end
+  log_state(
+    "post_probe_1_5_map_navigation_failed",
+    "cursor_x=" .. tostring(cursor_x) .. " cursor_y=" .. tostring(cursor_y)
+  )
+  return false
+end
+
+local function navigate_1_5_to_1_6_map()
+  local target_x = 128
+  local target_y = 160
+  log_state("post_probe_1_5_to_1_6_start")
+  for step = 1, 6 do
+    local cursor_x = memory.readbyte(0x79)
+    local cursor_y = memory.readbyte(0x75)
+    if cursor_x == target_x and cursor_y == target_y then
+      log_state("post_probe_1_6_map_ready")
+      return true
+    end
+    local direction = cursor_x < target_x and "right" or (cursor_x > target_x and "left" or nil)
+    if direction == nil then
+      direction = cursor_y < target_y and "down" or "up"
+    end
+    run_map_sequence(direction, "post_probe_1_5_to_1_6_" .. direction)
+    resolve_world_1_roamer_if_present(direction)
+  end
+  log_state(
+    "post_probe_1_6_map_navigation_failed",
+    "cursor_x=" .. tostring(memory.readbyte(0x79))
+      .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+  )
+  return false
 end
 
 local function run_1_5_water_probe()
@@ -4996,12 +5098,203 @@ local function run_1_5_water_probe()
   local enemy_avoid_frames = 0
   local enemy_avoid_left_frames = 0
   local late_window_used = false
+  local first_plant_phase = "approach"
+  local first_plant_seen_extended = false
+  local first_plant_staged = false
+  local first_plant_commit_frames = 0
+  local second_plant_phase = "approach"
+  local second_plant_seen_extended = false
+  local second_plant_commit_frames = 0
+  local first_plant_search_done = false
+  local second_plant_search_done = false
   held.right = true
   held.B = true
   local completed = false
+  local entered_gameplay = false
+  local minimum_form = 3
+
+  local function search_first_plant_crossing()
+    local checkpoint = savestate.create()
+    savestate.save(checkpoint)
+    local waits = {}
+    for wait_frames = 0, 240, 10 do
+      waits[#waits + 1] = wait_frames
+    end
+    local modes = {"run", "jump_hold", "jump_pulse", "tail_pulse", "slide"}
+    local stage_frames_options = {0, 15, 30, 45}
+    for _, stage_frames in ipairs(stage_frames_options) do
+      for _, wait_frames in ipairs(waits) do
+        for _, mode in ipairs(modes) do
+        savestate.load(checkpoint)
+        held.right = true
+        held.left = false
+        held.B = true
+        held.A = false
+        held.down = false
+        local stage_safe = true
+        for i = 1, stage_frames do
+          if memory.readbyte(0xED) ~= 3 then
+            stage_safe = false
+            break
+          end
+          apply()
+          advance_frame()
+        end
+        if stage_safe then
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        for i = 1, wait_frames do
+          apply()
+          advance_frame()
+        end
+        held.right = true
+        held.left = false
+        held.B = true
+        held.down = false
+        for i = 1, 240 do
+          held.A = mode == "jump_hold" or (mode == "jump_pulse" and i % 12 < 6)
+          held.B = mode ~= "tail_pulse" or i % 12 >= 4
+          held.down = mode == "slide"
+          local candidate = mario()
+          if memory.readbyte(0xED) ~= 3 then
+            break
+          end
+          if candidate.x >= 350 then
+            log_state(
+              "post_probe_1_5_first_plant_search_success",
+              "stage_frames=" .. tostring(stage_frames)
+                .. " wait_frames=" .. tostring(wait_frames)
+                .. " mode=" .. mode
+            )
+            return true
+          end
+          apply()
+          advance_frame()
+        end
+        end
+        end
+      end
+    end
+    savestate.load(checkpoint)
+    held.down = false
+    log_state("post_probe_1_5_first_plant_search_failed")
+    return false
+  end
+
+  local function search_second_plant_crossing()
+    local checkpoint = savestate.create()
+    savestate.save(checkpoint)
+    local modes = {"run", "jump_hold", "jump_pulse", "tail_pulse", "slide"}
+    for stage_frames = 0, 45, 15 do
+      for wait_frames = 0, 240, 10 do
+        for _, mode in ipairs(modes) do
+          savestate.load(checkpoint)
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          held.down = false
+          local safe = true
+          for i = 1, stage_frames do
+            if memory.readbyte(0xED) ~= 3 then
+              safe = false
+              break
+            end
+            apply()
+            advance_frame()
+          end
+          if safe then
+            held.right = false
+            held.B = false
+            for i = 1, wait_frames do
+              apply()
+              advance_frame()
+            end
+            held.right = true
+            held.B = true
+            for i = 1, 240 do
+              held.A = mode == "jump_hold" or (mode == "jump_pulse" and i % 12 < 6)
+              held.B = mode ~= "tail_pulse" or i % 12 >= 4
+              held.down = mode == "slide"
+              local candidate = mario()
+              if memory.readbyte(0xED) ~= 3 then
+                break
+              end
+              if candidate.x >= 2100 then
+                log_state(
+                  "post_probe_1_5_second_plant_search_success",
+                  "stage_frames=" .. tostring(stage_frames)
+                    .. " wait_frames=" .. tostring(wait_frames)
+                    .. " mode=" .. mode
+                )
+                return true
+              end
+              apply()
+              advance_frame()
+            end
+          end
+        end
+      end
+    end
+    savestate.load(checkpoint)
+    held.down = false
+    log_state("post_probe_1_5_second_plant_search_failed")
+    return false
+  end
+
+  local function execute_no_damage_crossing(stage_frames, wait_frames, mode, target_x, event)
+    held.right = true
+    held.left = false
+    held.B = true
+    held.A = false
+    held.down = false
+    for i = 1, stage_frames do
+      apply()
+      advance_frame()
+    end
+    held.right = false
+    held.B = false
+    for i = 1, wait_frames do
+      apply()
+      advance_frame()
+    end
+    held.right = true
+    held.B = true
+    for i = 1, 300 do
+      held.A = mode == "jump_pulse" and i % 12 < 6
+      held.B = mode ~= "tail_pulse" or i % 12 >= 4
+      if memory.readbyte(0xED) ~= 3 then
+        log_state(event .. "_failed", "reason=form_lost")
+        return false
+      end
+      if mario().x >= target_x then
+        log_state(
+          event,
+          "stage_frames=" .. tostring(stage_frames)
+            .. " wait_frames=" .. tostring(wait_frames)
+            .. " mode=" .. mode
+        )
+        return true
+      end
+      apply()
+      advance_frame()
+    end
+    log_state(event .. "_failed", "reason=timeout")
+    return false
+  end
+
   for frame = 1, 6000 do
     local m = mario()
     local enemy = nearest_enemy_ahead(m)
+    if m.x < 8192 and m.y > 0 then
+      minimum_form = math.min(minimum_form, memory.readbyte(0xED))
+    end
+
+    if m.x < 8192 and m.y > 0 then
+      entered_gameplay = true
+    end
 
     if memory.readbyte(0x14) == 1 then
       died = true
@@ -5013,7 +5306,9 @@ local function run_1_5_water_probe()
     end
 
     if m.x >= 8192 then
-      if m.x > 20000 or (not died and (max_x > 1000 or memory.readbyte(0xED) > 0)) then
+      if not entered_gameplay then
+        log_state("post_probe_1_5_water_bad_state", "reason=level_not_entered")
+      elseif minimum_form == 3 and end_pipe_started and after_end_pipe_started and max_x > 2200 then
         log_state("post_probe_1_5_water_success_course_clear", "max_x=" .. tostring(max_x))
       else
         log_state("post_probe_1_5_water_bad_state", "max_x=" .. tostring(max_x))
@@ -5037,6 +5332,46 @@ local function run_1_5_water_probe()
     else
       stuck_frames = 0
       last_x = m.x
+    end
+
+    if not first_plant_search_done and m.x >= 500 and memory.readbyte(0xED) == 3 then
+      first_plant_search_done = true
+      local crossed = false
+      if os.getenv("SMB3_1_5_DISCOVERY_SEARCH") == "1" then
+        crossed = search_first_plant_crossing()
+      else
+        crossed = execute_no_damage_crossing(
+          15, 70, "jump_pulse", 700, "post_probe_1_5_first_plant_crossing"
+        )
+      end
+      if crossed then
+        first_plant_phase = "done"
+        m = mario()
+      end
+    end
+    if not second_plant_search_done and m.x >= 1720 and memory.readbyte(0xED) == 3 then
+      second_plant_search_done = true
+      local crossed = false
+      if os.getenv("SMB3_1_5_DISCOVERY_SEARCH") == "1" then
+        crossed = search_second_plant_crossing()
+      else
+        crossed = execute_no_damage_crossing(
+          0, 0, "tail_pulse", 2100, "post_probe_1_5_second_plant_crossing"
+        )
+      end
+      if crossed then
+        second_plant_phase = "done"
+        m = mario()
+      end
+    end
+
+    if first_plant_phase == "approach" and m.x >= 510 then
+      first_plant_phase = "guard"
+      log_state("post_probe_1_5_first_plant_guard")
+    end
+    if second_plant_phase == "approach" and m.x >= 1760 then
+      second_plant_phase = "guard"
+      log_state("post_probe_1_5_second_plant_guard")
     end
 
     if not end_pipe_started and m.x >= post_1_5_water_end_pipe_trigger_x and m.y >= 240 then
@@ -5124,7 +5459,85 @@ local function run_1_5_water_probe()
     held.down = false
     held.up = false
     held.A = false
-    if after_end_pipe_started then
+    if first_plant_phase == "guard" then
+      held.right = false
+      local guard_x = first_plant_staged and 570 or 510
+      held.left = m.x > guard_x
+      held.B = false
+      held.A = false
+      local plant = nearest_object_id_between(m, -93, 0, 220, 300)
+      local close_hazard = nearest_object_id_between(m, 112, -20, 130, 180)
+      if plant ~= nil and plant.y >= 260 then
+        first_plant_seen_extended = true
+      end
+      if first_plant_seen_extended and plant ~= nil and plant.y <= 242 and close_hazard == nil then
+        if not first_plant_staged then
+          first_plant_phase = "stage"
+          first_plant_seen_extended = false
+          log_state("post_probe_1_5_first_plant_stage")
+        else
+          first_plant_phase = "commit"
+          first_plant_commit_frames = 48
+          log_state("post_probe_1_5_first_plant_retracted")
+        end
+      end
+    elseif first_plant_phase == "stage" then
+      local plant = nearest_object_id_between(m, -93, 0, 220, 300)
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = false
+      if m.x >= 570 or (plant ~= nil and plant.y >= 250) then
+        first_plant_staged = true
+        first_plant_phase = "guard"
+        first_plant_seen_extended = plant ~= nil and plant.y >= 260
+        log_state("post_probe_1_5_first_plant_near_guard")
+      end
+    elseif first_plant_commit_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = false
+      first_plant_commit_frames = first_plant_commit_frames - 1
+      if first_plant_commit_frames == 0 then
+        first_plant_phase = "done"
+      end
+    elseif second_plant_phase == "guard" then
+      local plant = nearest_object_id_between(m, -90, 0, 180, 300)
+      if plant == nil and m.x < 1810 then
+        held.right = true
+        held.left = false
+        held.B = false
+        held.A = false
+      else
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        if plant ~= nil and plant.y <= 305 then
+          second_plant_seen_extended = true
+        end
+        if second_plant_seen_extended and plant ~= nil and plant.y >= 325 then
+          if m.x < 1860 then
+            held.right = true
+            held.B = false
+          else
+            second_plant_phase = "commit"
+            second_plant_commit_frames = 54
+            log_state("post_probe_1_5_second_plant_retracted")
+          end
+        end
+      end
+    elseif second_plant_commit_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = true
+      second_plant_commit_frames = second_plant_commit_frames - 1
+      if second_plant_commit_frames == 0 then
+        second_plant_phase = "done"
+      end
+    elseif after_end_pipe_started then
       held.right = true
       held.B = true
       held.up = false
@@ -5252,6 +5665,7 @@ local function run_1_6_probe()
   local jump_frames = 0
   local cooldown = 0
   local reached_goal_card = false
+  local goal_card_seen = false
   local goal_carry_frames = 0
   local first_jump_started = false
   local first_platform_landed = false
@@ -5262,6 +5676,7 @@ local function run_1_6_probe()
   local opening_bridge_jump_started = false
   local opening_exit_jump_started = false
   local platform_hop_right_frames = 0
+  local search_course_cleared = false
   if post_1_6_start_wait_frames > 0 then
     held.A = false
     held.B = false
@@ -5282,6 +5697,434 @@ local function run_1_6_probe()
   end
   held.right = true
   held.B = true
+  if frame_sleep_seconds > 0
+      and os.getenv("SMB3_1_6_DISCOVERY_SEARCH") == "1"
+      and os.getenv("SMB3_1_6_ALLOW_VISIBLE_DISCOVERY") ~= "1" then
+    held.right = false
+    held.B = false
+    apply()
+    log_1_6(
+      "post_probe_1_6_visible_discovery_blocked",
+      "reason=savestate_search_is_not_a_playback_route"
+    )
+    return
+  end
+  local function search_1_6_opening()
+    local checkpoint = savestate.create()
+    savestate.save(checkpoint)
+    local waits = {0, 20, 40, 60, 80}
+    local rhythms = {
+      {period = 12, on = 6},
+      {period = 16, on = 6},
+      {period = 20, on = 8},
+      {period = 26, on = 8},
+      {period = 30, on = 10},
+    }
+    for _, wait_frames in ipairs(waits) do
+      for _, rhythm in ipairs(rhythms) do
+        savestate.load(checkpoint)
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        for i = 1, wait_frames do
+          apply()
+          advance_frame()
+        end
+        held.right = true
+        held.left = false
+        held.B = true
+        for i = 1, 1200 do
+          held.A = i % rhythm.period < rhythm.on
+          local candidate = mario()
+          if candidate.x >= 8192 or candidate.y == 0 or memory.readbyte(0xED) ~= 3 then
+            break
+          end
+          if candidate.x >= 350 then
+            log_1_6(
+              "post_probe_1_6_opening_search_success",
+              "wait_frames=" .. tostring(wait_frames)
+                .. " period=" .. tostring(rhythm.period)
+                .. " on=" .. tostring(rhythm.on)
+            )
+            return true
+          end
+          apply()
+          advance_frame()
+        end
+      end
+    end
+    savestate.load(checkpoint)
+    log_1_6("post_probe_1_6_opening_search_failed")
+    return false
+  end
+
+  local function search_1_6_segment(target_x)
+    local checkpoint = savestate.create()
+    savestate.save(checkpoint)
+    local best_x = mario().x
+    local best_p_meter = memory.readbyte(0x3DD)
+    local best_y = mario().y
+    if target_x == 2420 then
+      local goal_triggers = {80, 65, 50, 35}
+      for _, trigger_dx in ipairs(goal_triggers) do
+        for _, right_frames in ipairs({8, 12, 16, 20, 24}) do
+          savestate.load(checkpoint)
+          held.right = false
+          held.left = false
+          held.B = false
+          held.A = false
+          for _ = 1, 180 do
+            local runner = mario()
+            local goal = nearest_object_id_between(runner, 65, 0, 120, 100)
+            if runner.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+              break
+            end
+            if goal ~= nil and goal.dx <= trigger_dx then
+              local touched_goal = false
+              for i = 1, 360 do
+                held.right = i <= right_frames
+                held.B = false
+                held.A = i <= 42
+                local goal_before = nearest_object_id_between(mario(), 65, -40, 120, 120)
+                apply()
+                advance_frame()
+                local finisher = mario()
+                local goal_after = nearest_object_id_between(finisher, 65, -40, 120, 120)
+                if goal_before ~= nil and goal_after == nil then
+                  touched_goal = true
+                end
+                if finisher.x >= 8192 then
+                  if touched_goal then
+                    search_course_cleared = true
+                    log_1_6(
+                      "post_probe_1_6_success_course_clear",
+                      "goal_trigger_dx=" .. tostring(trigger_dx)
+                        .. " right_frames=" .. tostring(right_frames)
+                        .. " form_before_clear=3"
+                    )
+                    return true
+                  end
+                  break
+                end
+                if not touched_goal and memory.readbyte(0xED) ~= 3 then
+                  break
+                end
+              end
+              break
+            end
+            apply()
+            advance_frame()
+          end
+        end
+      end
+      savestate.load(checkpoint)
+      log_1_6("post_probe_1_6_goal_card_search_failed")
+      return false
+    end
+    if target_x == 2020 then
+      local enemy_triggers = {110, 90, 70, 50, 30, 10}
+      for _, trigger_dx in ipairs(enemy_triggers) do
+        savestate.load(checkpoint)
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        local triggered = false
+        for _ = 1, 600 do
+          local rider = mario()
+          local rider_enemy = nearest_enemy_ahead(rider)
+          if rider.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+            break
+          end
+          if rider_enemy ~= nil and rider_enemy.dx <= trigger_dx then
+            triggered = true
+            break
+          end
+          apply()
+          advance_frame()
+        end
+        if triggered then
+          held.right = true
+          held.left = false
+          for i = 1, 600 do
+            held.A = i % 12 < 6
+            held.B = i % 12 ~= 0
+            local candidate = mario()
+            if candidate.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+              break
+            end
+            if candidate.x >= 2200 and candidate.air == 0 then
+              log_1_6(
+                "post_probe_1_6_paratroopa_transfer_success",
+                "trigger_dx=" .. tostring(trigger_dx)
+              )
+              return true
+            end
+            apply()
+            advance_frame()
+          end
+        end
+      end
+      savestate.load(checkpoint)
+      log_1_6("post_probe_1_6_paratroopa_transfer_failed")
+    end
+    local waits = {0, 10, 20, 30, 45, 60, 80, 100, 120, 160, 200, 240, 300, 360}
+    local settle_directions = {"left", "neutral", "right"}
+    local rhythms = {
+      {period = 12, on = 6},
+      {period = 16, on = 6},
+      {period = 20, on = 8},
+      {period = 26, on = 8},
+      {period = 30, on = 10},
+      {period = 36, on = 12},
+    }
+    for _, settle_direction in ipairs(settle_directions) do
+      for _, wait_frames in ipairs(waits) do
+        for _, rhythm in ipairs(rhythms) do
+        savestate.load(checkpoint)
+        held.right = settle_direction == "right"
+        held.left = settle_direction == "left"
+        held.B = settle_direction ~= "neutral"
+        held.A = false
+        for _ = 1, wait_frames do
+          local waiting = mario()
+          if waiting.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+            break
+          end
+          apply()
+          advance_frame()
+        end
+        held.right = true
+        held.left = false
+        held.B = true
+        for i = 1, 900 do
+          if target_x == 1700 then
+            local p_meter = memory.readbyte(0x3DD)
+            local flight_active = memory.readbyte(0x57B) ~= 0
+            if flight_active or p_meter >= 112 then
+              held.A = i % 4 < 2
+            else
+              held.A = i <= 16 or p_meter >= rhythm.on
+            end
+          else
+            held.A = i % rhythm.period < rhythm.on
+          end
+          held.B = mario().x < 1250 or i % 12 ~= 0
+          local candidate = mario()
+          local candidate_p_meter = memory.readbyte(0x3DD)
+          if candidate.x > best_x or candidate_p_meter > best_p_meter then
+            best_x = math.max(best_x, candidate.x)
+            best_p_meter = math.max(best_p_meter, candidate_p_meter)
+            best_y = candidate.y
+          end
+          if candidate.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+            break
+          end
+          local candidate_y_speed = memory.readbytesigned(0xCF)
+          if candidate.x >= target_x
+              and candidate.sy >= 0
+              and (
+                (
+                  target_x >= 1400
+                  and candidate.air == 0
+                  and candidate.y <= (target_x >= 2000 and 400 or 330)
+                )
+                or (
+                  target_x < 1400
+                  and candidate.y <= (target_x >= 1300 and 330 or 300)
+                  and (target_x >= 1300 or candidate_y_speed <= 0)
+                )
+              ) then
+            log_1_6(
+              "post_probe_1_6_segment_search_success",
+              "target_x=" .. tostring(target_x)
+                .. " wait_frames=" .. tostring(wait_frames)
+                .. " settle_direction=" .. tostring(settle_direction)
+                .. " period=" .. tostring(rhythm.period)
+                .. " on=" .. tostring(rhythm.on)
+                .. " y_speed=" .. tostring(candidate_y_speed)
+            )
+            return true
+          end
+          apply()
+          advance_frame()
+        end
+      end
+      end
+    end
+    savestate.load(checkpoint)
+    log_1_6(
+      "post_probe_1_6_segment_search_failed",
+      "target_x=" .. tostring(target_x)
+        .. " best_x=" .. tostring(best_x)
+        .. " best_y=" .. tostring(best_y)
+        .. " best_p_meter=" .. tostring(best_p_meter)
+    )
+    return false
+  end
+
+  local function run_1_6_fixed_segment(target_x, wait_frames, settle_direction, period, on_frames, flight)
+    held.right = settle_direction == "right"
+    held.left = settle_direction == "left"
+    held.B = settle_direction ~= "neutral"
+    held.A = false
+    for _ = 1, wait_frames do
+      if mario().x >= 8192 or memory.readbyte(0xED) ~= 3 then
+        return false
+      end
+      apply()
+      advance_frame()
+    end
+    held.right = true
+    held.left = false
+    held.B = true
+    for i = 1, 1500 do
+      if flight then
+        local p_meter = memory.readbyte(0x3DD)
+        local flight_active = memory.readbyte(0x57B) ~= 0
+        if flight_active or p_meter >= 112 then
+          held.A = i % 4 < 2
+        else
+          held.A = i <= 16 or p_meter >= on_frames
+        end
+      else
+        held.A = i % period < on_frames
+      end
+      held.B = mario().x < 1250 or i % 12 ~= 0
+      local candidate = mario()
+      if candidate.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+        return false
+      end
+      local stable = candidate.air == 0
+      if target_x == 350 then
+        stable = true
+      elseif target_x < 1400 then
+        local y_speed = memory.readbytesigned(0xCF)
+        stable = candidate.sy >= 0
+          and candidate.y <= (target_x >= 1300 and 330 or 300)
+          and (target_x >= 1300 or y_speed <= 0)
+      elseif target_x < 2000 then
+        stable = stable and candidate.y <= 330
+      else
+        stable = stable and candidate.y <= 400
+      end
+      if candidate.x >= target_x and stable then
+        log_1_6(
+          "post_probe_1_6_fixed_segment",
+          "target_x=" .. tostring(target_x)
+            .. " wait_frames=" .. tostring(wait_frames)
+            .. " settle_direction=" .. tostring(settle_direction)
+            .. " period=" .. tostring(period)
+            .. " on=" .. tostring(on_frames)
+            .. " flight=" .. tostring(flight)
+        )
+        return true
+      end
+      apply()
+      advance_frame()
+    end
+    return false
+  end
+
+  local function run_1_6_fixed_route()
+    local fixed_segments = {
+      {350, 0, "neutral", 12, 6, false},
+      {520, 30, "neutral", 20, 8, false},
+      {620, 0, "left", 12, 6, false},
+      {720, 0, "left", 12, 6, false},
+      {820, 0, "left", 12, 6, false},
+      {920, 0, "left", 12, 6, false},
+      {1020, 0, "left", 20, 8, false},
+      {1120, 0, "left", 12, 6, false},
+      {1220, 0, "left", 12, 6, false},
+      {1700, 100, "left", 12, 6, true},
+    }
+    for _, segment in ipairs(fixed_segments) do
+      if not run_1_6_fixed_segment(
+        segment[1], segment[2], segment[3], segment[4], segment[5], segment[6]
+      ) then
+        log_1_6("post_probe_1_6_fixed_route_failed", "target_x=" .. tostring(segment[1]))
+        return false
+      end
+    end
+
+    held.right = false
+    held.left = false
+    held.B = false
+    held.A = false
+    local triggered = false
+    for _ = 1, 600 do
+      local rider = mario()
+      local rider_enemy = nearest_enemy_ahead(rider)
+      if rider.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+        return false
+      end
+      if rider_enemy ~= nil and rider_enemy.dx <= 110 then
+        triggered = true
+        break
+      end
+      apply()
+      advance_frame()
+    end
+    if not triggered then
+      log_1_6("post_probe_1_6_fixed_route_failed", "phase=paratroopa_wait")
+      return false
+    end
+    held.right = true
+    held.left = false
+    for i = 1, 600 do
+      held.A = i % 12 < 6
+      held.B = i % 12 ~= 0
+      local candidate = mario()
+      if candidate.x >= 8192 or memory.readbyte(0xED) ~= 3 then
+        return false
+      end
+      if candidate.x >= 2200 and candidate.air == 0 then
+        log_1_6("post_probe_1_6_fixed_paratroopa_transfer", "trigger_dx=110")
+        break
+      end
+      apply()
+      advance_frame()
+    end
+    return run_1_6_fixed_segment(2320, 0, "left", 12, 6, false)
+  end
+
+  if os.getenv("SMB3_1_6_DISCOVERY_SEARCH") == "1" and search_1_6_opening() then
+    first_jump_started = true
+    first_platform_landed = true
+    first_platform_landed_frame = 0
+    next_progress_marker = 512
+    local segment_targets = {
+      520, 620, 720, 820, 920, 1020, 1120, 1220,
+      -- The documented Raccoon route uses this runway to fill the P-meter,
+      -- fly over the erratic rail, and land on its moving platform.
+      1700,
+      1820, 1920, 2020, 2120, 2220, 2320, 2420,
+    }
+    for _, target_x in ipairs(segment_targets) do
+      if not search_1_6_segment(target_x) then
+        break
+      end
+    end
+    if search_course_cleared then
+      held.A = false
+      held.B = false
+      held.right = false
+      held.left = false
+      apply()
+      advance(900, "post_probe_1_6_after")
+      log_1_6("post_probe_1_6_done")
+      return
+    end
+  elseif os.getenv("SMB3_1_6_DISCOVERY_SEARCH") ~= "1" then
+    if run_1_6_fixed_route() then
+      first_jump_started = true
+      first_platform_landed = true
+      first_platform_landed_frame = 0
+      next_progress_marker = 2304
+    end
+  end
   for frame = 1, 5400 do
     local m = mario()
     local enemy = nearest_enemy_ahead(m)
@@ -5293,6 +6136,15 @@ local function run_1_6_probe()
     if m.x >= next_progress_marker and m.x < 8192 then
       log_1_6("post_probe_1_6_progress_x_" .. tostring(next_progress_marker))
       next_progress_marker = next_progress_marker + 256
+    end
+
+    local goal_card_object = nearest_object_id_between(m, 65, -80, 180, 140)
+    if goal_card_object ~= nil then
+      goal_card_seen = true
+    elseif goal_card_seen and not reached_goal_card then
+      reached_goal_card = true
+      goal_carry_frames = 120
+      log_1_6("post_probe_1_6_goal_card", "evidence=object_65_disappeared")
     end
 
     if m.x >= 2600 and m.x < 8192 and not reached_goal_card then
@@ -6372,7 +7224,10 @@ local function run_1_3_probe()
       advance_frame()
     elseif m.x >= 8192 or m.y == 0 then
       log_state("post_probe_1_3_transition")
-      if route_mode == "whistle" and white_block_route_started and not transition_wait_started then
+      if post_1_3_after_whistle_mode == "memory_return_map" and memory_return_map_triggered then
+        log_state("post_probe_1_3_memory_return_map_ready")
+        break
+      elseif route_mode == "whistle" and white_block_route_started and not transition_wait_started then
         transition_wait_started = true
         transition_wait_frames = post_1_3_transition_wait_frames
       else
@@ -7101,6 +7956,46 @@ local function run_post_1_1_probe()
     apply_pre_fortress_entry_form()
     run_1_fortress_probe()
     apply_fortress_whistle_bridge()
+  elseif post_1_1_probe == "run_1_fortress_to_1_5_map" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    apply_pre_fortress_entry_form()
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    navigate_fortress_to_1_5_map()
+  elseif post_1_1_probe == "run_1_5_clear_after_fortress" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    apply_pre_fortress_entry_form()
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    if navigate_fortress_to_1_5_map() then
+      run_map_sequence("A", "post_probe_1_5_level_enter")
+      run_1_5_water_probe()
+    end
+  elseif post_1_1_probe == "run_1_6_after_1_5_clear" then
+    enter_1_2_from_map(180)
+    run_1_2_naive_probe()
+    enter_1_3_from_map(300)
+    run_1_3_probe()
+    run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    apply_pre_fortress_entry_form()
+    run_1_fortress_probe()
+    apply_fortress_whistle_bridge()
+    if navigate_fortress_to_1_5_map() then
+      run_map_sequence("A", "post_probe_1_5_level_enter")
+      run_1_5_water_probe()
+      if navigate_1_5_to_1_6_map() then
+        run_map_sequence("A", "post_probe_1_6_level_enter")
+        run_1_6_probe()
+      end
+    end
   elseif post_1_1_probe == "run_1_fortress_map_sequence" then
     enter_1_2_from_map(180)
     run_1_2_naive_probe()
@@ -7214,33 +8109,17 @@ local function run_post_1_1_probe()
     enter_1_3_from_map(300)
     run_1_3_probe()
     run_map_sequence(post_1_3_map_sequence .. ",A", "post_probe_1_fortress_enter")
+    apply_pre_fortress_entry_form()
     run_1_fortress_probe()
     apply_fortress_whistle_bridge()
-    run_map_sequence("right,up,right,A", "post_probe_1_4_enter")
-    apply_1_4_entry_form()
-    run_1_4_naive_probe()
-    run_map_sequence("left,down,left,left,down,A", "post_probe_1_5_enter")
-    run_1_5_naive_probe()
-    local water_bridge_applied = apply_1_5_water_map_position_bridge()
-    if water_bridge_applied then
-      log_state(
-        "post_probe_1_5_water_map_position_bridge",
-        "map_x="
-          .. tostring(post_1_5_water_bridge_x)
-          .. " map_y="
-          .. tostring(post_1_5_water_bridge_y)
-          .. " sentinel_x="
-          .. tostring(post_1_5_water_bridge_sentinel_x)
-      )
+    if navigate_fortress_to_1_5_map() then
+      run_map_sequence("A", "post_probe_1_5_level_enter")
+      run_1_5_water_probe()
+      if navigate_1_5_to_1_6_map() then
+        run_map_sequence("A", "post_probe_1_6_level_enter")
+        run_1_6_probe()
+      end
     end
-    if water_bridge_applied then
-      run_map_sequence("A", "post_probe_1_5_water_enter")
-    else
-      run_map_sequence("down,A", "post_probe_1_5_water_enter")
-    end
-    run_1_5_water_probe()
-    run_map_sequence(post_1_6_map_sequence, "post_probe_1_6_enter")
-    run_1_6_probe()
     if apply_world_1_complete_flags_bridge() then
       log_state("post_probe_world_1_complete_flags_bridge")
     end
