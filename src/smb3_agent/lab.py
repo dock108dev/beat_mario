@@ -404,6 +404,7 @@ def add_note(
         "anchor": _note_anchor(text, anchor_type, anchor_value),
         "severity": severity,
         "text": text,
+        "evidence_paths": _artifact_paths(text),
         "expected_change": _expected_change(text),
         "interpretation": {
             "status": "pending_review",
@@ -949,6 +950,15 @@ def _coerce_anchor_value(value: str | int | float | None) -> str | int | float |
     return value
 
 
+def _artifact_paths(text: str) -> list[str]:
+    matches = re.findall(
+        r"(?<![A-Za-z0-9_])((?:/[^\s]+|artifacts/[^\s]+)\.(?:png|jpg|jpeg|gif|gd|log|jsonl|yaml))",
+        text,
+        re.I,
+    )
+    return list(dict.fromkeys(match.rstrip(".,;:)") for match in matches))
+
+
 def _expected_change(text: str) -> str:
     lowered = text.lower()
     if "fall" in lowered or "hole" in lowered:
@@ -1171,6 +1181,7 @@ def _issues_from_notes(session_id: str, notes: list[dict[str, Any]]) -> list[dic
         issue_id = f"issue_{segment_id}_{issue_counters[segment_id]:03d}"
         actionable = issue_type not in {
             "positive_evidence",
+            "evidence_attachment",
             "expected_behavior",
             "objective_update",
             "guide_detail",
@@ -1185,6 +1196,13 @@ def _issues_from_notes(session_id: str, notes: list[dict[str, Any]]) -> list[dic
                 "status": "open" if actionable else "accepted",
                 "actionable": actionable,
                 "source_notes": [str(note["id"]) for note in source_notes],
+                "evidence_paths": list(
+                    dict.fromkeys(
+                        str(path)
+                        for note in source_notes
+                        for path in (note.get("evidence_paths") or _artifact_paths(str(note.get("text", ""))))
+                    )
+                ),
                 "summary": _issue_summary(segment_id, issue_type, source_notes),
                 "proposed_next_step": _issue_next_step(segment_id, issue_type),
             }
@@ -1200,17 +1218,19 @@ def _group_sort_key(key: tuple[str, str]) -> tuple[int, str, str]:
 def _issue_type_for_note(note: dict[str, Any]) -> str:
     text = str(note.get("text", "")).lower()
     severity = str(note.get("severity", "")).lower()
+    if severity in {"positive", "success", "passing"}:
+        return "positive_evidence"
+    if severity == "note" and (note.get("evidence_paths") or _artifact_paths(text)):
+        return "evidence_attachment"
     if severity == "objective":
         return "objective_update"
     if severity == "map_action":
         return "map_action"
     if severity == "guide_detail":
         return "guide_detail"
-    if "expected" in text or "not complete" in text or "not a complete" in text:
-        return "expected_behavior"
-    if "perfect" in text or "good" in text:
-        return "positive_evidence"
     if "carry" in text or "leak" in text or "dies first" in text or "die first" in text:
+        return "recovery_bug"
+    if severity in {"failure", "error"} and ("fire" in text or "death" in text or "dies" in text):
         return "recovery_bug"
     if "wrong" in text or "1-4" in text or "map" in text:
         return "wrong_route_state"
@@ -1218,6 +1238,10 @@ def _issue_type_for_note(note: dict[str, Any]) -> str:
         return "route_hardening" if severity == "harden" else "input_timing"
     if severity == "harden":
         return "route_hardening"
+    if "expected" in text or "not complete" in text or "not a complete" in text:
+        return "expected_behavior"
+    if "perfect" in text or "good" in text:
+        return "positive_evidence"
     return "unknown"
 
 
@@ -1226,7 +1250,7 @@ def _issue_priority(issue_type: str, source_notes: list[dict[str, Any]]) -> str:
         return "high"
     if issue_type in {"wrong_route_state", "route_hardening", "input_timing"}:
         return "medium"
-    if issue_type in {"expected_behavior", "positive_evidence", "objective_update", "guide_detail"}:
+    if issue_type in {"expected_behavior", "positive_evidence", "evidence_attachment", "objective_update", "guide_detail"}:
         return "none"
     if issue_type == "map_action":
         return "medium"

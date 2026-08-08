@@ -26,7 +26,6 @@ route:
     - world_1_airship_to_king
 
 bridged_segments:
-  - world_1_fortress_whistle
   - world_1_5_water_path
   - world_1_6_clear
   - world_1_airship_to_king
@@ -55,6 +54,12 @@ success_metrics:
   - id: reaches_king_transition
     type: final_event
     value: post_probe_1_airship_success_king
+  - id: fortress_secret_whistle_collected
+    type: event_present
+    value: post_probe_1_fortress_whistle_room_success
+  - id: fortress_whistle_bridge_not_used
+    type: event_absent
+    value: post_probe_1_fortress_bridge_second_whistle
   - id: post_probe_clear
     type: summary_field
     field: post_probe_clear
@@ -70,4 +75,3 @@ recovery_policy:
     action: stop_and_review
   unknown_state:
     action: capture_artifacts_and_stop
-

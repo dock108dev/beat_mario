@@ -17,7 +17,7 @@ def test_load_world_1_king_goal_contract() -> None:
 
     assert contract.id == "world_1_king"
     assert contract.preset == "fceux_world_1_king"
-    assert "world_1_fortress_whistle" in contract.bridged_segments
+    assert "world_1_fortress_whistle" not in contract.bridged_segments
     assert contract.segments[0] == "fresh_start_to_1_1"
 
 
@@ -55,6 +55,10 @@ def test_goal_success_metrics_pass_for_king_summary() -> None:
         post_probe_max_x=432,
         post_probe_last_event="post_probe_1_airship_success_king",
         post_probe_clear=True,
+        post_probe_events=(
+            "post_probe_1_fortress_whistle_room_success",
+            "post_probe_1_airship_success_king",
+        ),
     )
 
     assert evaluate_success_metrics(contract, summary) is True
@@ -80,6 +84,29 @@ def test_goal_success_metrics_fail_without_final_event() -> None:
     assert evaluate_success_metrics(contract, summary) is False
 
 
+def test_goal_success_metrics_reject_fortress_whistle_bridge() -> None:
+    contract = load_goal_contract(Path("data/goals/world_1_king.yaml"))
+    summary = BatchSummary(
+        attempts=(
+            AttemptSummary(
+                attempt=1,
+                success=True,
+                bad_state=False,
+                reached_end=True,
+                goal_area=True,
+                max_x=2848,
+            ),
+        ),
+        post_probe_last_event="post_probe_1_airship_success_king",
+        post_probe_clear=True,
+        post_probe_events=(
+            "post_probe_1_fortress_bridge_second_whistle",
+            "post_probe_1_airship_success_king",
+        ),
+    )
+
+    assert evaluate_success_metrics(contract, summary) is False
+
+
 def test_resolve_goal_path_accepts_id() -> None:
     assert resolve_goal_path("world_1_king") == Path("data/goals/world_1_king.yaml")
-

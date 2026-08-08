@@ -62,6 +62,59 @@ def test_parse_fceux_log_counts_world_1_king_success(tmp_path: Path) -> None:
     assert summary.post_probe_clear is True
 
 
+def test_parse_fceux_log_resets_clear_when_1_6_level_entry_starts(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_1_5_success_course_clear x=8192 y=0",
+                "frame=20 event=post_probe_1_6_level_enter_wait x=40960 y=0",
+                "frame=30 event=post_probe_1_6_bad_state x=40960 y=0 max_x=307",
+                "frame=40 event=post_probe_1_6_done x=40960 y=0",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path, expected_attempts=0)
+
+    assert summary.post_probe_clear is False
+    assert summary.post_probe_last_event == "post_probe_1_6_done"
+
+
+def test_parse_fceux_log_rejects_1_6_discovery_as_playback(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_1_6_opening_search_success x=350 y=248 form=3",
+                "frame=20 event=post_probe_1_6_goal_card x=2440 y=384 form=3 evidence=object_65_disappeared",
+                "frame=30 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0",
+                "frame=40 event=post_probe_1_airship_success_king x=432 y=4192 form=0",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path, expected_attempts=0)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_requires_raccoon_goal_evidence_for_1_6(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_1_6_goal_card x=2440 y=384 form=3 evidence=object_65_disappeared",
+                "frame=20 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path, expected_attempts=0)
+
+    assert summary.post_probe_clear is True
+
+
 def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:
     image_dir = tmp_path / "gd"
     image_dir.mkdir()

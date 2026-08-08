@@ -56,6 +56,5 @@ def test_render_goal_status_lists_route_order_and_bridge_flags() -> None:
 
     assert "goal_id=world_1_king" in rendered
     assert "1. id=fresh_start_to_1_1 status=solved bridged=false" in rendered
-    assert "5. id=world_1_fortress_whistle status=bridged bridged=true" in rendered
+    assert "5. id=world_1_fortress_whistle status=flaky bridged=false" in rendered
     assert "6. id=world_1_4_clear status=flaky bridged=false" in rendered
-

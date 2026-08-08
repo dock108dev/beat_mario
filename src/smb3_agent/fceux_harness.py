@@ -10,6 +10,7 @@ from pathlib import Path
 STATE_RE = re.compile(r"\battempt_(?P<attempt>\d+)_(?P<event>[A-Za-z0-9_]+)\b")
 X_RE = re.compile(r"\bx=(?P<x>-?\d+)\b")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
+FORM_RE = re.compile(r"\bform=(?P<form>-?\d+)\b")
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class BatchSummary:
     post_probe_max_x: int = -1
     post_probe_last_event: str | None = None
     post_probe_clear: bool = False
+    post_probe_events: tuple[str, ...] = ()
 
     @property
     def success_count(self) -> int:
@@ -78,14 +80,32 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
     post_probe_max_x = -1
     post_probe_last_event: str | None = None
     post_probe_clear = False
+    post_probe_events: list[str] = []
+    playback_contaminated = False
+    valid_1_6_goal_card_seen = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
         event = event_match.group("event") if event_match is not None else None
         x_match = X_RE.search(line)
         if event is not None and event.startswith("post_probe_"):
+            post_probe_events.append(event)
             post_probe_last_event = event
-            if event in {
+            if event.startswith("post_probe_1_6_opening_search") or event.startswith(
+                "post_probe_1_6_segment_search"
+            ):
+                playback_contaminated = True
+                post_probe_clear = False
+            if event == "post_probe_1_6_goal_card":
+                form_match = FORM_RE.search(line)
+                valid_1_6_goal_card_seen = (
+                    form_match is not None
+                    and int(form_match.group("form")) == 3
+                    and "evidence=object_65_disappeared" in line
+                )
+            if event == "post_probe_1_6_success_course_clear":
+                post_probe_clear = valid_1_6_goal_card_seen and not playback_contaminated
+            elif event in {
                 "post_probe_1_2_enter",
                 "post_probe_1_3_enter",
                 "post_probe_1_fortress_enter",
@@ -100,6 +120,8 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
             ) or event.startswith(
                 "post_probe_1_6_enter"
             ) or event.startswith(
+                "post_probe_1_6_level_enter"
+            ) or event.startswith(
                 "post_probe_1_castle_enter"
             ):
                 post_probe_clear = False
@@ -111,10 +133,9 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 "post_probe_1_4_success_course_clear",
                 "post_probe_1_5_success_course_clear",
                 "post_probe_1_5_water_success_course_clear",
-                "post_probe_1_6_success_course_clear",
                 "post_probe_1_airship_success_king",
             }:
-                post_probe_clear = True
+                post_probe_clear = not playback_contaminated
             if x_match is not None:
                 x = int(x_match.group("x"))
                 if 0 <= x < 8192:
@@ -159,6 +180,7 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
         post_probe_max_x=post_probe_max_x,
         post_probe_last_event=post_probe_last_event,
         post_probe_clear=post_probe_clear,
+        post_probe_events=tuple(post_probe_events),
     )
 
 
