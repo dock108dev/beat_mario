@@ -60,7 +60,11 @@ local post_1_3_room_center_x = tonumber(os.getenv("SMB3_1_3_ROOM_CENTER_X") or "
 local post_1_3_room_jump_left_frames =
   tonumber(os.getenv("SMB3_1_3_ROOM_JUMP_LEFT_FRAMES") or "50")
 local post_1_3_room_floor_jump_direction = os.getenv("SMB3_1_3_ROOM_FLOOR_JUMP_DIRECTION") or "right"
-local post_1_3_map_sequence = os.getenv("SMB3_1_3_MAP_SEQUENCE") or "down,down,left"
+-- A genuine whistle-room exit advances the map cursor to the node right of
+-- 1-3.  Return left to the cleared 1-3 node before taking its open lower path
+-- to the Fortress.  The old shorter sequence only worked with the diagnostic
+-- memory-return shortcut, which put the cursor directly on 1-3.
+local post_1_3_map_sequence = os.getenv("SMB3_1_3_MAP_SEQUENCE") or "left,down,down,left"
 post_1_fortress_map_sequence = os.getenv("SMB3_1_FORTRESS_MAP_SEQUENCE") or ""
 post_1_4_map_sequence = os.getenv("SMB3_1_4_MAP_SEQUENCE") or ""
 post_1_5_map_sequence = os.getenv("SMB3_1_5_MAP_SEQUENCE") or ""
@@ -587,7 +591,11 @@ post_1_5_water_end_pipe_up_frames =
 post_1_5_water_end_pipe_entry_direction =
   os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_DIRECTION") or "up"
 post_1_5_water_end_pipe_entry_horizontal =
-  os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_HORIZONTAL") or "right"
+  os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_HORIZONTAL") or "align"
+post_1_5_water_end_pipe_target_x =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_TARGET_X") or "2244")
+post_1_5_water_end_pipe_tolerance =
+  tonumber(os.getenv("SMB3_1_5_WATER_END_PIPE_TOLERANCE") or "3")
 post_1_5_water_end_pipe_entry_swim =
   os.getenv("SMB3_1_5_WATER_END_PIPE_ENTRY_SWIM") ~= "0"
 post_1_5_water_late_hazard_brake_frames =
@@ -3283,6 +3291,19 @@ local function continue_1_fortress_after_mid_candidate(candidate_id, max_frames)
       break
     end
 
+    if reached_goal_card then
+      -- The course-clear walk and transition are game-controlled. Continuing
+      -- to steer after the card disappears can pin Mario against the exit and
+      -- turn a real clear into an observer timeout.
+      held.A = false
+      held.B = false
+      held.right = false
+      held.left = false
+      held.down = false
+      held.up = false
+    end
+
+    if not reached_goal_card then
     if math.abs(m.x - last_x) <= 1 and m.x > 100 then
       stuck_frames = stuck_frames + 1
     else
@@ -5565,8 +5586,13 @@ local function run_1_5_water_probe()
       held.left = end_pipe_phase == 1 and post_1_5_water_end_pipe_brake_direction == "left"
       held.right = end_pipe_phase == 1 and post_1_5_water_end_pipe_brake_direction == "right"
       if end_pipe_phase >= 2 then
-        held.left = post_1_5_water_end_pipe_entry_horizontal == "left"
-        held.right = post_1_5_water_end_pipe_entry_horizontal == "right"
+        if post_1_5_water_end_pipe_entry_horizontal == "align" then
+          held.left = m.x > post_1_5_water_end_pipe_target_x + post_1_5_water_end_pipe_tolerance
+          held.right = m.x < post_1_5_water_end_pipe_target_x - post_1_5_water_end_pipe_tolerance
+        else
+          held.left = post_1_5_water_end_pipe_entry_horizontal == "left"
+          held.right = post_1_5_water_end_pipe_entry_horizontal == "right"
+        end
       end
       held.up = end_pipe_phase >= 2 and post_1_5_water_end_pipe_entry_direction == "up"
       held.down = end_pipe_phase >= 2 and post_1_5_water_end_pipe_entry_direction == "down"
@@ -5765,6 +5791,28 @@ local function run_1_6_probe()
     local best_x = mario().x
     local best_p_meter = memory.readbyte(0x3DD)
     local best_y = mario().y
+    local function checkpoint_ok(candidate)
+      local max_y = 350
+      if target_x < 920 then
+        max_y = 300
+      elseif target_x >= 1880 and target_x < 2000 then
+        max_y = 260
+      elseif target_x >= 1820 and target_x < 1880 then
+        max_y = 300
+      elseif target_x >= 1100 and target_x < 2000 then
+        max_y = 300
+        if target_x > 1700 then
+          max_y = 380
+        end
+      elseif target_x >= 2000 and target_x < 2200 then
+        max_y = 350
+      elseif target_x >= 2200 then
+        max_y = 400
+      end
+      return candidate.x >= target_x
+        and (candidate.y <= max_y or (candidate.air == 0 and candidate.y <= 390))
+        and memory.readbyte(0xED) == 3
+    end
     if target_x == 2420 then
       local goal_triggers = {80, 65, 50, 35}
       for _, trigger_dx in ipairs(goal_triggers) do
@@ -5822,7 +5870,7 @@ local function run_1_6_probe()
       log_1_6("post_probe_1_6_goal_card_search_failed")
       return false
     end
-    if target_x == 2020 then
+    if target_x == 2200 then
       local enemy_triggers = {110, 90, 70, 50, 30, 10}
       for _, trigger_dx in ipairs(enemy_triggers) do
         savestate.load(checkpoint)
@@ -5868,6 +5916,96 @@ local function run_1_6_probe()
       end
       savestate.load(checkpoint)
       log_1_6("post_probe_1_6_paratroopa_transfer_failed")
+    end
+    if target_x >= 920 and target_x < 2000 then
+      local prep_directions = {"left", "neutral", "right"}
+      local prep_frames_options = {
+        1, 2, 4, 6, 8, 10, 12, 24, 36, 48, 60, 90, 120, 180, 240, 300, 360,
+      }
+      local prep_rhythms = {
+        {period = 12, on = 6},
+        {period = 16, on = 8},
+        {period = 20, on = 10},
+        {period = 1000, on = 1000},
+        {period = 1000, on = 0},
+      }
+      local run_rhythms = {
+        {period = 12, on = 6},
+        {period = 16, on = 6},
+        {period = 20, on = 8},
+        {period = 1000, on = 1000},
+      }
+      for _, prep_direction in ipairs(prep_directions) do
+        for _, prep_frames in ipairs(prep_frames_options) do
+          for _, prep_rhythm in ipairs(prep_rhythms) do
+            for _, run_rhythm in ipairs(run_rhythms) do
+              savestate.load(checkpoint)
+              held.right = prep_direction == "right"
+              held.left = prep_direction == "left"
+              held.B = prep_direction ~= "neutral"
+              held.A = false
+              local alive = true
+              for i = 1, prep_frames do
+                held.A = i % prep_rhythm.period < prep_rhythm.on
+                local prep_candidate = mario()
+                if checkpoint_ok(prep_candidate) then
+                  log_1_6(
+                    "post_probe_1_6_segment_search_success",
+                    "target_x=" .. tostring(target_x)
+                      .. " prep_direction=" .. prep_direction
+                      .. " prep_frames=" .. tostring(i)
+                      .. " prep_period=" .. tostring(prep_rhythm.period)
+                      .. " prep_on=" .. tostring(prep_rhythm.on)
+                      .. " run_period=" .. tostring(run_rhythm.period)
+                      .. " run_on=" .. tostring(run_rhythm.on)
+                      .. " run_frames=0"
+                  )
+                  return true
+                end
+                if prep_candidate.y >= 432 or memory.readbyte(0xED) ~= 3 then
+                  alive = false
+                  break
+                end
+                apply()
+                advance_frame()
+              end
+              if alive then
+                held.right = true
+                held.left = false
+                held.B = true
+                for i = 1, 900 do
+                  held.A = i % run_rhythm.period < run_rhythm.on
+                  local candidate = mario()
+                  if candidate.x > best_x then
+                    best_x = candidate.x
+                    best_y = candidate.y
+                  end
+                  if candidate.x >= 8192 or candidate.y >= 432 or memory.readbyte(0xED) ~= 3 then
+                    break
+                  end
+                  if checkpoint_ok(candidate) then
+                    log_1_6(
+                      "post_probe_1_6_segment_search_success",
+                      "target_x=" .. tostring(target_x)
+                        .. " prep_direction=" .. prep_direction
+                        .. " prep_frames=" .. tostring(prep_frames)
+                        .. " prep_period=" .. tostring(prep_rhythm.period)
+                        .. " prep_on=" .. tostring(prep_rhythm.on)
+                        .. " run_period=" .. tostring(run_rhythm.period)
+                        .. " run_on=" .. tostring(run_rhythm.on)
+                        .. " run_frames=" .. tostring(i)
+                    )
+                    return true
+                  end
+                  apply()
+                  advance_frame()
+                end
+              end
+            end
+          end
+        end
+      end
+      savestate.load(checkpoint)
     end
     local waits = {0, 10, 20, 30, 45, 60, 80, 100, 120, 160, 200, 240, 300, 360}
     local settle_directions = {"left", "neutral", "right"}
@@ -5922,20 +6060,8 @@ local function run_1_6_probe()
             break
           end
           local candidate_y_speed = memory.readbytesigned(0xCF)
-          if candidate.x >= target_x
-              and candidate.sy >= 0
-              and (
-                (
-                  target_x >= 1400
-                  and candidate.air == 0
-                  and candidate.y <= (target_x >= 2000 and 400 or 330)
-                )
-                or (
-                  target_x < 1400
-                  and candidate.y <= (target_x >= 1300 and 330 or 300)
-                  and (target_x >= 1300 or candidate_y_speed <= 0)
-                )
-              ) then
+          local discovery_checkpoint_ok = checkpoint_ok(candidate)
+          if discovery_checkpoint_ok then
             log_1_6(
               "post_probe_1_6_segment_search_success",
               "target_x=" .. tostring(target_x)
@@ -5943,6 +6069,7 @@ local function run_1_6_probe()
                 .. " settle_direction=" .. tostring(settle_direction)
                 .. " period=" .. tostring(rhythm.period)
                 .. " on=" .. tostring(rhythm.on)
+                .. " run_frames=" .. tostring(i)
                 .. " y_speed=" .. tostring(candidate_y_speed)
             )
             return true
@@ -6097,10 +6224,12 @@ local function run_1_6_probe()
     next_progress_marker = 512
     local segment_targets = {
       520, 620, 720, 820, 920, 1020, 1120, 1220,
+      1320, 1420, 1520, 1600, 1640, 1680,
       -- The documented Raccoon route uses this runway to fill the P-meter,
       -- fly over the erratic rail, and land on its moving platform.
-      1700,
-      1820, 1920, 2020, 2120, 2220, 2320, 2420,
+      1700, 1720, 1760, 1800, 1820, 1860, 1880, 1900,
+      1920, 1960, 2000, 2040, 2080, 2120, 2160, 2200,
+      2220, 2320, 2420,
     }
     for _, target_x in ipairs(segment_targets) do
       if not search_1_6_segment(target_x) then
@@ -6469,6 +6598,7 @@ local function run_1_6_probe()
     end
     if goal_carry_frames > 0 then
       goal_carry_frames = goal_carry_frames - 1
+    end
     end
 
     apply()
@@ -7205,7 +7335,12 @@ local function run_1_3_probe()
       held.right = false
       held.left = false
       held.B = false
-      held.A = false
+      -- The whistle room leaves a real "got item" confirmation on screen
+      -- after Mario has moved to the transition sentinel.  Keep confirming
+      -- it through visible controller input; otherwise the run waits forever
+      -- and the old diagnostic had to force the map-return state in memory.
+      held.A = post_1_3_after_whistle_mode == "tap_A"
+        and transition_wait_frames % 30 < 8
       held.down = false
       held.up = false
       transition_wait_frames = transition_wait_frames - 1
