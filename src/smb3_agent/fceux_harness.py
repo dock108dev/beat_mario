@@ -134,6 +134,7 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 "post_probe_1_5_success_course_clear",
                 "post_probe_1_5_water_success_course_clear",
                 "post_probe_1_airship_success_king",
+                "post_probe_world_8_map_arrival",
             }:
                 post_probe_clear = not playback_contaminated
             if x_match is not None:

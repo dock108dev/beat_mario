@@ -9,6 +9,7 @@ from smb3_agent.detection.state_detector import detect_state
 from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
 from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
 from smb3_agent.goals import (
+    ACTIVE_PRODUCT_GOAL_ID,
     GoalValidationError,
     load_goal_contract,
     resolve_goal_path,
@@ -244,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fceux_world_1_king = task_subparsers.add_parser(
         "fceux-world-1-king",
-        help="Run the verified FCEUX World 1 route through the king transition",
+        help="Run the legacy FCEUX World 1 king-transition diagnostic",
     )
     fceux_world_1_king.add_argument("--game-file", required=True, help="Path to the local game file")
     fceux_world_1_king.add_argument(
@@ -318,8 +319,8 @@ def build_parser() -> argparse.ArgumentParser:
     goal_status.add_argument("goal", help="Goal id or path to a goal YAML file")
     goal_status.add_argument(
         "--segments",
-        default="data/segments/world_1.yaml",
-        help="Path to the segment catalog YAML file",
+        default=None,
+        help="Override the segment catalog declared by the goal contract",
     )
 
     segment = subparsers.add_parser("segment", help="Validate segment catalogs")
@@ -329,7 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     segment_validate.add_argument("catalog", help="Path to a segment catalog YAML file")
     segment_validate.add_argument(
         "--goal",
-        default="world_1_king",
+        default=ACTIVE_PRODUCT_GOAL_ID,
         help="Optional goal id/path to cross-check against the catalog",
     )
 
@@ -377,7 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     recovery_simulate = recovery_subparsers.add_parser("simulate", help="Simulate a recovery scenario")
     recovery_simulate.add_argument("scenario", choices=["life_lost", "wrong_map_node"])
-    recovery_simulate.add_argument("--goal", default="world_1_king", help="Goal id or path")
+    recovery_simulate.add_argument("--goal", default=ACTIVE_PRODUCT_GOAL_ID, help="Goal id or path")
 
     lab = subparsers.add_parser("lab", help="Run attempt-lab sessions, notes, reviews, and variants")
     lab_subparsers = lab.add_subparsers(dest="lab_command", required=True)
@@ -579,6 +580,9 @@ def main() -> None:
             parser.error(str(exc))
         print("valid=true")
         print(f"goal_id={contract.id}")
+        print(f"goal_type={contract.goal_type}")
+        print(f"execution_status={contract.execution_status}")
+        print(f"executable={str(contract.executable).lower()}")
         print(f"preset={contract.preset}")
         print(f"segments={len(contract.segments)}")
         print(f"bridged_segments={len(contract.bridged_segments)}")
@@ -590,18 +594,27 @@ def main() -> None:
         except GoalValidationError as exc:
             parser.error(str(exc))
 
+        if not contract.executable:
+            parser.error(
+                f"Goal {contract.id} is planned and not yet executable; "
+                "no diagnostic runner fallback is permitted"
+            )
+
         game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
         if not game_file:
             parser.error("goal run requires --game-file or SMB3_GAME_FILE")
 
-        result = run_goal_contract(
-            contract,
-            game_path=Path(game_file),
-            attempts=args.attempts,
-            artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
-            capture_images=args.capture_images,
-            capture_ticks=args.capture_ticks,
-        )
+        try:
+            result = run_goal_contract(
+                contract,
+                game_path=Path(game_file),
+                attempts=args.attempts,
+                artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
+                capture_images=args.capture_images,
+                capture_ticks=args.capture_ticks,
+            )
+        except GoalValidationError as exc:
+            parser.error(str(exc))
         print(f"goal_id={result.contract.id}")
         print(f"artifacts_dir={result.artifacts_dir}")
         print(result.summary.to_text())
@@ -613,7 +626,7 @@ def main() -> None:
     if args.command == "goal" and args.goal_command == "status":
         try:
             contract = load_goal_contract(resolve_goal_path(args.goal))
-            catalog = load_segment_catalog(Path(args.segments))
+            catalog = load_segment_catalog(Path(args.segments) if args.segments else contract.catalog_path)
             print(render_goal_status(contract, catalog))
         except (GoalValidationError, SegmentValidationError) as exc:
             parser.error(str(exc))
@@ -646,11 +659,22 @@ def main() -> None:
     if args.command == "command" and args.command_action == "parse":
         try:
             print(parse_command(args.text).to_text())
-        except CommandParseError as exc:
+        except (CommandParseError, GoalValidationError) as exc:
             parser.error(str(exc))
         return
 
     if args.command == "command" and args.command_action == "run":
+        try:
+            parsed_command = parse_command(args.text)
+            if parsed_command.goal:
+                parsed_contract = load_goal_contract(resolve_goal_path(parsed_command.goal))
+                if not parsed_contract.executable:
+                    parser.error(
+                        f"Goal {parsed_contract.id} is planned and not yet executable; "
+                        "no diagnostic runner fallback is permitted"
+                    )
+        except (CommandParseError, GoalValidationError) as exc:
+            parser.error(str(exc))
         game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
         if not game_file:
             parser.error("command run requires --game-file or SMB3_GAME_FILE")
@@ -660,7 +684,7 @@ def main() -> None:
                 game_path=Path(game_file),
                 artifacts_dir=Path(args.artifacts_dir) if args.artifacts_dir else None,
             )
-        except CommandParseError as exc:
+        except (CommandParseError, GoalValidationError) as exc:
             parser.error(str(exc))
         print(result.to_text())
         if not result.goal_result.metrics_passed:

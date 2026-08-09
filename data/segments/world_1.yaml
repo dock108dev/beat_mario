@@ -1,5 +1,6 @@
 catalog_id: world_1
 game: smb3
+purpose: legacy_world_1_king_diagnostic
 
 segments:
   - id: fresh_start_to_1_1
@@ -120,7 +121,7 @@ segments:
       probe: run_1_4_after_fortress
     evidence:
       - watchable demo failed at post_probe_1_4_after
-    notes: Reliability gate may skip or bridge around parts; visible throttled run exposed instability.
+    notes: Diagnostic-only segment. World 1-4 is not part of the active World 2-first double-whistle route.
 
   - id: world_1_5_water_path
     name: World 1-5 water path
@@ -140,7 +141,7 @@ segments:
       probe: run_1_5_clear_after_fortress
     evidence:
       - post_probe_1_5_water_success_course_clear with max_x above 2000
-    notes: "Real route: after the Fortress whistle navigate left, down, down to map cursor 64,160; recover from an optional roaming Bro encounter; enter 1-5; traverse the level and collect the goal card. The historical water label is retained for compatibility."
+    notes: "Legacy diagnostic capability. The active route separately classifies 1-5 as a game prerequisite on the owner-corrected path to World 2."
 
   - id: world_1_6_clear
     name: World 1-6 clear
@@ -160,7 +161,7 @@ segments:
       env_prefix: SMB3_1_6_BRIDGE
     evidence:
       - 1-6 clear bridge
-    notes: Used to reach later World 1 state.
+    notes: Legacy diagnostic bridge. The active product route requires safe gameplay here and leaves it planned.
 
   - id: world_1_airship_to_king
     name: Airship to king transition
@@ -180,4 +181,4 @@ segments:
       env_prefix: SMB3_1_AIRSHIP
     evidence:
       - post_probe_1_airship_success_king
-    notes: Current gate reaches king marker with explicit transition support.
+    notes: Legacy diagnostic only. This marker cannot satisfy World 8 arrival.

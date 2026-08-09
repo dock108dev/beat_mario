@@ -1,111 +1,90 @@
 # Route Status
 
-This file separates what the agent can actually play from what is currently
-assisted or bridged. Keep it current after every route change.
+Last updated: 2026-08-09.
 
-Status values:
+## Active goal
 
-- `solved`: repeatable with a validation gate.
-- `flaky`: sometimes works but needs tuning or recovery.
-- `bridged`: progress is forced through a known state transition.
-- `planned`: route is described but not implemented.
-- `unknown`: route is not yet understood.
+`world_8_double_whistle` is the product source of truth. It ends only on a
+genuine World 8 map observation. The owner corrected the route boundary during
+live investigation: Mario must clear the final World 1 castle/airship, arrive
+safely in World 2 with both whistles, and use the first whistle from World 2.
 
-## Current Goal: World 1 King Transition
+The active goal is `planned`, not executable. The legacy `world_1_king` gate is
+a separate diagnostic and is not progress completion.
 
-Command:
+## Ordered route
 
-```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent task fceux-world-1-king \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 10 \
-  --artifacts-dir artifacts/fceux/world_1_king \
-  --require-perfect
-```
+| Order | Route step | Role | Active execution | Current capability |
+| ---: | --- | --- | --- | --- |
+| 1 | Fresh start to 1-1 | game prerequisite | normal gameplay | solved |
+| 2 | 1-1 | game prerequisite | normal gameplay | solved |
+| 3 | 1-2 | game prerequisite | normal gameplay | solved |
+| 4 | Collect 1-3 whistle | objective milestone | normal gameplay | solved, assisted map return follows |
+| 5 | Collect Fortress whistle | objective milestone | normal gameplay | flaky; one fresh live success |
+| 6 | 1-5 | game prerequisite | normal gameplay | solved in fresh live diagnostic |
+| 7 | 1-6 | game prerequisite | planned | diagnostic bridge only |
+| 8 | Airship / King | game prerequisite | planned | diagnostic bridges only |
+| 9 | World 2 map with two whistles | objective milestone | planned | unverified |
+| 10 | First whistle from World 2 | objective milestone | planned | unverified |
+| 11 | Warp Zone 5/6/7 tier | objective milestone | planned | unverified |
+| 12 | Second whistle from Warp Zone | objective milestone | planned | unverified |
+| 13 | Warp Zone World 8 tier | objective milestone | planned | unverified |
+| 14 | World 8 pipe | objective milestone | planned | unverified |
+| 15 | World 8 map arrival | objective milestone | planned | unverified |
 
-Latest known pass condition:
+World 1-4 is absent. World 7 is not entered; it is only one of the labels on
+the expected first Warp Zone tier.
 
-```text
-successes=10/10
-post_probe_last_event=post_probe_1_airship_success_king
-post_probe_clear=true
-```
+## Fresh live investigation
 
-Latest Phase 0 truth refresh:
-
-```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent task fceux-world-1-king \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 3 \
-  --artifacts-dir artifacts/fceux/doc_gate_world_1_king \
-  --require-perfect
-```
-
-Result:
+The bounded FCEUX investigation wrote ignored artifacts under:
 
 ```text
-successes=3/3
-bad_states=0/3
-post_probe_last_event=post_probe_1_airship_success_king
-post_probe_clear=true
+artifacts/fceux/world_8_double_whistle_topology/
 ```
 
-Latest Phase 1 goal-contract run:
+Observed facts:
+
+- A fresh run collected the 1-3 whistle (`item_0=12`).
+- The Fortress secret-room route collected the second whistle without the
+  whistle-inventory bridge (`item_0=12`, `item_1=12`).
+- The game returned to the World 1 map with both whistles visible in inventory.
+- A fresh diagnostic continued through 1-5 with both whistles.
+- The same diagnostic traversed 1-6 only with its declared bridge and preserved
+  both whistles.
+- The final-castle diagnostic used declared completion/map/airship bridges and
+  failed at `post_probe_1_castle_bad_state`; it did not reach the king marker or
+  World 2.
+
+Before the owner's correction, a probe tested whistle use from World 1. Those
+artifacts are retained as rejected-hypothesis evidence only. They are not part
+of the active route and cannot support active-goal success.
+
+## Proof levels
+
+- Contract/test proof: active goal, catalog, CLI status, review mapping, Route
+  Lab order, and regression tests agree.
+- Live game proof: two whistles on the World 1 map and 1-5 traversal were
+  observed; 1-6 was observed only through a diagnostic bridge.
+- Assisted proof: the 1-3 return-to-map mode and later World 1 diagnostic
+  bridges are explicit and cannot establish normal gameplay reliability.
+- Executable route proof: unavailable.
+- World 2-first Warp Zone and World 8 arrival proof: unavailable.
+
+## Diagnostic route
+
+The explicit command remains:
 
 ```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent goal run world_1_king --attempts 3
+.venv/bin/python -m smb3_agent goal status world_1_king
 ```
 
-Result:
+It may be used to repair World 1, but `post_probe_1_airship_success_king` is not
+a World 8 success marker and is rejected by the active goal metrics.
 
-```text
-successes=3/3
-bad_states=0/3
-post_probe_last_event=post_probe_1_airship_success_king
-post_probe_clear=true
-metrics_passed=true
-```
+## Next bounded task
 
-## Segment Table
-
-This table is backed by `data/segments/world_1.yaml` and can be inspected with:
-
-```bash
-python -m smb3_agent goal status world_1_king
-```
-
-| Segment | Status | Evidence | Notes |
-| --- | --- | --- | --- |
-| Fresh start to World 1-1 | solved | FCEUX 1-1 gate | Handled by Lua route bootstrap. |
-| World 1-1 clear | solved | `fceux-1-1 --attempts 10 --require-perfect` | Strongest current base gate. |
-| World 1-2 clear | solved | `run_1_2_naive` post-probe | Cataloged but still implemented as a post-probe script. |
-| World 1-3 whistle | solved | Whistle inventory marker | Route uses white-block whistle path. |
-| World 1 fortress whistle | in progress | `post_probe_1_fortress_whistle_room_success` | Goal is the secret whistle via raccoon flight above the ceiling; normal level completion does not count. |
-| World 1-4 | flaky | Watchable demo failed here | Reliability gate may skip/bridge around parts; visible throttled run exposed instability. |
-| World 1-5 / water path | bridged | Water map-position bridge | Needs real route implementation or explicit bridge policy. |
-| World 1-6 | bridged | 1-6 clear bridge | Used to reach later World 1 state. |
-| Airship/king transition | bridged | `post_probe_1_airship_success_king` | Current gate reaches king marker with explicit transition support. |
-| World 8 route | unknown | None | Needs research and planned segment catalog. |
-
-## Known Watch Mode Issue
-
-Visible playback with frame sleep and screenshot capture can change timing. A
-recent watchable run reached the post-fortress World 1-4 segment and failed
-there:
-
-```text
-post_probe_last_event=post_probe_1_4_after
-post_probe_clear=false
-```
-
-Treat watch mode as a debugging surface, not a reliability gate.
-
-## Next Route Cleanup Targets
-
-1. Add route-patch application from selected Codex task packets.
-2. Replace or clearly isolate the fortress whistle bridge.
-3. Stabilize World 1-4 under watchable/capture mode.
-4. Start World 8 research as planned segments, not one giant route.
+Implement and validate the safe boundary from the post-Fortress World 1 map,
+through real 1-5/1-6/Airship gameplay, to an independently observed World 2 map
+with both whistles still in inventory. Stop there; do not add the Warp Zone
+sequence until that boundary is reliable.

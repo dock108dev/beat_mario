@@ -1,194 +1,117 @@
 # Mario Route Lab
 
-Mario Route Lab is the local UI for reviewing, teaching, and validating the
-World 1 route. It is not a dashboard. Its visible model is the experiment loop:
+Mario Route Lab is the local evidence-first route review surface. It answers:
 
-```text
-run -> observe -> annotate -> patch -> validate -> promote
+- Where is Mario in the selected route?
+- What is proved, bridged, planned, or failing?
+- What should be observed or repaired next?
+
+It is not a generic operations dashboard. The CLI, goal contract, catalog, and
+artifact schemas remain the source of truth.
+
+## Active route
+
+The default selected goal is `world_8_double_whistle`. Route Lab loads its
+declared segment catalog and renders exactly this contract order:
+
+1. Fresh Start
+2. 1-1
+3. 1-2
+4. 1-3 whistle
+5. Fortress whistle
+6. 1-5
+7. 1-6
+8. Airship / King
+9. World 2 Map with both whistles
+10. First Whistle (World 2)
+11. Warp Zone 5 / 6 / 7
+12. Second Whistle (Warp Zone)
+13. Warp Zone World 8
+14. World 8 Pipe
+15. World 8 Map
+
+World 1-4 is not rendered because it is not in the active contract. World 7 is
+not a route destination; it appears only in the visible Warp Zone tier label.
+
+Each route row uses player-facing language and displays its role:
+
+- `goal milestone` for owner-required outcomes;
+- `required path` for game traversal needed to reach the next milestone;
+- truthful state such as Learned, Needs Validation, or Planned.
+
+Planned steps never appear as learned or solved.
+
+## Layout
+
+The established layout remains:
+
+- top run strip;
+- Route index;
+- Evidence viewer;
+- Teach Mario panel;
+- Latest Attempt, Active Problems, and Observation History.
+
+The route correction changes content and source-of-truth plumbing, not the page
+structure.
+
+## Primary action
+
+`Run World 8 Route` is the only strong primary button. The active goal is
+currently planned, so attempting to run it returns an honest not-yet-executable
+error. It does not run the World 1 king diagnostic.
+
+Unit tests, phase gate, HTML render check, refresh, note, lifecycle, and Codex
+task actions remain secondary or quiet controls.
+
+## Evidence behavior
+
+The selected route row drives the evidence and teaching panels. Evidence may
+come from a screenshot, contact sheet, log, state trace, note, issue, or
+proposal. Assisted evidence must remain labeled; a bridge screenshot cannot be
+presented as normal gameplay proof.
+
+The current live boundary is the post-Fortress World 1 route. World 2 and later
+rows remain Planned until independent live observations exist.
+
+## Route roles and observations
+
+Notes and issues continue to use human locations while retaining segment ids in
+artifacts. New active mappings include:
+
+- `world_2_map_arrival_with_two_whistles` -> World 2 Map
+- `world_2_first_whistle_use` -> First Whistle (World 2)
+- `warp_zone_5_6_7_tier` -> Warp Zone 5 / 6 / 7
+- `warp_zone_second_whistle_use` -> Second Whistle (Warp Zone)
+- `warp_zone_world_8_tier` -> Warp Zone World 8
+- `world_8_pipe_entry` -> World 8 Pipe
+- `world_8_map_arrival` -> World 8 Map
+
+## Commands
+
+Render once:
+
+```bash
+python -m smb3_agent lab ui-render \
+  --output artifacts/ui/world_8_double_whistle.html
 ```
 
-Every visible element should answer one of three questions:
-
-- Where is Mario?
-- What went wrong?
-- What should he do next?
-
-Run it with:
+Serve locally:
 
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 ```
 
-Render one HTML file for validation:
+Inspect the contract independently:
 
 ```bash
-python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
+python -m smb3_agent goal status world_8_double_whistle
 ```
 
-## Product Model
+## Visual contract
 
-The primary object is evidence from the latest route attempt. The route path is
-the index into that evidence. Notes, issues, variants, and Codex task packets
-are secondary actions attached to the selected route location.
-
-The operator should think:
-
-- where Mario is in World 1
-- which action failed or still needs validation
-- what instruction or validation note should be attached before the next run
-
-The operator should not think in dashboard metrics, tickets, or backend route
-identifiers.
-
-## Layout
-
-Top:
-
-- compact title: `Mario Route Lab`
-- current session
-- run button
-- speed selector
-- attempt selector
-- last run result
-
-Main:
-
-- left route index: Map, 1-1, 1-2, 1-3, Fortress, 1-4, Toad House,
-  Spade Panel, Hammer Brother, 1-5, 1-6, Airship, King
-- center evidence viewer with latest screenshot/contact sheet when available
-- right `Teach Mario` panel for the selected route location only
-
-Bottom:
-
-- Latest Attempt
-- Active Problems
-- Observation History
-
-## Language Rule
-
-The normal UI must speak in player-facing locations and objectives:
-
-- Map
-- 1-1
-- 1-2
-- 1-3
-- Fortress
-- 1-4
-- Toad House
-- Spade Panel
-- Hammer Brother
-- 1-5
-- 1-6
-- Airship
-- King
-
-Backend route ids, script ids, detector ids, and implementation labels are
-plumbing. They can exist in artifact files and code, but they should not be the
-primary UI labels.
-
-## Location Model
-
-Mario Route Lab reads `data/worlds/world_1_locations.yaml`.
-
-Each location defines:
-
-- `id`
-- `label`
-- `type`
-- `default_status`
-- `objective`
-- `guide_terms`
-
-The model uses guide/player vocabulary such as Grass Land, World Map, Fortress,
-Boom Boom, Super Leaf, Raccoon Mario, P-meter, Warp Whistle, Toad House, Spade
-Panel, Hammer Brother, Airship, Koopaling, wand, and King.
-
-## Teaching Notes
-
-The teaching panel renders one add-observation form for the selected location.
-It must not render a form for every route location. UI labels map to the
-existing note severities:
-
-- failure -> `bug`
-- expected behavior -> `objective`
-- route instruction -> `map_action`
-- validation note -> `harden`
-- positive evidence -> `guide_detail`
-
-Existing observations are operable, not write-only. Each observation supports:
-
-- edit
-- delete
-- mark resolved
-- mark expected behavior
-- convert to issue
-- archive
-
-Those controls are progressively disclosed. Default observation rows are compact
-summaries with a `Review` link. Full controls appear only for the selected
-observation in Review Notes mode.
-
-Active issues support:
-
-- mark resolved
-- mark expected behavior / not a bug
-- mark needs rerun
-- create Codex task
-- archive
-- delete
-
-Default issue rows are compact summaries with a `Review` link. Full controls
-appear only for the selected issue in Fix Issue mode.
-
-Examples:
-
-```text
-1-1: Mario jumps too late at the hole near 283 on the clock.
-1-3: Whistle exit is expected; do not treat it as normal course completion.
-Fortress: preserve P-meter before trying the above-ceiling flight route.
-Map: after 1-3, move down, down, left.
-Airship: verify boss transition and king restore.
-```
-
-## Evidence
-
-The evidence viewer looks for screenshots/contact sheets in the latest session
-or in artifact paths printed by the latest panel command. It renders the first
-available image from those artifact roots and links to related files in the
-attempt log.
-
-If no image exists, the center pane shows:
-
-```text
-No screenshot captured yet
-```
-
-That empty state stays compact so it does not dominate the screen before real
-evidence exists.
-
-## Visual System
-
-Cream is only the page background. Cards, inputs, and secondary buttons use
-white or near-white surfaces so the panels read clearly on top of the grid.
-
-The UI uses these roles:
-
-- primary text: dark charcoal
-- secondary text: muted slate
-- cards: true white
-- internal surfaces: near-white
-- selected route and active review rows: blue-tinted background with a blue
-  left rail
-- active teaching mode: dark navy filled segment with white text
-- failed state: red chip/text only
-- learned state: green chip/text
-- needs validation: amber chip/text
-
-`Run World 1` is the only strong primary button. Other actions are secondary or
-quiet controls. Destructive lifecycle actions remain small quiet buttons rather
-than red blocks.
-
-Render tests assert stable visual hooks instead of exact color values:
+Keep the current warm off-white page, white panels, dark text, neutral borders,
+blue selection, and restrained red/green/amber state treatments. Preserve the
+semantic render hooks:
 
 - `primary-button`
 - `secondary-button`
@@ -199,46 +122,10 @@ Render tests assert stable visual hooks instead of exact color values:
 - `status-learned`
 - `status-validation`
 
-## Local Assets
+Tests assert these hooks and the exact contract-derived route, not color values.
 
-Optional local-only UI art lives under:
+## Diagnostic route
 
-```text
-public/assets/local/
-```
-
-The directory is ignored by git except `.gitkeep`. Missing images render CSS
-text fallbacks. See `docs/local-assets.md`.
-
-## Validation
-
-Required checks:
-
-```bash
-python -m pytest -q
-python -m smb3_agent lab ui-render --output artifacts/ui/latest.html
-```
-
-The rendered HTML should contain:
-
-- `Mario Route Lab`
-- `Run World 1`
-- `Route`
-- `Evidence`
-- `Teach Mario`
-- `Active Problems`
-- `Observation History`
-- compact issue rows with `Review`
-- compact observation rows with `Review`
-- one selected detail area with lifecycle actions
-- exactly one primary button: `Run World 1`
-- visual hooks for primary, secondary, segmented-control, active segment,
-  selected route, failed, learned, and validation states
-
-The rendered HTML should not require old dashboard labels such as:
-
-- `World 1 Control Panel`
-- `World 1 Mission Control`
-- `Run Controls`
-- `World 1 Notes`
-- `Route Health`
+The bridge-assisted `world_1_king` route remains explicitly selectable from
+the CLI under its diagnostic name. It is intentionally not the default Route
+Lab route and its king marker is not a World 8 success state.

@@ -4,6 +4,28 @@ This plan turns the current route harness into a user-steered gameplay agent.
 Every implementation step has a validation gate. Do not expand scope until the
 gate for the current step passes or the failure is documented.
 
+## Superseding route correction (2026-08-09)
+
+The active product goal is now `world_8_double_whistle`. It requires safe World
+2 arrival with both whistles before first-whistle use. World 1-4 is excluded;
+1-5, 1-6, and Airship/King are retained as the path to World 2. Only World 8
+map arrival succeeds.
+
+Earlier phases below describe how the legacy World 1 king diagnostic was built.
+They are historical capability notes, not the current product route. No future
+phase may use `world_1_king`, its bridges, or
+`post_probe_1_airship_success_king` as World 8 progress.
+
+Current ranked work:
+
+1. Correct contract/catalog/UI/CLI semantics. [implemented]
+2. Replace the post-Fortress diagnostic path with safe real 1-5, 1-6, and
+   Airship gameplay; independently observe World 2 with both whistles.
+3. Implement observable first-whistle use from World 2, the 5/6/7 tier, and
+   second-whistle use while still in the Warp Zone.
+4. Implement World 8 tier, correct pipe entry, and genuine World 8 map arrival.
+5. Only after arrival is reliable, plan World 8 gameplay as a separate goal.
+
 ## Phase 0: Repo Readiness
 
 Goal: make the project easy to resume without relying on chat history.
@@ -40,23 +62,19 @@ Implementation:
 Validation gate:
 
 ```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent task fceux-world-1-king \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 3 \
-  --artifacts-dir artifacts/fceux/doc_gate_world_1_king \
-  --require-perfect
+python -m smb3_agent goal validate data/goals/world_8_double_whistle.yaml
+python -m smb3_agent segment validate \
+  data/segments/world_8_double_whistle.yaml \
+  --goal world_8_double_whistle
+python -m smb3_agent goal status world_8_double_whistle
 ```
 
 Pass condition:
 
-- Command exits zero.
-- Summary includes `post_probe_clear=true`.
-- Route status doc matches the result.
-- If `SMB3_GAME_FILE` is not set on a machine, the repo-only Phase 0 gate can
-  still pass, but live route truth is not refreshed.
+- Static commands exit zero and Route Lab renders the same ordered route.
+- Live proof level is reported separately in `docs/route-status.md`.
 
-## Phase 1: Explicit Goal Contracts
+## Phase 1: Explicit Goal Contracts (historical diagnostic foundation)
 
 Goal: stop encoding intent only in command flags and env overrides.
 
@@ -73,7 +91,7 @@ Validation gate:
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
+.venv/bin/python -m smb3_agent goal validate data/goals/world_8_double_whistle.yaml
 ```
 
 Pass condition:
@@ -81,11 +99,11 @@ Pass condition:
 - Contract loads and validates.
 - Missing required fields produce a clear error.
 
-### Step 1.2: Add World 1 king contract
+### Step 1.2: Preserve the World 1 king diagnostic contract
 
 Implementation:
 
-- Create `data/goals/world_1_king.yaml`.
+- Keep `data/goals/world_1_king.yaml` explicitly labeled `diagnostic_route`.
 - Map it to the existing `fceux-world-1-king` preset.
 - Record which parts are bridged.
 
@@ -100,7 +118,8 @@ Pass condition:
 
 - Command exits zero.
 - It writes an attempt directory.
-- Summary includes final event `post_probe_1_airship_success_king`.
+- Summary includes final event `post_probe_1_airship_success_king` only for the
+  diagnostic contract; it never satisfies the active goal.
 
 ## Phase 2: Segment Catalog
 
@@ -119,13 +138,14 @@ Validation gate:
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/python -m smb3_agent segment validate data/segments/world_1.yaml
+.venv/bin/python -m smb3_agent segment validate data/segments/world_1.yaml --goal world_1_king
 ```
 
 Pass condition:
 
 - Segment file validates.
-- Every segment referenced by `world_1_king` exists.
+- Every segment referenced by the selected contract exists in that contract's
+  declared catalog.
 
 ### Step 2.2: Promote current route facts
 
@@ -138,7 +158,7 @@ Implementation:
 Validation gate:
 
 ```bash
-.venv/bin/python -m smb3_agent goal status world_1_king
+.venv/bin/python -m smb3_agent goal status world_8_double_whistle
 ```
 
 Pass condition:
@@ -204,8 +224,8 @@ Goal: let the user command the agent in game terms, not only CLI flags.
 Implementation:
 
 - Add a parser for user commands such as:
-  - "run world 1 king gate 10 times"
-  - "show me the route at 4x"
+  - "run world 1 king diagnostic gate 10 times"
+  - "show me the route at 4x" (now resolves to the active goal and reports planned)
   - "review the latest failed run"
   - "continue after losing a life if the route allows it"
 - Start with deterministic parsing before adding an LLM.
@@ -214,7 +234,7 @@ Validation gate:
 
 ```bash
 .venv/bin/python -m pytest -q
-.venv/bin/python -m smb3_agent command parse "run world 1 king gate 3 times"
+.venv/bin/python -m smb3_agent command parse "run world 1 king diagnostic gate 3 times"
 ```
 
 Pass condition:
@@ -232,7 +252,7 @@ Validation gate:
 
 ```bash
 export SMB3_GAME_FILE=/path/to/local-game-file
-.venv/bin/python -m smb3_agent command run "run world 1 king gate 3 times"
+.venv/bin/python -m smb3_agent command run "run world 1 king diagnostic gate 3 times"
 ```
 
 Pass condition:
@@ -334,7 +354,7 @@ Validation gate:
 
 ```bash
 export SMB3_GAME_FILE=/path/to/local-game-file
-.venv/bin/python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+.venv/bin/python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" --attempts 1
 ```
 
 Pass condition:
@@ -627,7 +647,7 @@ Implementation:
 
 - Add a speed selector for 1x through 100x. [implemented]
 - Add attempts and mode selectors. [implemented]
-- Add Run World 1, Unit Tests, Phase Gate, and Render Check controls.
+- Add Run World 8 Route, Unit Tests, Phase Gate, and Render Check controls.
   [implemented]
 - Record the last command result in `artifacts/ui/last_command.yaml`.
   [implemented]
@@ -668,7 +688,7 @@ Implementation:
 
 - Keep the existing Route / Evidence / Teach Mario / bottom review layout.
   [implemented]
-- Use one strong primary action, `Run World 1`. [implemented]
+- Use one strong primary action, `Run World 8 Route`. [implemented]
 - Render secondary and lifecycle actions as quiet controls. [implemented]
 - Render the teaching mode chooser as a segmented control. [implemented]
 - Render selected route rows with a blue left rail and light blue background.
@@ -690,50 +710,33 @@ Pass condition:
 - HTML contains exactly one primary action.
 - Cards and controls remain in the existing layout.
 
-## Phase 8: Research Unknown Routes
+## Phase 8: World 2-first double-whistle arrival
 
-Goal: handle World 8 and other less-known route sections through the attempt lab
-instead of one-off scripting.
+Goal: make the active contract executable without reusing diagnostic bridges as
+product proof.
 
-### Step 8.1: Route research notes
+### Step 8.1: Safe World 2 boundary
 
-Implementation:
+- Implement real 1-6 and Airship gameplay after the two-whistle state.
+- Observe World 2 map state and exactly two whistles.
+- Stop at World 2; do not implement Warp Zone actions in this rank.
 
-- Add `docs/world-8-research.md`.
-- Record required levels, known hazards, suspected hard segments, and source
-  confidence.
-- Convert notes into planned segments.
+### Step 8.2: Warp Zone transitions
 
-Validation gate:
-
-```bash
-python -m smb3_agent segment validate data/segments/world_8.yaml
-```
-
-Pass condition:
-
-- World 8 has a planned segment list.
-- Unknowns are explicit.
-- Each planned segment has a proposed first attempt-lab session command.
-
-### Step 8.2: First World 8 segment proof
-
-Implementation:
-
-- Start from a known World 8 state.
-- Build the first segment as a small run with logs and screenshots.
-- Use attempt-lab notes and variants for each correction.
+- Use the first whistle from World 2 and observe the 5/6/7 tier.
+- Use the second whistle before entering a numbered pipe.
+- Observe the World 8 tier, enter pipe 8, and observe the World 8 map.
+- Keep World 8 gameplay outside this goal.
 
 Validation gate:
 
 ```bash
-python -m smb3_agent goal run world_8_first_segment --attempts 5
+python -m smb3_agent goal status world_8_double_whistle
+python -m smb3_agent goal run world_8_double_whistle --attempts 5
 ```
 
-Pass condition:
-
-- At least one successful run or a classified blocker with artifacts.
-- Any user observations are captured as notes instead of remaining only in chat.
+The run command must remain unavailable until every planned segment has an
+observable implementation and the selected contract permits its tactics.
 
 ## Phase 9: Generalize Beyond SMB3
 
@@ -750,7 +753,7 @@ Validation gate:
 
 ```bash
 python -m pytest -q
-python -m smb3_agent goal status world_1_king
+python -m smb3_agent goal status world_8_double_whistle
 ```
 
 Pass condition:

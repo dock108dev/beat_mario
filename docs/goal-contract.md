@@ -1,150 +1,103 @@
 # Goal Contract
 
-A goal contract is the structured version of a user's game objective.
+A goal contract is the machine-readable source of truth for a user objective.
+The active product contract is `data/goals/world_8_double_whistle.yaml`.
 
-The contract is the bridge between:
+## Route semantics
 
-- Natural language user steering.
-- Route planning.
-- Segment execution.
-- Recovery decisions.
-- Validation gates.
-- Attempt review.
+- `objective_milestone`: directly required by the owner goal.
+- `game_prerequisite`: traversal required to reach a later owner milestone.
+- `optional`: available but unnecessary for the selected goal.
+- `recovery_only`: used only after a classified failure and never on the
+  nominal route.
+- `diagnostic_route`: a supported test path that is not the product goal.
+- `bridge`: an explicit temporary transition aid. It is an execution mode, not
+  evidence that the game requires a segment. Bridge use must be declared and
+  cannot satisfy a goal that disallows it.
 
-## Contract Shape
+Route need and execution status are separate. For example, World 1-6 is a
+`game_prerequisite` in the owner-corrected route, while its current executable
+capability is only `bridged`; the active contract therefore leaves that step
+`planned` rather than treating the diagnostic bridge as product proof.
+
+## Active contract shape
 
 ```yaml
-id: world_1_king
+id: world_8_double_whistle
 game: smb3
-user_directive: "Reach the World 1 king transition from a fresh start."
+goal_type: product_goal
+execution_status: planned
+user_directive: >-
+  Collect both World 1 Warp Whistles, safely reach World 2, use both
+  whistles, and arrive on the World 8 map.
 
 objective:
   type: route_completion
-  target: world_1_king_transition
+  target: world_8_map_arrival
 
 route:
+  catalog: data/segments/world_8_double_whistle.yaml
   segments:
-    - fresh_start_to_1_1
-    - world_1_1_clear
-    - world_1_2_clear
-    - world_1_3_whistle
-    - world_1_fortress_whistle
-    - world_1_remaining_path
-    - world_1_airship_to_king
+    - id: world_1_3_whistle
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_first_whistle_inventory]
+    - id: world_2_map_arrival_with_two_whistles
+      classification: objective_milestone
+      execution_mode: planned
+      evidence: [owner_corrected_world_2_boundary]
+    - id: world_2_first_whistle_use
+      classification: objective_milestone
+      execution_mode: planned
+      evidence: [owner_corrected_world_2_boundary]
+    - id: world_8_map_arrival
+      classification: objective_milestone
+      execution_mode: planned
+      evidence: [owner_corrected_world_2_boundary]
 
-constraints:
-  prefer_real_gameplay: true
-  allow_bridge_steps: true
-  preserve_attempt_artifacts: true
-  explain_failures: true
-
-allowed_tactics:
-  scripted_inputs: true
-  memory_observation: true
-  known_transition_bridge: true
-  blind_state_mutation: false
-
-success_metrics:
-  - id: all_attempts_clear_1_1
-    type: summary_field
-    field: success_count
-    equals: total
-  - id: reaches_king_transition
-    type: final_event
-    value: post_probe_1_airship_success_king
-  - id: post_probe_clear
-    type: summary_field
-    field: post_probe_clear
-    equals: true
-
-recovery_policy:
-  life_lost:
-    action: reclassify_state
-    continue_if_contract_allows: true
-  wrong_map_node:
-    action: correct_known_state_or_stop
-  timeout:
-    action: stop_and_review
-  unknown_state:
-    action: capture_artifacts_and_stop
+runner:
+  preset: unavailable
+  executable: false
 ```
 
-## Required Fields
+The real contract contains every ordered step. Each step has non-empty evidence
+and an explicit execution mode. Unknown classifications, modes, presets,
+recovery actions, bridge declarations, duplicate segments, and missing catalog
+segments fail validation.
 
-Every goal contract should include:
+## Active route invariants
 
-- `id`
-- `game`
-- `user_directive`
-- `objective`
-- `route.segments`
-- `constraints`
-- `allowed_tactics`
-- `success_metrics`
-- `recovery_policy`
+- Both World 1 whistle acquisitions are owner milestones.
+- World 1-4 is absent.
+- World 1-5 and World 1-6 are game prerequisites after the owner corrected the
+  route to require the final World 1 castle and World 2 arrival.
+- Airship/King is an intermediate game prerequisite.
+- World 2 map arrival with two whistles occurs before first-whistle use.
+- First-whistle use and second-whistle use are distinct.
+- The second whistle is used from the Warp Zone, before entering a numbered
+  pipe.
+- The 5/6/7 tier, World 8 tier, World 8 pipe, and World 8 map are distinct
+  observable states.
+- `post_probe_1_airship_success_king` cannot satisfy this contract.
+- Only `post_probe_world_8_map_arrival` can be the final success event.
+- Planned segments are never rendered or reported as solved.
 
-## Allowed Tactics
+## Legacy diagnostic
 
-The agent needs to distinguish how progress was achieved.
+`data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its
+own honest validation and explicit bridges. It is executable only when
+explicitly selected, and its king marker remains local to that diagnostic.
 
-| Tactic | Meaning |
-| --- | --- |
-| `scripted_inputs` | Controller inputs are executed by script. |
-| `memory_observation` | Emulator state is read to observe game facts. |
-| `known_transition_bridge` | A known transition is forced to keep route work moving. |
-| `blind_state_mutation` | Arbitrary state edits without a known route reason. Should stay false. |
-
-Bridge steps are not automatically bad. They are bad when they are hidden.
-Contracts should make them explicit.
-
-## Recovery Policy
-
-Recovery is the first place where this becomes more than a route script.
-
-For SMB3, the agent should eventually handle:
-
-- Mario loses a life but has remaining lives.
-- The route returns to the map after death instead of after clear.
-- Mario is on the wrong map node.
-- The segment enters the wrong screen.
-- The route is stuck in a transition.
-
-The recovery manager should ask the contract what is allowed before acting.
-
-## Validation
-
-Command:
+## Commands
 
 ```bash
-.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_double_whistle.yaml
+.venv/bin/python -m smb3_agent segment validate \
+  data/segments/world_8_double_whistle.yaml \
+  --goal world_8_double_whistle
+.venv/bin/python -m smb3_agent goal status world_8_double_whistle
 ```
 
-Pass condition:
-
-- Required fields exist.
-- Every success metric has a supported evaluator.
-- Recovery actions are recognized.
-- Bridge usage is explicit.
-
-Segment catalog cross-checks are a Phase 2 responsibility.
-
-## First Implementation Target
-
-Do not add LLM interpretation before the contract layer is stable.
-
-First build:
-
-1. YAML contract loader.
-2. Pydantic or dataclass validator.
-3. `goal validate` CLI command.
-4. Static `world_1_king` contract.
-5. `goal run world_1_king` wrapper around the existing preset.
-
-Validation gate:
-
-```bash
-.venv/bin/python -m pytest -q
-.venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
-export SMB3_GAME_FILE=/path/to/local-game-file
-.venv/bin/python -m smb3_agent goal run world_1_king --attempts 3
-```
+`goal run world_8_double_whistle` currently fails with a planned/not-executable
+message and never routes to `world_1_king`.

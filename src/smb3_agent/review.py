@@ -133,6 +133,13 @@ def infer_failed_segment(summary: BatchSummary, events: tuple[LogEvent, ...]) ->
 
     event_names = [event.event for event in events]
     for prefix, segment in (
+        ("post_probe_world_8_map_arrival", "world_8_map_arrival"),
+        ("post_probe_world_8_pipe", "world_8_pipe_entry"),
+        ("post_probe_warp_zone_world_8", "warp_zone_world_8_tier"),
+        ("post_probe_warp_zone_second_whistle", "warp_zone_second_whistle_use"),
+        ("post_probe_warp_zone_5_6_7", "warp_zone_5_6_7_tier"),
+        ("post_probe_world_2_first_whistle", "world_2_first_whistle_use"),
+        ("post_probe_world_2_map", "world_2_map_arrival_with_two_whistles"),
         ("post_probe_1_2", "world_1_2_clear"),
         ("post_probe_1_3", "world_1_3_whistle"),
         ("post_probe_1_fortress", "world_1_fortress_whistle"),

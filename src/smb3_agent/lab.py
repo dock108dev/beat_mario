@@ -550,9 +550,12 @@ def write_ui_summary_latest() -> UiSummaryResult:
 def write_ui_summary(
     session_dir: Path,
     *,
-    segment_catalog_path: Path = Path("data/segments/world_1.yaml"),
+    segment_catalog_path: Path | None = None,
 ) -> UiSummaryResult:
     manifest = _load_session_manifest(session_dir)
+    if segment_catalog_path is None:
+        contract = load_goal_contract(resolve_goal_path(str(manifest["goal_id"])))
+        segment_catalog_path = contract.catalog_path
     notes = _load_notes(session_dir)
     if not (session_dir / "issues.yaml").is_file():
         build_issue_ledger(session_dir)
@@ -612,6 +615,7 @@ def write_codex_task_latest(issue_id: str) -> CodexTaskResult:
 
 def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
     manifest = _load_session_manifest(session_dir)
+    contract = load_goal_contract(resolve_goal_path(str(manifest["goal_id"])))
     if not (session_dir / "issues.yaml").is_file():
         build_issue_ledger(session_dir)
     issues = _load_yaml(session_dir / "issues.yaml").get("issues", [])
@@ -637,8 +641,8 @@ def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
             "issue_ledger": str(session_dir / "issues.yaml"),
             "review": str(session_dir / "review.yaml"),
             "route_log_excerpt": str(excerpt_path),
-            "segment_catalog": "data/segments/world_1.yaml",
-            "relevant_files": _relevant_files_for_issue(issue),
+            "segment_catalog": str(contract.catalog_path),
+            "relevant_files": _relevant_files_for_issue(issue, contract.catalog_path),
         },
         "expected_output": {
             "proposal_summary": "One-paragraph explanation of the route change.",
@@ -670,7 +674,7 @@ def run_variant(
         raise LabError(f"Variant cannot be run from status: {proposal['status']}")
 
     result = start_session(
-        f"run world 1 king gate {attempts} times",
+        f"run world 1 king diagnostic gate {attempts} times",
         game_path=game_path,
         attempts=attempts,
         artifacts_root=artifacts_root,
@@ -1388,9 +1392,9 @@ def _segment_validation_status(proposals: list[dict[str, Any]]) -> str:
     return "untested"
 
 
-def _relevant_files_for_issue(issue: dict[str, Any]) -> list[str]:
+def _relevant_files_for_issue(issue: dict[str, Any], catalog_path: Path) -> list[str]:
     segment_id = str(issue.get("segment_id", ""))
-    files = [_suggested_change_file(segment_id), "data/segments/world_1.yaml"]
+    files = [_suggested_change_file(segment_id), str(catalog_path)]
     return list(dict.fromkeys(files))
 
 

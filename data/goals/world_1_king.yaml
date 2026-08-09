@@ -1,9 +1,11 @@
 id: world_1_king
 game: smb3
-user_directive: Reach the World 1 king transition from a fresh start.
+goal_type: diagnostic_route
+execution_status: executable
+user_directive: Run the legacy World 1 king-transition diagnostic from a fresh start.
 
 objective:
-  type: route_completion
+  type: diagnostic_route_completion
   target: world_1_king_transition
 
 runner:
@@ -12,18 +14,47 @@ runner:
   script: scripts/fceux_1_1_agent.lua
   artifacts_root: artifacts/goals/world_1_king
   require_perfect: true
+  executable: true
 
 route:
+  catalog: data/segments/world_1.yaml
   segments:
-    - fresh_start_to_1_1
-    - world_1_1_clear
-    - world_1_2_clear
-    - world_1_3_whistle
-    - world_1_fortress_whistle
-    - world_1_4_clear
-    - world_1_5_water_path
-    - world_1_6_clear
-    - world_1_airship_to_king
+    - id: fresh_start_to_1_1
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_1_clear
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_2_clear
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_3_whistle
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_fortress_whistle
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_4_clear
+      classification: diagnostic_route
+      execution_mode: normal_gameplay
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_5_water_path
+      classification: diagnostic_route
+      execution_mode: bridge
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_6_clear
+      classification: diagnostic_route
+      execution_mode: bridge
+      evidence: [legacy_world_1_king_gate]
+    - id: world_1_airship_to_king
+      classification: diagnostic_route
+      execution_mode: bridge
+      evidence: [legacy_world_1_king_gate]
 
 bridged_segments:
   - world_1_5_water_path

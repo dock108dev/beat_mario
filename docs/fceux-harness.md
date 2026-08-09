@@ -37,7 +37,7 @@ post_probe_*
 `success_course_clear` only counts if the route first reached the expected goal
 area. This avoids mistaking a death or invalid transition for a completed level.
 
-## Current Preset: World 1 King Transition
+## Legacy diagnostic preset: World 1 King Transition
 
 Command:
 
@@ -58,8 +58,9 @@ post_probe_last_event=post_probe_1_airship_success_king
 post_probe_clear=true
 ```
 
-This preset is a route gate, not a claim that every World 1 segment is solved by
-regular gameplay. See `docs/route-status.md`.
+This preset is a diagnostic route, not the product goal and not a claim that
+every World 1 segment is solved by regular gameplay. It cannot prove safe World
+2 arrival or World 8. See `docs/route-status.md`.
 
 ## Visual Review
 
@@ -77,7 +78,8 @@ python -m smb3_agent task fceux-contact-sheet \
 ```
 
 The contact sheet is a review aid only. Structured log markers are the source of
-truth for pass/fail.
+truth for this diagnostic's pass/fail; the selected goal contract determines
+whether those markers mean product success.
 
 ## Watchable Demo Mode
 

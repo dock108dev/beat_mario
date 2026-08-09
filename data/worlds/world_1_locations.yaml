@@ -1,7 +1,17 @@
-world: 1
-name: Grass Land
-display_rule: Use player-facing guide language in the control panel.
+world: route
+name: World 2-first double-whistle route
+active_goal: world_8_double_whistle
+display_rule: Use player-facing route language and order rows from the selected goal contract.
 locations:
+  - id: fresh_start_to_1_1
+    segment_id: fresh_start_to_1_1
+    label: Fresh Start
+    type: map
+    default_status: works
+    objective: Start a new game and reach the World 1-1 panel.
+    guide_terms:
+      - fresh game
+      - World 1 map
   - id: world_1_map
     label: Map
     type: map
@@ -12,6 +22,7 @@ locations:
       - path
       - level panel
   - id: world_1_1
+    segment_id: world_1_1_clear
     label: 1-1
     type: level
     default_status: works
@@ -21,6 +32,7 @@ locations:
       - Super Leaf
       - P-meter
   - id: world_1_2
+    segment_id: world_1_2_clear
     label: 1-2
     type: level
     default_status: works
@@ -28,6 +40,7 @@ locations:
     guide_terms:
       - Grass Land 2
   - id: world_1_3
+    segment_id: world_1_3_whistle
     label: 1-3
     type: level
     default_status: works
@@ -37,6 +50,7 @@ locations:
       - behind the scenery
       - Warp Whistle
   - id: world_1_fortress
+    segment_id: world_1_fortress_whistle
     label: Fortress
     type: fortress
     default_status: blocked
@@ -50,6 +64,7 @@ locations:
       - P-meter
       - Warp Whistle
   - id: world_1_4
+    segment_id: world_1_4_clear
     label: 1-4
     type: level
     default_status: needs review
@@ -81,6 +96,7 @@ locations:
       - Hammer Brother
       - map enemy
   - id: world_1_5
+    segment_id: world_1_5_water_path
     label: 1-5
     type: level
     default_status: needs review
@@ -88,6 +104,7 @@ locations:
     guide_terms:
       - Grass Land 5
   - id: world_1_6
+    segment_id: world_1_6_clear
     label: 1-6
     type: level
     default_status: needs review
@@ -95,7 +112,8 @@ locations:
     guide_terms:
       - Grass Land 6
   - id: world_1_airship
-    label: Airship
+    segment_id: world_1_airship_to_king
+    label: Airship / King
     type: airship
     default_status: needs review
     objective: Complete the moving stage and boss transition.
@@ -111,3 +129,64 @@ locations:
     guide_terms:
       - king
       - world clear
+  - id: world_2_map
+    segment_id: world_2_map_arrival_with_two_whistles
+    label: World 2 Map
+    type: map
+    default_status: blocked
+    objective: Confirm a genuine World 2 map arrival with both Warp Whistles still in inventory.
+    guide_terms:
+      - Desert Land
+      - two Warp Whistles
+  - id: world_2_first_whistle
+    segment_id: world_2_first_whistle_use
+    label: First Whistle (World 2)
+    type: inventory
+    default_status: unknown
+    objective: Open inventory on the World 2 map and consume exactly one Warp Whistle.
+    guide_terms:
+      - World 2 map
+      - Warp Whistle
+  - id: warp_zone_5_6_7
+    segment_id: warp_zone_5_6_7_tier
+    label: Warp Zone 5 / 6 / 7
+    type: warp_zone
+    default_status: unknown
+    objective: Observe the 5/6/7 tier without entering a numbered-world pipe.
+    guide_terms:
+      - Warp Zone
+      - worlds 5 6 7
+  - id: warp_zone_second_whistle
+    segment_id: warp_zone_second_whistle_use
+    label: Second Whistle (Warp Zone)
+    type: inventory
+    default_status: unknown
+    objective: Use the remaining whistle while Mario is still in the Warp Zone.
+    guide_terms:
+      - second Warp Whistle
+      - stay in Warp Zone
+  - id: warp_zone_world_8
+    segment_id: warp_zone_world_8_tier
+    label: Warp Zone World 8
+    type: warp_zone
+    default_status: unknown
+    objective: Observe the World 8 tier created by the second whistle.
+    guide_terms:
+      - World 8 tier
+  - id: world_8_pipe
+    segment_id: world_8_pipe_entry
+    label: World 8 Pipe
+    type: pipe
+    default_status: unknown
+    objective: Enter the pipe labeled 8 and observe its transition.
+    guide_terms:
+      - pipe 8
+  - id: world_8_map
+    segment_id: world_8_map_arrival
+    label: World 8 Map
+    type: map
+    default_status: unknown
+    objective: Confirm a genuine World 8 map state; do not begin World 8 gameplay.
+    guide_terms:
+      - Dark Land
+      - World 8 map

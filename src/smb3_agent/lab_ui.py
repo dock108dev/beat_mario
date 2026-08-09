@@ -23,6 +23,14 @@ from smb3_agent.lab import (
     start_session,
     write_codex_task_latest,
 )
+from smb3_agent.goals import (
+    ACTIVE_PRODUCT_GOAL_ID,
+    GoalContract,
+    GoalValidationError,
+    load_goal_contract,
+    resolve_goal_path,
+)
+from smb3_agent.segments import load_segment_catalog
 
 
 WORLD_1_LOCATION_PATH = Path("data/worlds/world_1_locations.yaml")
@@ -156,7 +164,13 @@ class _Handler(BaseHTTPRequestHandler):
                 write_codex_task_latest(issue_id)
                 self._redirect("/")
                 return
-        except (LabError, LabUiError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        except (
+            GoalValidationError,
+            LabError,
+            LabUiError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+        ) as exc:
             self._send_html(render_error(str(exc)), status=HTTPStatus.BAD_REQUEST)
             return
         self.send_error(HTTPStatus.NOT_FOUND)
@@ -244,7 +258,7 @@ def render_lab_ui(
               {_asset_icon('leaf_icon.png', 'LAB', 'Route lab local asset')}
               <div>
                 <h1>Mario Route Lab</h1>
-                <p>Current session: {_esc(str(summary.get('session_label', 'No active session')))} · World 1 / Grass Land</p>
+                <p>Current session: {_esc(str(summary.get('session_label', 'No active session')))} · World 2-first double-whistle route to World 8</p>
               </div>
             </div>
             {_run_bar(last_command)}
@@ -305,7 +319,7 @@ def _run_bar(last_command: dict[str, object]) -> str:
                     <option value="gate">gate run</option>
                   </select>
                 </label>
-                <button type="submit" class="primary-button">Run World 1</button>
+                <button type="submit" class="primary-button">Run World 8 Route</button>
               </form>
               <div class="last-result">
                 <span>Last run result</span>
@@ -327,7 +341,7 @@ def _route_item(location: dict[str, object], selected: dict[str, object]) -> str
                   {_asset_icon(_icon_name_for_location(location), _icon_fallback(location), f'{label} icon')}
                   <span class="route-copy">
                     <strong>{_esc(label)}</strong>
-                    <small>{_esc(_title_status(state))} · {location.get('open_issues', 0)} open · {location.get('notes', 0)} notes</small>
+                    <small>{_esc(_route_role_label(str(location.get('classification', ''))))} · {_esc(_title_status(state))} · {location.get('open_issues', 0)} open</small>
                   </span>
                 </a>"""
 
@@ -347,7 +361,7 @@ def _evidence_viewer(
         image_html = """
                 <div class="empty-evidence">
                   <strong>No screenshot captured yet</strong>
-                  <span>Run World 1 to capture screenshot/contact-sheet evidence.</span>
+                  <span>Run the World 8 route to capture screenshot/contact-sheet evidence.</span>
                 </div>"""
     detail_rows = "".join(
         f"<li><strong>{_esc(label)}</strong><span>{_esc(value)}</span></li>"
@@ -942,9 +956,15 @@ def render_error(message: str) -> str:
     )
 
 
-def build_control_panel_summary() -> dict[str, object]:
-    locations = _load_locations()
+def build_control_panel_summary(goal_id: str = ACTIVE_PRODUCT_GOAL_ID) -> dict[str, object]:
+    contract = load_goal_contract(resolve_goal_path(goal_id))
+    catalog = load_segment_catalog(contract.catalog_path)
+    locations = _load_locations(contract)
     session_dir = _latest_session_dir_if_any()
+    if session_dir is not None:
+        session_manifest = _load_yaml(session_dir / "session.yaml")
+        if str(session_manifest.get("goal_id", "")) != contract.id:
+            session_dir = None
     if session_dir is None:
         notes: list[dict[str, object]] = []
         issues: list[dict[str, object]] = []
@@ -966,6 +986,9 @@ def build_control_panel_summary() -> dict[str, object]:
     location_rows = []
     for location in locations:
         location_id = str(location["id"])
+        segment_id = str(location["segment_id"])
+        segment = catalog.by_id[segment_id]
+        catalog_default_status = _default_location_status(segment.status)
         location_notes = [
             note for note in visible_notes if _location_id_for_artifact(str(note.get("segment_id"))) == location_id
         ]
@@ -974,17 +997,31 @@ def build_control_panel_summary() -> dict[str, object]:
         location_rows.append(
             {
                 **location,
+                "classification": next(
+                    step.classification for step in contract.route_steps if step.id == segment_id
+                ),
+                "execution_mode": next(
+                    step.execution_mode for step in contract.route_steps if step.id == segment_id
+                ),
+                "segment_status": segment.status,
+                "default_status": catalog_default_status,
                 "notes": len(location_notes),
                 "issues": len(location_issues),
                 "open_issues": len(location_issues),
                 "proposals": len(issue_ids & proposal_issue_ids),
-                "status": _location_status(location, location_issues),
+                "status": _location_status(
+                    {**location, "default_status": catalog_default_status}, location_issues
+                ),
             }
         )
 
     return {
         "session_label": session_label,
         "session_dir": session_dir_value,
+        "goal_id": contract.id,
+        "goal_type": contract.goal_type,
+        "execution_status": contract.execution_status,
+        "objective_target": contract.objective.get("target"),
         "locations": location_rows,
         "notes": visible_notes,
         "issues": issues,
@@ -1185,6 +1222,8 @@ def _selected_location(
 
 
 def _route_state(location: dict[str, object]) -> str:
+    if str(location.get("segment_status", "")) == "planned":
+        return "planned"
     status = str(location.get("status", "unknown"))
     if status == "works":
         return "learned"
@@ -1425,6 +1464,10 @@ def _icon_name_for_location(location: dict[str, object]) -> str:
         return "airship_icon.png"
     if location_type == "world_clear":
         return "king_icon.png"
+    if location_type == "inventory":
+        return "whistle_icon.png"
+    if location_type in {"warp_zone", "pipe"}:
+        return "map_icon.png"
     if "toad" in location_id:
         return "toad_house_icon.png"
     if "spade" in location_id:
@@ -1446,6 +1489,9 @@ def _icon_fallback(location: dict[str, object]) -> str:
         "world_clear": "KING",
         "map_event": "EVT",
         "map_enemy": "HB",
+        "inventory": "ITEM",
+        "warp_zone": "WARP",
+        "pipe": "PIPE",
     }
     return fallbacks.get(location_type, label[:3].upper())
 
@@ -1505,7 +1551,7 @@ def _run_world_1_from_form(data: dict[str, list[str]]) -> dict[str, object]:
     if speed not in SUPPORTED_SPEEDS:
         raise LabUiError("Unsupported speed")
     if mode == "gate":
-        command = f"run world 1 king gate {attempts} times at {speed}x"
+        command = f"run world 8 double whistle arrival {attempts} times at {speed}x"
     else:
         command = f"show me the route at {speed}x"
     result = start_session(
@@ -1797,12 +1843,42 @@ def _split_note_text(text: str) -> list[str]:
     return chunks or [text]
 
 
-def _load_locations() -> list[dict[str, object]]:
+def _load_locations(contract: GoalContract) -> list[dict[str, object]]:
     data = _load_yaml(WORLD_1_LOCATION_PATH)
     locations = data.get("locations", [])
     if not isinstance(locations, list):
         raise LabUiError(f"Invalid location model: {WORLD_1_LOCATION_PATH}")
-    return [location for location in locations if isinstance(location, dict) and location.get("id")]
+    by_segment = {
+        str(location.get("segment_id")): location
+        for location in locations
+        if isinstance(location, dict) and location.get("id") and location.get("segment_id")
+    }
+    missing = [segment_id for segment_id in contract.segments if segment_id not in by_segment]
+    if missing:
+        raise LabUiError(
+            f"Location model is missing active goal segment(s): {', '.join(missing)}"
+        )
+    return [by_segment[segment_id] for segment_id in contract.segments]
+
+
+def _default_location_status(segment_status: str) -> str:
+    if segment_status == "solved":
+        return "works"
+    if segment_status in {"flaky", "bridged"}:
+        return "needs review"
+    if segment_status in {"planned", "blocked"}:
+        return "blocked"
+    return "unknown"
+
+
+def _route_role_label(classification: str) -> str:
+    return {
+        "objective_milestone": "goal milestone",
+        "game_prerequisite": "required path",
+        "optional": "optional",
+        "recovery_only": "recovery only",
+        "diagnostic_route": "diagnostic only",
+    }.get(classification, "route step")
 
 
 def _location_status(location: dict[str, object], issues: list[dict[str, object]]) -> str:
@@ -1824,6 +1900,13 @@ def _location_id_for_artifact(value: str) -> str:
         "world_1_5_water_path": "world_1_5",
         "world_1_6_clear": "world_1_6",
         "world_1_airship_to_king": "world_1_airship",
+        "world_2_map_arrival_with_two_whistles": "world_2_map",
+        "world_2_first_whistle_use": "world_2_first_whistle",
+        "warp_zone_5_6_7_tier": "warp_zone_5_6_7",
+        "warp_zone_second_whistle_use": "warp_zone_second_whistle",
+        "warp_zone_world_8_tier": "warp_zone_world_8",
+        "world_8_pipe_entry": "world_8_pipe",
+        "world_8_map_arrival": "world_8_map",
         "fortress": "world_1_fortress",
         "castle": "world_1_airship",
         "airship": "world_1_airship",

@@ -14,9 +14,10 @@ run route
 -> promote, keep, or discard
 ```
 
-This comes before broader route expansion. The project already proved that
-explicit control plus user guidance can clear and bridge sections. The next
-problem is making every correction durable, reviewable, and repeatable.
+The active route contract now extends through World 8 map arrival, but its
+unimplemented sections remain planned. The lab may preserve observations about
+those rows; it must not report the legacy king diagnostic as active-goal
+progress.
 
 ## Goals
 
@@ -38,14 +39,15 @@ problem is making every correction durable, reviewable, and repeatable.
 - Do not add a real-time LLM controller yet.
 - Do not silently mutate baseline routes.
 - Do not treat watchable-speed runs as reliability gates.
-- Do not expand to World 8 until the attempt lab can preserve notes, grouped
-  issues, variants, and review output.
+- Do not begin World 8 gameplay; the active boundary is World 8 map arrival.
+- Do not run a planned active goal through the legacy king diagnostic.
 
 ## Attempt Session
 
 An attempt session is the top-level artifact for a run or batch of runs.
 
-Minimum fields:
+Minimum fields for a historical diagnostic session (active sessions use
+`world_8_double_whistle` once its runner is executable):
 
 ```yaml
 session_id: 20260706T230000Z_world_1_king
@@ -57,7 +59,7 @@ attempts_requested: 3
 started_at: 2026-07-06T23:00:00Z
 artifacts_dir: artifacts/sessions/20260706T230000Z_world_1_king
 inputs:
-  command: show me the route at 4x
+  command: run world 1 king diagnostic gate 1 times at 4x
   game_file_env: SMB3_GAME_FILE
 outputs:
   route_log: fceux_1_1.log
@@ -324,7 +326,7 @@ should still own applying, validating, comparing, and promoting changes.
 These are the intended commands for the next implementation phase.
 
 ```bash
-python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" --attempts 1
 python -m smb3_agent lab note latest "1-1 around 320 timer: falls into the hole and usually gets lucky"
 python -m smb3_agent lab review latest
 python -m smb3_agent lab issues latest

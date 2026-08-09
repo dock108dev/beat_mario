@@ -48,12 +48,21 @@ fresh_start
 -> world_1_2
 -> world_1_3_whistle
 -> world_1_fortress_whistle
--> remaining_world_1_path
--> airship_or_king_transition
+-> world_1_5
+-> world_1_6
+-> world_1_airship_and_king
+-> world_2_map_with_two_whistles
+-> first_whistle_from_world_2
+-> warp_zone_5_6_7
+-> second_whistle_from_warp_zone
+-> warp_zone_world_8
+-> world_8_pipe
+-> world_8_map_arrival
 ```
 
-The planner should be conservative. It should prefer known segment gates over
-inventing broad behavior.
+The selected goal contract supplies this order. World 1-4 is not part of the
+active route. The planner must not infer route need from a historical script or
+bridge, and it must keep planned steps visibly planned.
 
 ## Segment Runner
 
@@ -210,6 +219,9 @@ Examples:
   bridge."
 - "Visible demo throttle can change timing and should not be treated as a
   reliability gate."
-- "World 1-4 is currently flaky under watchable capture mode."
+- "World 1-4 is diagnostic history, not part of the active World 2-first
+  double-whistle route."
+- "The Airship/King transition is required before World 2 but cannot satisfy
+  World 8 arrival."
 
 This can start as YAML/Markdown and later move into structured storage.

@@ -4,7 +4,16 @@ import pytest
 
 from smb3_agent.commands import CommandParseError, parse_command, run_command
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
-from smb3_agent.goals import GoalRunResult
+from smb3_agent.goals import GoalRunResult, GoalValidationError
+
+
+def test_parse_world_8_double_whistle_goal_command() -> None:
+    command = parse_command("run world 8 double whistle arrival 3 times")
+
+    assert command.action == "run_goal"
+    assert command.goal == "world_8_double_whistle"
+    assert command.attempts == 3
+    assert command.validation_policy == "require_goal_metrics"
 
 
 def test_parse_world_1_king_gate_command() -> None:
@@ -36,7 +45,7 @@ def test_parse_show_route_command() -> None:
     command = parse_command("show me the route at 4x")
 
     assert command.action == "show_route"
-    assert command.goal == "world_1_king"
+    assert command.goal == "world_8_double_whistle"
     assert command.speed == 4
     assert command.validation_policy == "review_only"
 
@@ -99,3 +108,15 @@ def test_run_command_writes_trace(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert result.trace_path.is_file()
     assert result.goal_result.metrics_passed is True
     assert "trace_path=" in result.to_text()
+
+
+def test_active_goal_run_fails_closed_without_legacy_fallback(tmp_path: Path) -> None:
+    game_file = tmp_path / "local-game-file"
+    game_file.write_text("placeholder")
+
+    with pytest.raises(GoalValidationError, match="planned and not yet executable"):
+        run_command(
+            "run world 8 double whistle arrival",
+            game_path=game_file,
+            artifacts_dir=tmp_path / "command",
+        )

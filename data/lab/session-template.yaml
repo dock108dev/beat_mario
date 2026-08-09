@@ -1,11 +1,11 @@
-session_id: 20260706T230000Z_world_1_king
-goal_id: world_1_king
-route_variant: world_1_baseline
-run_mode: gate
+session_id: 20260809T230000Z_world_8_double_whistle
+goal_id: world_8_double_whistle
+route_variant: world_8_double_whistle_contract
+run_mode: inspect
 requested_speed: 4
 attempts_requested: 3
 started_at: 2026-07-06T23:00:00Z
-artifacts_dir: artifacts/sessions/20260706T230000Z_world_1_king
+artifacts_dir: artifacts/sessions/20260809T230000Z_world_8_double_whistle
 inputs:
   command: show me the route at 4x
   game_file_env: SMB3_GAME_FILE

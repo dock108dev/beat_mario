@@ -11,7 +11,18 @@ from smb3_agent.fceux_harness import BatchSummary, run_fceux_1_1
 from smb3_agent.presets import WORLD_1_KING_ENV
 
 
-SUPPORTED_PRESETS = {"fceux_world_1_king"}
+ACTIVE_PRODUCT_GOAL_ID = "world_8_double_whistle"
+SUPPORTED_GOAL_TYPES = {"product_goal", "diagnostic_route"}
+SUPPORTED_EXECUTION_STATUSES = {"executable", "planned"}
+SUPPORTED_ROUTE_CLASSIFICATIONS = {
+    "objective_milestone",
+    "game_prerequisite",
+    "optional",
+    "recovery_only",
+    "diagnostic_route",
+}
+SUPPORTED_EXECUTION_MODES = {"normal_gameplay", "bridge", "planned"}
+SUPPORTED_PRESETS = {"fceux_world_1_king", "unavailable"}
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
 SUPPORTED_SUMMARY_FIELDS = {
     "success_count",
@@ -34,12 +45,23 @@ class GoalValidationError(ValueError):
 
 
 @dataclass(frozen=True)
+class RouteStep:
+    id: str
+    classification: str
+    execution_mode: str
+    evidence: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class GoalContract:
     id: str
     game: str
     user_directive: str
+    goal_type: str
+    execution_status: str
     objective: dict[str, Any]
     route: dict[str, Any]
+    route_steps: tuple[RouteStep, ...]
     constraints: dict[str, Any]
     allowed_tactics: dict[str, Any]
     success_metrics: tuple[dict[str, Any], ...]
@@ -50,7 +72,15 @@ class GoalContract:
 
     @property
     def segments(self) -> tuple[str, ...]:
-        return tuple(self.route["segments"])
+        return tuple(step.id for step in self.route_steps)
+
+    @property
+    def catalog_path(self) -> Path:
+        return Path(self.route["catalog"])
+
+    @property
+    def executable(self) -> bool:
+        return bool(self.runner["executable"])
 
     @property
     def preset(self) -> str:
@@ -86,6 +116,8 @@ def load_goal_contract(path: Path) -> GoalContract:
             "id",
             "game",
             "user_directive",
+            "goal_type",
+            "execution_status",
             "objective",
             "route",
             "constraints",
@@ -99,6 +131,8 @@ def load_goal_contract(path: Path) -> GoalContract:
     _require_type(raw, "id", str)
     _require_type(raw, "game", str)
     _require_type(raw, "user_directive", str)
+    _require_type(raw, "goal_type", str)
+    _require_type(raw, "execution_status", str)
     _require_type(raw, "objective", dict)
     _require_type(raw, "route", dict)
     _require_type(raw, "constraints", dict)
@@ -107,23 +141,58 @@ def load_goal_contract(path: Path) -> GoalContract:
     _require_type(raw, "recovery_policy", dict)
     _require_type(raw, "runner", dict)
 
+    goal_type = raw["goal_type"]
+    if goal_type not in SUPPORTED_GOAL_TYPES:
+        raise GoalValidationError(f"Unsupported goal_type: {goal_type}")
+    execution_status = raw["execution_status"]
+    if execution_status not in SUPPORTED_EXECUTION_STATUSES:
+        raise GoalValidationError(f"Unsupported execution_status: {execution_status}")
+
     route = raw["route"]
-    _require_fields(route, ("segments",))
+    _require_fields(route, ("catalog", "segments"))
+    if not isinstance(route["catalog"], str) or not route["catalog"]:
+        raise GoalValidationError("route.catalog must be a non-empty string")
     segments = route["segments"]
-    if not isinstance(segments, list) or not segments or not all(isinstance(item, str) for item in segments):
-        raise GoalValidationError("route.segments must be a non-empty list of strings")
+    if not isinstance(segments, list) or not segments:
+        raise GoalValidationError("route.segments must be a non-empty list")
+    route_steps = tuple(_load_route_step(index, item) for index, item in enumerate(segments))
+    route_ids = [step.id for step in route_steps]
+    duplicates = sorted({segment_id for segment_id in route_ids if route_ids.count(segment_id) > 1})
+    if duplicates:
+        raise GoalValidationError(f"Duplicate route segment id(s): {', '.join(duplicates)}")
 
     runner = raw["runner"]
-    _require_fields(runner, ("backend", "preset", "script", "artifacts_root", "require_perfect"))
+    _require_fields(
+        runner,
+        ("backend", "preset", "script", "artifacts_root", "require_perfect", "executable"),
+    )
     if runner["preset"] not in SUPPORTED_PRESETS:
         raise GoalValidationError(f"Unsupported runner preset: {runner['preset']}")
+    if not isinstance(runner["executable"], bool):
+        raise GoalValidationError("runner.executable must be bool")
+    if execution_status == "planned" and runner["executable"]:
+        raise GoalValidationError("planned goals cannot declare runner.executable=true")
+    if execution_status == "executable" and not runner["executable"]:
+        raise GoalValidationError("executable goals must declare runner.executable=true")
 
     bridged_segments = raw.get("bridged_segments", ())
     if not isinstance(bridged_segments, list) or not all(isinstance(item, str) for item in bridged_segments):
         raise GoalValidationError("bridged_segments must be a list of strings")
-    unknown_bridges = sorted(set(bridged_segments).difference(segments))
+    unknown_bridges = sorted(set(bridged_segments).difference(route_ids))
     if unknown_bridges:
         raise GoalValidationError(f"bridged_segments not present in route.segments: {', '.join(unknown_bridges)}")
+    declared_bridge_steps = {step.id for step in route_steps if step.execution_mode == "bridge"}
+    missing_bridge_declarations = sorted(declared_bridge_steps.difference(bridged_segments))
+    if missing_bridge_declarations:
+        raise GoalValidationError(
+            "bridge route step(s) missing from bridged_segments: "
+            + ", ".join(missing_bridge_declarations)
+        )
+    non_bridge_declarations = sorted(set(bridged_segments).difference(declared_bridge_steps))
+    if non_bridge_declarations:
+        raise GoalValidationError(
+            "bridged_segments must use execution_mode=bridge: " + ", ".join(non_bridge_declarations)
+        )
 
     metrics = tuple(raw["success_metrics"])
     if not metrics:
@@ -142,8 +211,11 @@ def load_goal_contract(path: Path) -> GoalContract:
         id=raw["id"],
         game=raw["game"],
         user_directive=raw["user_directive"],
+        goal_type=goal_type,
+        execution_status=execution_status,
         objective=raw["objective"],
         route=route,
+        route_steps=route_steps,
         constraints=raw["constraints"],
         allowed_tactics=raw["allowed_tactics"],
         success_metrics=metrics,
@@ -164,6 +236,11 @@ def run_goal_contract(
     capture_ticks: bool = False,
     env_overrides: tuple[str, ...] = (),
 ) -> GoalRunResult:
+    if not contract.executable:
+        raise GoalValidationError(
+            f"Goal {contract.id} is planned and not yet executable; "
+            "no diagnostic runner fallback is permitted"
+        )
     if contract.preset != "fceux_world_1_king":
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
 
@@ -224,6 +301,30 @@ def _validate_metric(index: int, metric: Any) -> None:
             raise GoalValidationError(f"Unsupported summary field: {metric['field']}")
     if metric["type"] in {"final_event", "event_present", "event_absent"}:
         _require_fields(metric, ("value",))
+
+
+def _load_route_step(index: int, raw: Any) -> RouteStep:
+    if not isinstance(raw, dict):
+        raise GoalValidationError(f"route.segments[{index}] must be a mapping")
+    _require_fields(raw, ("id", "classification", "execution_mode", "evidence"))
+    segment_id = raw["id"]
+    if not isinstance(segment_id, str) or not segment_id:
+        raise GoalValidationError(f"route.segments[{index}].id must be a non-empty string")
+    classification = raw["classification"]
+    if classification not in SUPPORTED_ROUTE_CLASSIFICATIONS:
+        raise GoalValidationError(f"Unsupported route classification for {segment_id}: {classification}")
+    execution_mode = raw["execution_mode"]
+    if execution_mode not in SUPPORTED_EXECUTION_MODES:
+        raise GoalValidationError(f"Unsupported execution mode for {segment_id}: {execution_mode}")
+    evidence = raw["evidence"]
+    if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item for item in evidence):
+        raise GoalValidationError(f"{segment_id}.evidence must be a non-empty list of strings")
+    return RouteStep(
+        id=segment_id,
+        classification=classification,
+        execution_mode=execution_mode,
+        evidence=tuple(evidence),
+    )
 
 
 def _require_fields(data: dict[str, Any], fields: tuple[str, ...]) -> None:

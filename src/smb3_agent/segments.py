@@ -82,6 +82,10 @@ def validate_goal_segments(contract: GoalContract, catalog: SegmentCatalog) -> N
         raise SegmentValidationError(
             f"Goal {contract.id} references missing segment(s): {', '.join(missing)}"
         )
+    if Path(contract.catalog_path) != Path(catalog.path):
+        raise SegmentValidationError(
+            f"Goal {contract.id} declares catalog {contract.catalog_path}, not {catalog.path}"
+        )
 
 
 def render_goal_status(contract: GoalContract, catalog: SegmentCatalog) -> str:
@@ -89,15 +93,20 @@ def render_goal_status(contract: GoalContract, catalog: SegmentCatalog) -> str:
     segments = catalog.by_id
     lines = [
         f"goal_id={contract.id}",
+        f"goal_type={contract.goal_type}",
+        f"execution_status={contract.execution_status}",
+        f"executable={str(contract.executable).lower()}",
+        f"objective_target={contract.objective.get('target')}",
         f"catalog_id={catalog.catalog_id}",
         f"segments={len(contract.segments)}",
     ]
-    for index, segment_id in enumerate(contract.segments, start=1):
-        segment = segments[segment_id]
-        bridge = " bridged=true" if segment_id in contract.bridged_segments else " bridged=false"
+    for index, step in enumerate(contract.route_steps, start=1):
+        segment = segments[step.id]
+        bridge = " bridged=true" if step.id in contract.bridged_segments else " bridged=false"
         evidence = ",".join(segment.evidence) if segment.evidence else "none"
         lines.append(
-            f"{index}. id={segment.id} status={segment.status}{bridge} "
+            f"{index}. id={segment.id} classification={step.classification} "
+            f"execution_mode={step.execution_mode} status={segment.status}{bridge} "
             f"method={segment.current_method['type']} evidence={evidence}"
         )
     return "\n".join(lines)
@@ -150,4 +159,3 @@ def _require_fields(data: dict[str, Any], fields: tuple[str, ...]) -> None:
     missing = [field for field in fields if field not in data]
     if missing:
         raise SegmentValidationError(f"Missing required field(s): {', '.join(missing)}")
-

@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
-from smb3_agent.goals import GoalRunResult
+from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.lab import add_batch_notes_to_latest, build_issue_ledger_latest, start_session
 from smb3_agent.lab_ui import (
     _selected_location,
@@ -37,7 +37,8 @@ def test_route_lab_renders_route_evidence_and_teaching_workflow(
     html = render_lab_ui()
 
     assert "Mario Route Lab" in html
-    assert "Run World 1" in html
+    assert "Run World 8 Route" in html
+    assert "World 2-first double-whistle route to World 8" in html
     assert "Route" in html
     assert "Evidence" in html
     assert "Teach Mario" in html
@@ -51,8 +52,11 @@ def test_route_lab_renders_route_evidence_and_teaching_workflow(
     assert "1-1" in html
     assert "1-3" in html
     assert "Fortress" in html
-    assert "Airship" in html
+    assert "Airship / King" in html
     assert "King" in html
+    assert "World 2 Map" in html
+    assert "World 8 Map" in html
+    assert "1-4" not in html
     assert "Unit Tests" in html
     assert "Phase Gate" in html
     assert 'href="/?location=world_1_fortress"' in html
@@ -150,6 +154,20 @@ def test_route_lab_defaults_to_first_open_issue_location(
     assert selected["id"] == "world_1_1"
 
 
+def test_route_lab_uses_active_goal_contract_order() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+
+    summary = build_control_panel_summary()
+    displayed_segments = tuple(str(location["segment_id"]) for location in summary["locations"])
+    labels = tuple(str(location["label"]) for location in summary["locations"])
+
+    assert summary["goal_id"] == "world_8_double_whistle"
+    assert displayed_segments == contract.segments
+    assert "1-4" not in labels
+    assert "World 2 Map" in labels
+    assert "World 8 Map" in labels
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -228,40 +246,46 @@ def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
                 "name": "Grass Land",
                 "locations": [
                     {
-                        "id": "world_1_map",
-                        "label": "Map",
-                        "default_status": "needs review",
-                        "objective": "Navigate between required locations.",
-                    },
-                    {
                         "id": "world_1_1",
+                        "segment_id": "world_1_1_clear",
                         "label": "1-1",
                         "default_status": "works",
                         "objective": "Clear the level.",
                     },
                     {
                         "id": "world_1_3",
+                        "segment_id": "world_1_3_whistle",
                         "label": "1-3",
                         "default_status": "works",
                         "objective": "Get the hidden item route.",
                     },
                     {
                         "id": "world_1_fortress",
+                        "segment_id": "world_1_fortress_whistle",
                         "label": "Fortress",
                         "default_status": "blocked",
                         "objective": "Use flight above the ceiling.",
                     },
                     {
                         "id": "world_1_airship",
-                        "label": "Airship",
+                        "segment_id": "world_1_airship_to_king",
+                        "label": "Airship / King",
                         "default_status": "needs review",
                         "objective": "Complete the moving stage.",
                     },
                     {
-                        "id": "world_1_king",
-                        "label": "King",
-                        "default_status": "needs review",
-                        "objective": "Confirm the world clear transition.",
+                        "id": "world_2_map",
+                        "segment_id": "world_2_map_arrival_with_two_whistles",
+                        "label": "World 2 Map",
+                        "default_status": "blocked",
+                        "objective": "Arrive with both whistles.",
+                    },
+                    {
+                        "id": "world_8_map",
+                        "segment_id": "world_8_map_arrival",
+                        "label": "World 8 Map",
+                        "default_status": "blocked",
+                        "objective": "Confirm genuine World 8 arrival.",
                     },
                 ],
             }
@@ -283,9 +307,45 @@ def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
             }
         )
     )
-    monkeypatch.setattr("smb3_agent.lab.load_goal_contract", lambda path: SimpleNamespace(id="world_1_king"))
+    monkeypatch.setattr(
+        "smb3_agent.lab.load_goal_contract",
+        lambda path: SimpleNamespace(
+            id="world_8_double_whistle",
+            catalog_path=Path("data/segments/world_1.yaml"),
+        ),
+    )
     monkeypatch.setattr("smb3_agent.lab.resolve_goal_path", lambda goal: Path(f"data/goals/{goal}.yaml"))
     monkeypatch.setattr("smb3_agent.lab.run_goal_contract", _fake_run_goal_contract)
+    route_steps = (
+        SimpleNamespace(id="world_1_1_clear", classification="game_prerequisite", execution_mode="normal_gameplay"),
+        SimpleNamespace(id="world_1_3_whistle", classification="objective_milestone", execution_mode="normal_gameplay"),
+        SimpleNamespace(id="world_1_fortress_whistle", classification="objective_milestone", execution_mode="normal_gameplay"),
+        SimpleNamespace(id="world_1_airship_to_king", classification="game_prerequisite", execution_mode="planned"),
+        SimpleNamespace(id="world_2_map_arrival_with_two_whistles", classification="objective_milestone", execution_mode="planned"),
+        SimpleNamespace(id="world_8_map_arrival", classification="objective_milestone", execution_mode="planned"),
+    )
+    fake_contract = SimpleNamespace(
+        id="world_8_double_whistle",
+        catalog_path=Path("data/segments/world_8_double_whistle.yaml"),
+        segments=tuple(step.id for step in route_steps),
+        route_steps=route_steps,
+        goal_type="product_goal",
+        execution_status="planned",
+        objective={"target": "world_8_map_arrival"},
+    )
+    fake_catalog = SimpleNamespace(
+        by_id={
+            "world_1_1_clear": SimpleNamespace(status="solved"),
+            "world_1_3_whistle": SimpleNamespace(status="solved"),
+            "world_1_fortress_whistle": SimpleNamespace(status="bridged"),
+            "world_1_airship_to_king": SimpleNamespace(status="bridged"),
+            "world_2_map_arrival_with_two_whistles": SimpleNamespace(status="planned"),
+            "world_8_map_arrival": SimpleNamespace(status="planned"),
+        }
+    )
+    monkeypatch.setattr("smb3_agent.lab_ui.load_goal_contract", lambda path: fake_contract)
+    monkeypatch.setattr("smb3_agent.lab_ui.resolve_goal_path", lambda goal: Path(f"data/goals/{goal}.yaml"))
+    monkeypatch.setattr("smb3_agent.lab_ui.load_segment_catalog", lambda path: fake_catalog)
 
 
 def _latest_session_file(name: str) -> Path:

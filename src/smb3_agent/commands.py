@@ -6,11 +6,23 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from smb3_agent.goals import GoalRunResult, load_goal_contract, resolve_goal_path, run_goal_contract
+from smb3_agent.goals import (
+    ACTIVE_PRODUCT_GOAL_ID,
+    GoalRunResult,
+    load_goal_contract,
+    resolve_goal_path,
+    run_goal_contract,
+)
 
 
+RUN_WORLD_8_DOUBLE_WHISTLE_RE = re.compile(
+    r"^run\s+(?:world\s+8\s+double\s+whistle(?:\s+arrival)?|double\s+whistle\s+world\s+8(?:\s+arrival)?)"
+    r"(?:\s+(?P<attempts>\d+)\s+times?)?"
+    r"(?:\s+at\s+(?P<speed>\d+(?:\.\d+)?)x)?$",
+    re.IGNORECASE,
+)
 RUN_WORLD_1_KING_RE = re.compile(
-    r"^run\s+world\s+1\s+king(?:\s+gate)?(?:\s+(?P<attempts>\d+)\s+times?)?"
+    r"^run\s+world\s+1\s+king(?:\s+diagnostic)?(?:\s+gate)?(?:\s+(?P<attempts>\d+)\s+times?)?"
     r"(?:\s+at\s+(?P<speed>\d+(?:\.\d+)?)x)?$",
     re.IGNORECASE,
 )
@@ -84,6 +96,20 @@ def parse_command(raw: str) -> AgentCommand:
     if not normalized:
         raise CommandParseError("Command is empty")
 
+    match = RUN_WORLD_8_DOUBLE_WHISTLE_RE.match(normalized)
+    if match is not None:
+        attempts = int(match.group("attempts") or "1")
+        speed = float(match.group("speed")) if match.group("speed") is not None else None
+        return AgentCommand(
+            action="run_goal",
+            raw=normalized,
+            goal=ACTIVE_PRODUCT_GOAL_ID,
+            attempts=attempts,
+            run_mode="gate",
+            validation_policy="require_goal_metrics",
+            speed=speed,
+        )
+
     match = RUN_WORLD_1_KING_RE.match(normalized)
     if match is not None:
         attempts = int(match.group("attempts") or "1")
@@ -104,7 +130,7 @@ def parse_command(raw: str) -> AgentCommand:
         return AgentCommand(
             action="show_route",
             raw=normalized,
-            goal="world_1_king",
+            goal=ACTIVE_PRODUCT_GOAL_ID,
             run_mode="watch",
             validation_policy="review_only",
             speed=speed,
@@ -122,7 +148,7 @@ def parse_command(raw: str) -> AgentCommand:
         return AgentCommand(
             action="set_recovery_policy",
             raw=normalized,
-            goal="world_1_king",
+            goal=ACTIVE_PRODUCT_GOAL_ID,
             run_mode="recovery",
             validation_policy="contract_allows",
             recovery_policy="continue_after_life_loss_if_allowed",

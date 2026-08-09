@@ -35,7 +35,7 @@ def test_lab_start_writes_session_manifest(monkeypatch: pytest.MonkeyPatch, tmp_
     )
 
     manifest = yaml.safe_load(result.manifest_path.read_text())
-    assert manifest["goal_id"] == "world_1_king"
+    assert manifest["goal_id"] == "world_8_double_whistle"
     assert manifest["requested_speed"] == 4
     assert manifest["run_settings"]["speed_mode"] == "normal"
     assert manifest["run_settings"]["frame_sleep_seconds"] == 0.004167
@@ -305,7 +305,13 @@ def _prepare_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
             }
         )
     )
-    monkeypatch.setattr("smb3_agent.lab.load_goal_contract", lambda path: SimpleNamespace(id="world_1_king"))
+    monkeypatch.setattr(
+        "smb3_agent.lab.load_goal_contract",
+        lambda path: SimpleNamespace(
+            id="world_8_double_whistle",
+            catalog_path=Path("data/segments/world_1.yaml"),
+        ),
+    )
     monkeypatch.setattr("smb3_agent.lab.resolve_goal_path", lambda goal: Path(f"data/goals/{goal}.yaml"))
     monkeypatch.setattr("smb3_agent.lab.run_goal_contract", _fake_run_goal_contract)
 

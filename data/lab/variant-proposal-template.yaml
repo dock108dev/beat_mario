@@ -11,7 +11,7 @@ changes:
     summary: Adjust jump before hole and add verification marker.
 validation:
   command: python -m smb3_agent lab validate-variant world_1_1_harden_hole_320_a --attempts 10
-  promotion_gate: 10/10 for world_1_1 and no regression in world_1_king smoke
+  promotion_gate: 10/10 for world_1_1 and no regression in the explicitly selected world_1_king diagnostic
 outcome:
   status: untested
   artifacts_dir: null

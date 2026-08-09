@@ -1,29 +1,38 @@
 # SMB3 Route Agent
 
-Local proof-of-concept for a user-steered game agent.
+Local proof-of-concept for a user-steered game agent. The active product goal is
+`world_8_double_whistle`:
 
-The immediate target is Super Mario Bros. 3 on a local NES emulator. The larger
-target is an agent workbench that can accept user goals, turn them into route
-contracts, operate a game, observe state, recover from failures, and explain
-what changed between attempts.
+> From a fresh game, collect both World 1 Warp Whistles, clear the required
+> World 1 path, arrive safely on the World 2 map with both whistles, use the
+> first whistle from World 2, use the second while still in the Warp Zone, and
+> arrive on the genuine World 8 map.
 
-## Current State
+World 8 arrival is the boundary. Playing or beating World 8 is outside the
+current goal.
 
-The repo currently has:
+## Current truth
 
-- A FCEUX-backed route runner with structured logs.
-- A strict World 1-1 reliability gate.
-- A World 1 route gate that reaches the king-transition marker using a mix of
-  scripted gameplay and explicit bridge steps.
-- Screenshot/contact-sheet tooling for review.
-- Phase 6 attempt-lab scaffolding for sessions, human notes, route variants,
-  and evidence-backed iteration.
-- Mario Route Lab, a local evidence-first UI for running World 1, reviewing
-  artifacts, teaching selected locations, and creating Codex-task packets.
-- Parser tests for route summaries and post-probe success markers.
+- The active contract and catalog are
+  `data/goals/world_8_double_whistle.yaml` and
+  `data/segments/world_8_double_whistle.yaml`.
+- World 1-4 is not in the active route.
+- World 1-5 and World 1-6 are retained as the route to the final World 1
+  castle after the owner corrected the boundary to require World 2 before
+  whistle use.
+- The Airship/King transition is a required intermediate boundary, not success.
+- The first whistle must be used from the World 2 map. The second must be used
+  from the Warp Zone before a numbered-world pipe is entered.
+- Only `post_probe_world_8_map_arrival` can satisfy the active goal. The legacy
+  king marker cannot.
+- The active runner is intentionally `planned`: safe World 2 arrival with both
+  whistles and the later Warp Zone transitions are not yet executable as a
+  validated end-to-end route.
+- `world_1_king` remains available only as a legacy diagnostic route. It uses
+  explicit bridges and is not product progress.
 
-See [docs/route-status.md](docs/route-status.md) for what is solved, bridged,
-flaky, and still unknown.
+Generated logs, screenshots, emulator state, and the local game asset remain
+ignored under `artifacts/` or other ignored local paths.
 
 ## Setup
 
@@ -32,129 +41,72 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-FCEUX must be available on `PATH`. Local game files, emulator state, and proof
-artifacts stay outside git.
+FCEUX must be available on `PATH` for live diagnostics. ROM-free validation
+does not require it.
 
-## Main Commands
-
-Run unit tests:
+## Active-goal commands
 
 ```bash
 python -m pytest -q
+python -m smb3_agent goal validate data/goals/world_8_double_whistle.yaml
+python -m smb3_agent segment validate \
+  data/segments/world_8_double_whistle.yaml \
+  --goal world_8_double_whistle
+python -m smb3_agent goal status world_8_double_whistle
+python -m smb3_agent command parse \
+  "run world 8 double whistle arrival 3 times"
 ```
 
-Run the strict World 1-1 gate:
+Attempting to run the active goal fails clearly as not yet executable; it never
+falls back to the king diagnostic.
 
-```bash
-python -m smb3_agent task fceux-1-1 \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 10 \
-  --artifacts-dir artifacts/fceux/cli_gate_1_1 \
-  --require-perfect
-```
+## Legacy diagnostic
 
-Run the current World 1 king-transition gate:
-
-```bash
-python -m smb3_agent task fceux-world-1-king \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 10 \
-  --artifacts-dir artifacts/fceux/world_1_king \
-  --require-perfect
-```
-
-Validate and run the first goal contract:
+The explicitly named diagnostic remains useful for World 1 regression work:
 
 ```bash
 python -m smb3_agent goal validate data/goals/world_1_king.yaml
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent goal run world_1_king --attempts 3
-```
-
-Inspect the World 1 segment catalog:
-
-```bash
-python -m smb3_agent segment validate data/segments/world_1.yaml
 python -m smb3_agent goal status world_1_king
+python -m smb3_agent task fceux-world-1-king \
+  --game-file "$SMB3_GAME_FILE" \
+  --attempts 1 \
+  --artifacts-dir artifacts/fceux/world_1_king_diagnostic
 ```
 
-Use the command interface:
+A diagnostic king-transition pass is not evidence of World 2 arrival, whistle
+preservation, Warp Zone behavior, or World 8 arrival.
+
+## Mario Route Lab
+
+Render deterministic HTML:
 
 ```bash
-python -m smb3_agent command parse "run world 1 king gate 3 times"
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent command run "run world 1 king gate 3 times"
+python -m smb3_agent lab ui-render \
+  --output artifacts/ui/world_8_double_whistle.html
 ```
 
-Observe and simulate recovery:
-
-```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-python -m smb3_agent observe run-segment world_1_1 --sample-frames 15
-python -m smb3_agent recovery simulate life_lost --goal world_1_king
-python -m smb3_agent recovery simulate wrong_map_node --goal world_1_king
-```
-
-Phase 6 attempt-lab commands are available. Their contracts are documented in
-`docs/attempt-lab.md` and scaffolded under `data/lab/`.
-
-Use the attempt lab:
-
-```bash
-python -m smb3_agent lab start "show me the route at 4x" --attempts 1
-python -m smb3_agent lab note latest "1-1 around 320 timer: falls into the hole and usually gets lucky"
-python -m smb3_agent lab review latest
-python -m smb3_agent lab propose-variant latest
-```
-
-Batch review lab commands:
-
-```bash
-python -m smb3_agent lab issues latest
-python -m smb3_agent lab propose-variants latest
-python -m smb3_agent lab ui-summary latest
-python -m smb3_agent lab codex-task latest --issue ISSUE_ID
-```
-
-Serve Mario Route Lab:
+Serve the local UI:
 
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 ```
 
-Mario Route Lab uses player-facing locations such as `Map`, `1-1`, `1-3`,
-`Fortress`, `Airship`, and `King`. The screen is organized around Route,
-Evidence, Teach Mario, Active Problems, and Observation History. Backend route
-labels stay out of the normal UI workflow. Its visual system keeps cream as the
-page background, uses white panels, blue selection, and red/green/amber route
-state chips.
+The Route list is ordered from the active goal contract. It shows World 2-first
+double-whistle milestones and does not show World 1-4 as required.
 
-Review an existing log:
-
-```bash
-python -m smb3_agent review log artifacts/fceux/world_1_king/fceux_1_1.log
-python -m smb3_agent review compare artifacts/fceux/world_1_king artifacts/fceux/show_world1_king_4x_001
-python -m smb3_agent task review-fceux-log \
-  --log artifacts/fceux/world_1_king/fceux_1_1.log \
-  --attempts 10
-```
-
-## Project Docs
+## Project docs
 
 - [Product direction](docs/product-direction.md)
 - [Goal contract](docs/goal-contract.md)
 - [Agent architecture](docs/agent-architecture.md)
-- [Attempt lab](docs/attempt-lab.md)
-- [World 1 lab guide](docs/world-1-lab-guide.md)
-- [Mario Route Lab](docs/mario-route-lab.md)
-- [Local Route Lab assets](docs/local-assets.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Validation gates](docs/validation-gates.md)
 - [Route status](docs/route-status.md)
-- [FCEUX harness notes](docs/fceux-harness.md)
+- [Mario Route Lab](docs/mario-route-lab.md)
+- [FCEUX harness](docs/fceux-harness.md)
 
-## Working Rule
+## Working rule
 
-Every implementation step must end with a validation gate. If a gate fails, the
-next implementation step is to explain and repair that failure before expanding
-scope.
+Every implementation step ends with a validation gate. Contract tests do not
+stand in for live game evidence; assisted topology checks do not stand in for a
+safe, repeatable gameplay route.

@@ -1,125 +1,81 @@
 # Product Direction
 
-This repo is not just a Mario scripting project. It is the first proof of a
-larger user-steered game agent.
+This repo is the first proof of a user-steered game agent, not merely a Mario
+input script. A user goal becomes a route contract; the workbench executes what
+is available, observes state, preserves evidence, recovers only within policy,
+and reports the next bounded experiment.
 
-The long-term product idea is an agent that can operate a game under a user's
-intent. The user should be able to describe goals, constraints, risk tolerance,
-and preferences. The agent should convert that into an operating contract, run
-the game, observe outcomes, recover from mistakes, and report what happened.
+## Active SMB3 goal
 
-For SMB3, the user directive might be:
-
-```text
-Reach World 8 using the double-whistle route. Prefer real gameplay when
-available, but use explicit bridge steps for already-understood transitions
-while the workbench is being built.
-```
-
-For a future shop, city, or life sim, the directive might be:
+The product source of truth is `world_8_double_whistle`:
 
 ```text
-Make the business feel premium, but keep cash above the reserve floor and do
-not let inventory go stale.
+fresh game
+-> collect the World 1-3 Warp Whistle
+-> collect the World 1 Fortress Warp Whistle
+-> clear the game-required World 1 path through 1-5 and 1-6
+-> clear the Airship and complete the King transition
+-> arrive safely on the World 2 map with both whistles
+-> use the first whistle from World 2
+-> observe the Warp Zone 5/6/7 tier
+-> use the second whistle while still in the Warp Zone
+-> observe the World 8 tier
+-> enter the World 8 pipe
+-> observe a genuine World 8 map arrival
 ```
 
-The reusable primitive is the same in both cases: a goal contract.
+World 1-4 is not part of this route. World 7 appears only as a visible label in
+the first Warp Zone tier; the route does not enter World 7. World 8 gameplay is
+outside the arrival boundary.
 
-## Goal Contract
+The owner-corrected route requires World 2 before whistle use. Therefore the
+Airship/King is an intermediate prerequisite, not a destination. The legacy
+`world_1_king` contract remains a diagnostic route and cannot satisfy the
+product goal.
 
-A goal contract is the structured version of what the user wants.
+## Evidence policy
 
-```yaml
-goal_contract:
-  id: world_1_king
-  user_directive: "Reach the World 1 king transition from a fresh start."
-  objective:
-    type: route_completion
-    target: world_1_king_transition
-  constraints:
-    prefer_real_gameplay: true
-    allow_bridge_steps: true
-    preserve_attempt_artifacts: true
-    explain_failures: true
-  success_metrics:
-    - all_attempts_clear_1_1
-    - post_probe_clear_is_true
-    - final_event_is_post_probe_1_airship_success_king
-  recovery_policy:
-    on_life_loss: reclassify_state_and_continue_if_route_allows
-    on_wrong_map_position: reload_or_rebridge_known_checkpoint
-    on_unknown_state: stop_and_capture_review_artifacts
-```
+The local game's observable behavior is authoritative. The proof levels stay
+separate:
 
-## Why SMB3 First
+1. Contract/static proof: schemas, catalog cross-checks, status output, tests,
+   and deterministic Route Lab HTML agree.
+2. Live topology proof: fresh FCEUX observations show concrete map, inventory,
+   and transition states.
+3. Assisted investigation: an explicit bridge or test setup may orient work,
+   but is labeled and cannot prove normal gameplay reliability.
+4. Executable route proof: the selected goal completes repeatably with only
+   tactics its contract allows.
 
-SMB3 is useful because it forces the hard parts early:
+The current active goal is `planned` because safe World 2 arrival with both
+whistles and the later World 2-first Warp Zone sequence are not yet a validated
+end-to-end runner.
 
-- Real-time input timing.
-- Observable and hidden state.
-- Death, lives, and restart paths.
-- Map navigation.
-- Route segments with different mechanics.
-- User corrections that must become durable knowledge.
+## Goal contract
 
-The first milestone is not a perfect game-playing AI. The first milestone is a
-workbench that can turn user intent into route execution, evidence, and the next
-experiment.
+A contract owns:
 
-## Attempt Lab
+- the user directive and final observable target;
+- the ordered route and its referenced segment catalog;
+- whether each step is an objective milestone or game prerequisite;
+- execution mode (`normal_gameplay`, `bridge`, or `planned`);
+- allowed tactics, recovery policy, and success metrics;
+- executable versus planned status.
 
-The attempt lab is the product loop that makes the project scalable.
+Commands, status rendering, review mappings, and Mario Route Lab consume that
+contract instead of maintaining a separate default route.
 
-The user should be able to watch a route, add a note, and have that note become
-structured work:
+## Product thesis
 
-```text
-user note
--> anchored attempt artifact
--> grouped route issue
--> review hypothesis
--> route variant proposal
--> validation run
--> promote or discard
-```
+Build a workbench that can:
 
-For SMB3, a note might be:
-
-```text
-1-1 around 320 timer: falls into the hole and usually gets lucky.
-```
-
-For a future sim, the same shape might be:
-
-```text
-The shop keeps overbuying low-margin items after the second rent payment.
-```
-
-In both cases, the agent should preserve the observation, connect it to evidence,
-group related observations into durable issues, try controlled changes, and
-compare the next attempt against the previous one.
-
-The UI direction follows from that artifact model. The first UI is Mario Route
-Lab: an evidence-first route review surface where the user sees the World 1
-path, inspects the latest screenshot/contact sheet or attempt artifact, teaches
-the selected location, runs the route at a selected speed, triggers validation
-commands, reviews grouped issues, and chooses which proposal to validate. The
-CLI and artifact schema remain the source of truth, but backend route labels
-should not be the normal UI vocabulary.
-
-## Product Thesis
-
-Build a user-steered gameplay agent that can:
-
-1. Parse a goal into a contract.
-2. Choose a route or experiment plan.
+1. Convert user intent into a reviewable contract.
+2. Select a justified route.
 3. Execute through an emulator adapter.
-4. Observe game state continuously.
-5. Adjust when lives, map position, inventory, or segment state changes.
-6. Produce a useful report and next action.
-7. Turn user observations into validated route or policy variants.
-8. Package selected issues into Codex-ready patch/review tasks.
+4. Observe map, level, inventory, transition, and failure state.
+5. Recover only when the contract permits it.
+6. Produce useful evidence and a bounded next action.
+7. Turn user observations into validated route variants.
 
-SMB3 proves the control, observation, recovery, and route-learning loop. The same
-shape can later operate a store sim, city sim, management game, or custom
-playtest sandbox.
+SMB3 proves this control/evidence loop before the same shape is generalized to
+management, city, shop, or life simulations.

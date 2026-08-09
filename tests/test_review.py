@@ -102,3 +102,39 @@ def test_compare_logs_calls_out_watch_or_capture_timing_risk(tmp_path: Path) -> 
 
     assert "timing/capture overhead" in report.explanation
     assert "right_failure_class=wrong_route_state" in report.to_text()
+
+
+def test_review_maps_world_2_first_whistle_failure_to_active_segment(tmp_path: Path) -> None:
+    log_path = tmp_path / "world_2_failure.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
+                "frame=30 event=post_probe_world_2_map_two_whistles item_0=12 item_1=12",
+                "frame=50 event=post_probe_world_2_first_whistle_timeout item_0=12 item_1=12",
+            ]
+        )
+    )
+
+    report = review_log(log_path, expected_attempts=1)
+
+    assert report.failure_class == "wrong_route_state"
+    assert report.failed_segment == "world_2_first_whistle_use"
+
+
+def test_review_accepts_only_world_8_map_arrival_as_active_final_state(tmp_path: Path) -> None:
+    log_path = tmp_path / "world_8_arrival.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
+                "frame=30 event=post_probe_world_8_map_arrival map_world=8",
+            ]
+        )
+    )
+
+    report = review_log(log_path, expected_attempts=1)
+
+    assert report.failure_class == "none"
+    assert report.failed_segment == "none"
+    assert report.last_event == "post_probe_world_8_map_arrival"

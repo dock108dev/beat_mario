@@ -1,7 +1,7 @@
-# World 1 Lab Guide
+# World 1 Diagnostic Lab Guide
 
-Use this guide when you want to watch the current World 1 route, add notes, and
-turn those notes into the next route experiment.
+Use this guide when explicitly repairing the legacy World 1 king diagnostic.
+It is not the active World 8 route and its result is not product progress.
 
 ## Setup
 
@@ -16,30 +16,30 @@ FCEUX must be available on `PATH`.
 
 ## Watch A Route
 
-Watch the current route at regular speed:
+Run the explicit diagnostic at regular review speed:
 
 ```bash
-python -m smb3_agent lab start "show me the route at 1x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 1x" --attempts 1
 ```
 
 Watch faster:
 
 ```bash
-python -m smb3_agent lab start "show me the route at 4x" --attempts 1
-python -m smb3_agent lab start "show me the route at 10x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 10x" --attempts 1
 ```
 
 Run a reliability-style gate:
 
 ```bash
-python -m smb3_agent lab start "run world 1 king gate 3 times" --attempts 3
+python -m smb3_agent lab start "run world 1 king diagnostic gate 3 times" --attempts 3
 ```
 
 Run the path at an explicit speed:
 
 ```bash
-python -m smb3_agent lab start "run world 1 king gate 3 times at 4x" --attempts 3
-python -m smb3_agent lab start "run world 1 king gate 1 times at 100x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 3 times at 4x" --attempts 3
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 100x" --attempts 1
 ```
 
 Speed notes:
@@ -131,7 +131,7 @@ previous baseline metadata under `data/variants/backups/`.
 
 ## Current World 1 Workflow
 
-1. Run `lab start "show me the route at 1x" --attempts 1`.
+1. Run `lab start "run world 1 king diagnostic gate 1 times at 1x" --attempts 1`.
 2. Add notes while the issue is fresh.
 3. Run `lab review latest`.
 4. Run `lab propose-variant latest`.
@@ -142,7 +142,7 @@ previous baseline metadata under `data/variants/backups/`.
 Example loop:
 
 ```bash
-python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" --attempts 1
 python -m smb3_agent lab note latest "1-4 platform gap is inconsistent under watch speed"
 python -m smb3_agent lab review latest
 python -m smb3_agent lab propose-variant latest
@@ -167,7 +167,7 @@ Use this shape when you have notes across several World 1 locations:
 Example command flow:
 
 ```bash
-python -m smb3_agent lab start "show me the route at 4x" --attempts 1
+python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" --attempts 1
 python -m smb3_agent lab note latest "1-1 falls into hole at 283 on clock." --segment world_1_1 --severity harden
 python -m smb3_agent lab note latest "1-2 and 1-3 are perfect. 1-3 whistle exit is expected." --segment world_1_3 --severity note
 python -m smb3_agent lab note latest "Castle dies first try every time, then carry-over inputs seem to send the route to 1-4." --segment fortress --severity harden
