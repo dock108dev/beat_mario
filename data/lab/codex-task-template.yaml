@@ -2,7 +2,7 @@ task_id: codex_issue_world_1_fortress_whistle_001
 created_at: 2026-07-06T23:20:00Z
 session_id: 20260706T230000Z_world_1_king
 issue_id: issue_world_1_fortress_whistle_001
-objective: Propose a route patch and validation plan for the selected issue.
+objective: Return one concrete Beat Mario route-patch/v1 artifact for the selected bounded issue.
 inputs:
   session_manifest: session.yaml
   notes: notes.yaml
@@ -13,7 +13,27 @@ inputs:
   relevant_files:
     - scripts/fceux_1_1_agent.lua
 expected_output:
-  proposal_summary: One-paragraph explanation of the route change.
-  changed_files: List of files that should change.
-  validation_command: Command to prove the change.
-  rollback_notes: How to discard the attempt if validation fails.
+  artifact: One YAML document using schema_version beat-mario.route-patch/v1.
+  source:
+    kind: codex_task
+    session_id: 20260706T230000Z_world_1_king
+    issue_id: issue_world_1_fortress_whistle_001
+    note_ids:
+      - note_003
+    task_id: codex_issue_world_1_fortress_whistle_001
+    task_packet: artifacts/sessions/20260706T230000Z_world_1_king/codex_tasks/issue_world_1_fortress_whistle_001.yaml
+  required_fields:
+    - patch_id
+    - variant_id
+    - parent_variant
+    - repository_base_commit
+    - allowed_files
+    - preimage_sha256
+    - operations
+    - expected_postimage_sha256
+    - summary
+    - rollback_description
+    - timestamps
+    - provenance
+  operation_contract: Use replace_text operations with complete UTF-8 content and exact preimage/postimage SHA-256 values.
+  validation: Do not supply commands or results; Route Lab selects an internal profile.

@@ -12,7 +12,6 @@ from smb3_agent.lab import (
     LabError,
     add_note_to_latest,
     build_issue_ledger_latest,
-    compare_variant,
     promote_variant,
     propose_variants_from_latest,
     propose_variant_from_latest,
@@ -126,7 +125,7 @@ def test_promote_variant_refuses_without_passing_validation(
         promote_variant(proposal.variant_id)
 
 
-def test_variant_run_compare_and_promote(
+def test_metadata_only_variant_cannot_validate_or_promote(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _prepare_lab(monkeypatch, tmp_path)
@@ -139,19 +138,15 @@ def test_variant_run_compare_and_promote(
     add_note_to_latest("1-1 around 320 timer: falls into the hole and usually gets lucky")
     proposal = propose_variant_from_latest()
 
-    run_result = run_variant(
-        proposal.variant_id,
-        game_path=tmp_path / "local-game-file",
-        attempts=2,
-        artifacts_root=tmp_path / "artifacts/sessions",
-    )
-    compare = compare_variant(proposal.variant_id)
-    promotion = promote_variant(proposal.variant_id)
-
-    assert run_result.route_variant == proposal.variant_id
-    assert "successes=2/2" in compare.to_text()
-    assert promotion.baseline_path.is_file()
-    assert promotion.backup_path.is_file()
+    with pytest.raises(LabError, match="Metadata-only variants cannot be validated"):
+        run_variant(
+            proposal.variant_id,
+            game_path=tmp_path / "local-game-file",
+            attempts=2,
+            artifacts_root=tmp_path / "artifacts/sessions",
+        )
+    with pytest.raises(LabError, match="metadata-only variants are not promotable"):
+        promote_variant(proposal.variant_id)
 
 
 def test_issue_ledger_groups_batch_notes_and_prioritizes_recovery(
@@ -281,6 +276,9 @@ def test_ui_summary_and_codex_task_packet(monkeypatch: pytest.MonkeyPatch, tmp_p
     task_yaml = yaml.safe_load(task.task_path.read_text())
     assert task_yaml["issue_id"] == issues.issues[0]["id"]
     assert "scripts/fceux_1_1_agent.lua" in task_yaml["inputs"]["relevant_files"]
+    assert task_yaml["expected_output"]["artifact"].endswith("route-patch/v1.")
+    assert "validation_command" not in task_yaml["expected_output"]
+    assert task_yaml["expected_output"]["source"]["task_packet"] == str(task.task_path)
 
 
 def _prepare_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

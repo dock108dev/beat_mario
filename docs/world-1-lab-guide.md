@@ -104,18 +104,22 @@ baseline route.
 For multi-note sessions, treat this as a compatibility shortcut. The intended
 next behavior is one proposal per actionable issue.
 
-## Validate A Variant
+## Apply And Validate A Route Patch
 
-Use the variant id printed by the proposal command:
+Create a Codex task for the reviewed issue, then import its normalized
+`beat-mario.route-patch/v1` output:
 
 ```bash
-python -m smb3_agent lab run-variant world_1_1_harden_320_a --attempts 10
-python -m smb3_agent lab compare-variant world_1_1_harden_320_a
+python -m smb3_agent lab patch import PATCH.yaml
+python -m smb3_agent lab patch review PATCH_ID
+python -m smb3_agent lab patch preview PATCH_ID
+python -m smb3_agent lab patch prepare PATCH_ID
+python -m smb3_agent lab patch validate PATCH_ID
+python -m smb3_agent lab patch compare PATCH_ID
 ```
 
-The current first version validates the active route under the proposed variant
-name and records the evidence. As the route editor gets smarter, this is where
-actual route-file changes will be applied and compared.
+Validation runs the actual patched candidate in a detached Git worktree and
+records separate parent evidence. Descriptive variants cannot validate.
 
 ## Promotion Guard
 
@@ -123,11 +127,12 @@ Promotion is intentionally guarded:
 
 ```bash
 python -m smb3_agent lab promote-variant world_1_1_harden_320_a
+python -m smb3_agent lab patch promote PATCH_ID --confirm PATCH_ID
 ```
 
-The command refuses to promote unless the variant has a passing validation
-artifact. When promotion succeeds, it writes baseline metadata and backs up the
-previous baseline metadata under `data/variants/backups/`.
+The route-patch command refuses unless review, candidate application, validation,
+comparison, hashes, artifacts, HEAD, and the accepted worktree all pass. It
+writes the exact validated bytes plus an inverse rollback artifact.
 
 ## Current World 1 Workflow
 
@@ -135,9 +140,9 @@ previous baseline metadata under `data/variants/backups/`.
 2. Add notes while the issue is fresh.
 3. Run `lab review latest`.
 4. Run `lab propose-variant latest`.
-5. Validate the variant with 3 attempts first.
-6. If it looks promising, validate with 10 attempts.
-7. Promote only if the gate passes and the review makes sense.
+5. Import, review, preview, and prepare the exact patch.
+6. Validate its isolated candidate and compare it with the parent.
+7. Promote only the exact recommended diff with patch-id confirmation.
 
 Example loop:
 
@@ -146,11 +151,15 @@ python -m smb3_agent lab start "run world 1 king diagnostic gate 1 times at 4x" 
 python -m smb3_agent lab note latest "1-4 platform gap is inconsistent under watch speed"
 python -m smb3_agent lab review latest
 python -m smb3_agent lab propose-variant latest
-python -m smb3_agent lab run-variant VARIANT_ID --attempts 3
-python -m smb3_agent lab compare-variant VARIANT_ID
+python -m smb3_agent lab codex-task latest --issue ISSUE_ID
+python -m smb3_agent lab patch import PATCH.yaml
+python -m smb3_agent lab patch review PATCH_ID
+python -m smb3_agent lab patch prepare PATCH_ID
+python -m smb3_agent lab patch validate PATCH_ID
+python -m smb3_agent lab patch compare PATCH_ID
 ```
 
-Replace `VARIANT_ID` with the id printed by `lab propose-variant`.
+Replace `PATCH_ID` with the id in the imported contract.
 
 ## Batch Workflow
 
@@ -162,7 +171,7 @@ Use this shape when you have notes across several World 1 locations:
 4. Review grouped issues.
 5. Generate one proposal per actionable issue.
 6. Create a Codex task packet for the issue you want patched first.
-7. Validate only the selected proposal.
+7. Validate only the selected reviewed patch in its candidate worktree.
 
 Example command flow:
 

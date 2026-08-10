@@ -186,10 +186,13 @@ Responsibilities:
 
 - Create proposed variants from reviews.
 - Record parent variant, source session, source notes, and intended changes.
-- Run validation gates against a variant.
-- Compare variant results with parent results.
-- Promote only when the configured gate passes.
-- Preserve enough metadata to roll back a bad promotion.
+- Normalize reviewed issues and Codex output into `beat-mario.route-patch/v1`.
+- Enforce path, file-type, hash, allowlist, size, and provenance policy before
+  any accepted-tree write.
+- Apply exact postimages in detached Git worktrees and validate candidate code.
+- Compare candidate artifacts with gates run against the parent commit.
+- Atomically promote only the exact validated diff and write its inverse.
+- Refuse rollback when later edits conflict with the promoted postimage.
 
 ## Codex Task Builder
 
@@ -203,10 +206,12 @@ It should include:
 - nearby log excerpts
 - segment catalog
 - relevant route source files
-- requested validation command
+- relevant-file allowlist
+- concrete route-patch schema and source provenance
 
-Codex can propose or implement patches, but the lab should still validate,
-compare, and promote through explicit gates.
+Codex returns content and hashes, not commands or decisions. The shared Route
+Lab backend selects validation profiles, runs argv arrays without a shell,
+compares, promotes, and rolls back through explicit lifecycle gates.
 
 ## Knowledge Store
 

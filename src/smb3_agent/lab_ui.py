@@ -31,6 +31,20 @@ from smb3_agent.goals import (
     resolve_goal_path,
 )
 from smb3_agent.segments import load_segment_catalog
+from smb3_agent.route_patch import (
+    PATCH_ARTIFACTS_ROOT,
+    RoutePatchError,
+    RoutePatchResult,
+    compare_route_patch,
+    import_route_patch,
+    patch_summary_for_issue,
+    prepare_route_patch,
+    preview_route_patch,
+    promote_route_patch,
+    review_route_patch,
+    rollback_route_patch,
+    validate_route_patch,
+)
 
 
 WORLD_1_LOCATION_PATH = Path("data/worlds/world_1_locations.yaml")
@@ -182,10 +196,29 @@ class _Handler(BaseHTTPRequestHandler):
                 write_codex_task_latest(issue_id)
                 self._redirect("/")
                 return
+            if path == "/patch-action":
+                result = run_patch_ui_action(data, repo_root=Path.cwd())
+                _write_last_command(
+                    f"patch_{_single(data, 'action')}",
+                    ("route-lab-backend", result.patch_id, _single(data, "action")),
+                    0,
+                    result.to_text(),
+                    "",
+                )
+                self._redirect(
+                    _location_url(
+                        _single(data, "return_location", default=""),
+                        mode="issue",
+                        issue_id=_single(data, "issue_id", default=""),
+                        goal_id=_single(data, "return_goal", default=ACTIVE_PRODUCT_GOAL_ID),
+                    )
+                )
+                return
         except (
             GoalValidationError,
             LabError,
             LabUiError,
+            RoutePatchError,
             FileNotFoundError,
             subprocess.TimeoutExpired,
         ) as exc:
@@ -606,7 +639,7 @@ def _page(*, title: str, body: str) -> str:
       padding: 4px 7px;
       font-size: 12px;
     }}
-    textarea, select {{
+    textarea, select, input {{
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -895,6 +928,26 @@ def _page(*, title: str, body: str) -> str:
       display: grid;
       gap: 8px;
     }}
+    .patch-workflow {{
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+      padding-top: 10px;
+    }}
+    .patch-facts {{
+      display: grid;
+      grid-template-columns: 90px minmax(0, 1fr);
+      gap: 3px 8px;
+      margin: 0;
+      font-size: 12px;
+    }}
+    .patch-facts dt {{ color: var(--muted); }}
+    .patch-facts dd {{ margin: 0; min-width: 0; }}
+    .patch-files, .patch-blockers {{ margin: 0; padding-left: 18px; font-size: 12px; }}
+    .patch-diff pre {{ max-height: 260px; font-size: 11px; }}
+    .patch-import-form, .patch-confirm-form {{ display: grid; gap: 6px; }}
+    .patch-actions {{ align-items: end; }}
     .detail-head {{ display: flex; justify-content: space-between; gap: 8px; align-items: center; }}
     .row-actions {{
       display: flex;
@@ -1026,6 +1079,14 @@ def build_control_panel_summary(goal_id: str = ACTIVE_PRODUCT_GOAL_ID) -> dict[s
         issues_path = session_dir / "issues.yaml"
         proposals_path = session_dir / "variant_proposals.yaml"
         issues = _list_dicts(_load_yaml(issues_path).get("issues", []))
+        for issue in issues:
+            issue["goal_id"] = contract.id
+            task_path = session_dir / "codex_tasks" / f"{issue.get('id')}.yaml"
+            issue["task_packet"] = str(task_path) if task_path.is_file() else None
+            if PATCH_ARTIFACTS_ROOT.is_dir():
+                issue["route_patch"] = patch_summary_for_issue(
+                    str(issue.get("id", "")), repo_root=Path.cwd()
+                )
         proposals = _list_dicts(_load_yaml(proposals_path).get("proposals", []))
         session_label = session_dir.name
         session_dir_value = str(session_dir)
@@ -1210,7 +1271,176 @@ def _issue_detail(issue: dict[str, object], location_id: str) -> str:
       <p>{_esc(str(issue.get('summary', '')))}</p>
       <p class="meta">{_esc(str(issue.get('proposed_next_step', '')))}</p>
       {_issue_action_row(issue, location_id)}
+      {_route_patch_panel(issue, location_id)}
     </article>"""
+
+
+def _route_patch_panel(issue: dict[str, object], location_id: str) -> str:
+    issue_id = str(issue.get("id", ""))
+    goal_id = str(issue.get("goal_id", ACTIVE_PRODUCT_GOAL_ID))
+    task_packet = issue.get("task_packet")
+    patch = issue.get("route_patch")
+    task_html = (
+        f'<a class="review-link" href="{_esc(_artifact_url(Path(str(task_packet))))}">Task packet</a>'
+        if task_packet
+        else "Task packet not created"
+    )
+    if not isinstance(patch, dict):
+        return f"""
+      <section class="patch-workflow" data-issue-id="{_esc(issue_id)}">
+        <div class="detail-head"><strong>Route patch</strong><span class="badge">not imported</span></div>
+        <p class="meta">{task_html}</p>
+        <form method="post" action="/patch-action" class="patch-import-form">
+          {_patch_hidden_fields(issue_id, location_id, goal_id=goal_id)}
+          <input type="hidden" name="action" value="import">
+          <label>Patch YAML path <input name="patch_file" required placeholder="/path/to/reviewed-patch.yaml"></label>
+          <button type="submit" class="quiet small">Import Patch</button>
+        </form>
+      </section>"""
+
+    patch_id = str(patch.get("patch_id", ""))
+    status = str(patch.get("status", "unknown"))
+    changed_files = patch.get("changed_files", [])
+    changed_html = "".join(f"<li><code>{_esc(str(path))}</code></li>" for path in changed_files)
+    validation = patch.get("validation_result")
+    validation_label = "not run" if validation is None else ("passed" if validation else "failed")
+    blockers = patch.get("blockers", [])
+    blocker_html = "".join(f"<li>{_esc(str(item))}</li>" for item in blockers)
+    diff_text = str(patch.get("exact_diff", ""))
+    return f"""
+      <section class="patch-workflow" data-patch-id="{_esc(patch_id)}">
+        <div class="detail-head">
+          <strong>Route patch {_esc(patch_id)}</strong>
+          <span class="badge">{_esc(status)}</span>
+        </div>
+        <p class="meta">{task_html}</p>
+        <dl class="patch-facts">
+          <dt>Base commit</dt><dd><code>{_esc(str(patch.get('base_commit', 'unknown')))}</code></dd>
+          <dt>Review</dt><dd>{_esc(str(patch.get('review_state', 'not reviewed')))}</dd>
+          <dt>Validation</dt><dd>{_esc(validation_label)}</dd>
+          <dt>Profile</dt><dd>{_esc(str(patch.get('validation_profile', 'unknown')))}</dd>
+          <dt>Promotion</dt><dd>{'eligible' if patch.get('promotion_eligible') else 'blocked'}</dd>
+          <dt>Rollback</dt><dd>{'available' if patch.get('rollback_available') else 'unavailable'}</dd>
+        </dl>
+        <ul class="patch-files">{changed_html}</ul>
+        <details class="patch-diff"><summary>Exact diff preview</summary><pre>{_esc(diff_text)}</pre></details>
+        {f'<ul class="patch-blockers">{blocker_html}</ul>' if blocker_html else ''}
+        <div class="row-actions patch-actions">
+          {_patch_action_button(issue_id, location_id, patch_id, 'review', 'Review', status == 'imported', goal_id)}
+          {_patch_action_button(issue_id, location_id, patch_id, 'preview', 'Preview', True, goal_id)}
+          {_patch_action_button(issue_id, location_id, patch_id, 'prepare', 'Prepare', status == 'reviewed', goal_id)}
+          {_patch_action_button(issue_id, location_id, patch_id, 'validate', 'Validate', status == 'applied_to_candidate', goal_id)}
+          {_patch_action_button(issue_id, location_id, patch_id, 'compare', 'Compare', status == 'validated', goal_id)}
+        </div>
+        {_patch_confirmation_form(issue_id, location_id, patch_id, 'promote', 'Promote', status == 'validated', goal_id)}
+        {_patch_confirmation_form(issue_id, location_id, patch_id, 'rollback', 'Rollback', status == 'promoted', goal_id)}
+      </section>"""
+
+
+def _patch_hidden_fields(
+    issue_id: str,
+    location_id: str,
+    patch_id: str = "",
+    goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
+) -> str:
+    return f"""
+          <input type="hidden" name="issue_id" value="{_esc(issue_id)}">
+          <input type="hidden" name="return_location" value="{_esc(location_id)}">
+          <input type="hidden" name="return_goal" value="{_esc(goal_id)}">
+          {f'<input type="hidden" name="patch_id" value="{_esc(patch_id)}">' if patch_id else ''}"""
+
+
+def _patch_action_button(
+    issue_id: str,
+    location_id: str,
+    patch_id: str,
+    action: str,
+    label: str,
+    enabled: bool,
+    goal_id: str,
+) -> str:
+    return f"""
+          <form method="post" action="/patch-action">
+            {_patch_hidden_fields(issue_id, location_id, patch_id, goal_id)}
+            <button type="submit" name="action" value="{_esc(action)}" class="quiet small"{' disabled' if not enabled else ''}>{_esc(label)}</button>
+          </form>"""
+
+
+def _patch_confirmation_form(
+    issue_id: str,
+    location_id: str,
+    patch_id: str,
+    action: str,
+    label: str,
+    enabled: bool,
+    goal_id: str,
+) -> str:
+    return f"""
+        <form method="post" action="/patch-action" class="patch-confirm-form">
+          {_patch_hidden_fields(issue_id, location_id, patch_id, goal_id)}
+          <input type="hidden" name="action" value="{_esc(action)}">
+          <label>Type {_esc(patch_id)} to {action}
+            <input name="confirmation" required placeholder="{_esc(patch_id)}"{' disabled' if not enabled else ''}>
+          </label>
+          <button type="submit" class="quiet small"{' disabled' if not enabled else ''}>{_esc(label)}</button>
+        </form>"""
+
+
+def run_patch_ui_action(
+    data: dict[str, list[str]],
+    *,
+    repo_root: Path | None = None,
+    artifacts_root: Path = PATCH_ARTIFACTS_ROOT,
+) -> RoutePatchResult:
+    action = _single(data, "action")
+    if action == "import":
+        return import_route_patch(
+            Path(_single(data, "patch_file")),
+            repo_root=repo_root,
+            artifacts_root=artifacts_root,
+            actor="route_lab",
+        )
+    patch_id = _single(data, "patch_id")
+    if action == "review":
+        return review_route_patch(
+            patch_id, repo_root=repo_root, artifacts_root=artifacts_root, actor="route_lab"
+        )
+    if action == "preview":
+        return preview_route_patch(patch_id, repo_root=repo_root, artifacts_root=artifacts_root)
+    if action == "prepare":
+        return prepare_route_patch(
+            patch_id, repo_root=repo_root, artifacts_root=artifacts_root, actor="route_lab"
+        )
+    if action == "validate":
+        game_file = _single(data, "game_file", default="") or os.environ.get("SMB3_GAME_FILE")
+        return validate_route_patch(
+            patch_id,
+            repo_root=repo_root,
+            artifacts_root=artifacts_root,
+            game_path=Path(game_file) if game_file else None,
+            actor="route_lab",
+        )
+    if action == "compare":
+        return compare_route_patch(patch_id, repo_root=repo_root, artifacts_root=artifacts_root)
+    confirmation = _single(data, "confirmation")
+    if action == "promote":
+        return promote_route_patch(
+            patch_id,
+            confirm_patch_id=confirmation,
+            repo_root=repo_root,
+            artifacts_root=artifacts_root,
+            actor="route_lab",
+        )
+    if action == "rollback":
+        return rollback_route_patch(
+            patch_id,
+            confirm_patch_id=confirmation,
+            reason=_single(data, "reason", default="explicit Route Lab rollback"),
+            repo_root=repo_root,
+            artifacts_root=artifacts_root,
+            actor="route_lab",
+        )
+    raise LabUiError(f"Unsupported Route Lab patch action: {action}")
 
 
 def _issue_action_row(issue: dict[str, object], location_id: str) -> str:

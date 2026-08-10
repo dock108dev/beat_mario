@@ -430,7 +430,7 @@ Implementation:
 - Add `lab propose-variant latest`. [implemented]
 - Generate a proposed variant from the review without modifying the baseline. [implemented]
 - Include parent variant, source session, source notes, intended files, and
-  validation command.
+  the requirement for a normalized route patch. [implemented]
 
 Validation gate:
 
@@ -448,25 +448,21 @@ Pass condition:
 
 Implementation:
 
-- Add `lab run-variant`. [implemented]
-- Add `lab compare-variant`. [implemented]
-- Add `lab promote-variant`. [implemented]
-- Promotion must backup the previous baseline metadata and record the validation
-  artifact that justified promotion.
+- Legacy descriptive variants fail closed when asked to validate or promote.
+  [implemented]
+- Executable validation and promotion are owned by Step 6.10's route-patch
+  lifecycle. [implemented]
 
 Validation gate:
 
 ```bash
-export SMB3_GAME_FILE=/path/to/local-game-file
-.venv/bin/python -m smb3_agent lab run-variant world_1_1_harden_hole_320_a --attempts 10
-.venv/bin/python -m smb3_agent lab compare-variant world_1_1_harden_hole_320_a
+.venv/bin/python -m pytest -q tests/test_lab.py tests/test_route_patch.py
 ```
 
 Pass condition:
 
-- Variant run writes a normal session artifact.
-- Comparison reports success rate, failure classes, and changed files.
-- Promotion is blocked unless the configured gate passes.
+- Metadata-only validation is refused.
+- Only a reviewed, applied, and validated route patch can reach promotion.
 
 ### Step 6.6: Issue ledger
 
@@ -507,8 +503,8 @@ Implementation:
 
 - Add `lab propose-variants latest`. [implemented]
 - Generate one proposal per actionable issue. [implemented]
-- Include source issue id, source notes, priority, relevant files, and validation
-  command. [implemented]
+- Include source issue id, source notes, priority, relevant files, and required
+  route-patch schema. [implemented]
 - Keep the existing `lab propose-variant latest` as a compatibility shortcut for
   the highest-priority actionable issue.
 
@@ -553,9 +549,9 @@ Implementation:
 - Add `lab codex-task latest --issue ISSUE_ID`. [implemented]
 - Use `data/lab/codex-task-template.yaml` as the initial contract.
 - Include session manifest, notes, issue ledger, selected issue, relevant log
-  excerpts, segment catalog, relevant route files, and validation command.
-- Codex task packets should request a patch proposal and validation plan; the
-  lab still owns applying, validating, comparing, and promoting. [implemented]
+  excerpts, segment catalog, and reviewed relevant-file allowlist. [implemented]
+- Codex task packets request a concrete `beat-mario.route-patch/v1` artifact
+  without commands or self-declared decisions. [implemented]
 
 Validation gate:
 
@@ -569,7 +565,34 @@ Pass condition:
   history.
 - Packet names the selected issue and excludes unrelated notes unless needed for
   context.
-- Packet includes the expected validation command.
+- Packet includes the exact route-patch source and operation contract.
+
+### Step 6.10: Exact route-patch application loop (Rank 33)
+
+Implementation:
+
+- Add one versioned patch contract and lab-owned lifecycle records. [implemented]
+- Add import, review, read-only preview, detached-worktree preparation,
+  candidate/parent validation, comparison, atomic promotion, and guarded
+  rollback commands. [implemented]
+- Select canonical, Rank 27, Rank 27 plus Rank 28, or documentation-static
+  validation profiles from changed files. [implemented]
+- Expose the same backend and artifacts through Mario Route Lab. [implemented]
+- Retire metadata-only validation and promotion eligibility. [implemented]
+
+Validation gate:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_route_patch.py tests/test_lab_ui.py
+```
+
+Pass condition:
+
+- A disposable reviewed fixture fails in its parent, passes only in the patched
+  candidate, promotes the exact validated bytes, and rolls back byte-for-byte.
+- CLI and HTTP Route Lab actions produce one lifecycle and artifact set.
+- All negative path, hash, command, artifact-integrity, atomicity, dirty-tree,
+  duplicate-promotion, and conflicting-rollback tests fail closed.
 
 ## Phase 7: Mario Route Lab
 

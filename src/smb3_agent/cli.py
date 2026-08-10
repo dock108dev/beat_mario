@@ -34,6 +34,18 @@ from smb3_agent.lab_ui import LabUiError, render_lab_ui, run_lab_ui_server
 from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.recovery import RecoveryError, simulate_recovery
+from smb3_agent.route_patch import (
+    RoutePatchError,
+    compare_route_patch,
+    import_route_patch,
+    prepare_route_patch,
+    preview_route_patch,
+    reject_route_patch,
+    review_route_patch,
+    rollback_route_patch,
+    promote_route_patch,
+    validate_route_patch,
+)
 from smb3_agent.reliability import (
     run_reliability_gate,
     run_watchable_playback,
@@ -466,6 +478,52 @@ def build_parser() -> argparse.ArgumentParser:
     lab_codex_task.add_argument("target", choices=["latest"], help="Session target")
     lab_codex_task.add_argument("--issue", required=True, help="Issue id to package")
 
+    lab_patch = lab_subparsers.add_parser(
+        "patch", help="Import, isolate, validate, promote, and roll back exact route patches"
+    )
+    patch_subparsers = lab_patch.add_subparsers(dest="patch_command", required=True)
+
+    patch_import = patch_subparsers.add_parser("import", help="Import a normalized route patch")
+    patch_import.add_argument("patch_file")
+
+    patch_review = patch_subparsers.add_parser("review", help="Review patch provenance and allowlist")
+    patch_review.add_argument("patch_id")
+
+    patch_preview = patch_subparsers.add_parser("preview", help="Preview the exact read-only diff")
+    patch_preview.add_argument("patch_id")
+
+    patch_prepare = patch_subparsers.add_parser("prepare", help="Apply patch in an isolated worktree")
+    patch_prepare.add_argument("patch_id")
+
+    patch_validate = patch_subparsers.add_parser("validate", help="Validate actual candidate content")
+    patch_validate.add_argument("patch_id")
+    patch_validate.add_argument("--game-file", default=None)
+    patch_validate.add_argument("--timeout-seconds", type=int, default=900)
+
+    patch_compare = patch_subparsers.add_parser("compare", help="Compare candidate and parent evidence")
+    patch_compare.add_argument("patch_id")
+
+    patch_promote = patch_subparsers.add_parser("promote", help="Promote the exact validated diff")
+    patch_promote.add_argument("patch_id")
+    patch_promote.add_argument(
+        "--confirm",
+        default=None,
+        help="Exact patch ID confirmation; defaults to the explicit command target",
+    )
+
+    patch_rollback = patch_subparsers.add_parser("rollback", help="Apply the recorded inverse patch")
+    patch_rollback.add_argument("patch_id")
+    patch_rollback.add_argument(
+        "--confirm",
+        default=None,
+        help="Exact patch ID confirmation; defaults to the explicit command target",
+    )
+    patch_rollback.add_argument("--reason", default="explicit CLI rollback")
+
+    patch_reject = patch_subparsers.add_parser("reject", help="Reject an imported or reviewed patch")
+    patch_reject.add_argument("patch_id")
+    patch_reject.add_argument("--reason", required=True)
+
     lab_ui = lab_subparsers.add_parser("ui", help="Serve the local World 1 lab UI")
     lab_ui.add_argument("--host", default="127.0.0.1")
     lab_ui.add_argument("--port", type=int, default=8765)
@@ -474,7 +532,9 @@ def build_parser() -> argparse.ArgumentParser:
     lab_ui_render = lab_subparsers.add_parser("ui-render", help="Render the lab UI HTML once")
     lab_ui_render.add_argument("--output", default="artifacts/ui/latest.html")
 
-    lab_run_variant = lab_subparsers.add_parser("run-variant", help="Run a route variant through validation")
+    lab_run_variant = lab_subparsers.add_parser(
+        "run-variant", help="Legacy metadata-only command; executable validation uses lab patch"
+    )
     lab_run_variant.add_argument("variant_id")
     lab_run_variant.add_argument("--game-file", default=None, help="Path to the local game file")
     lab_run_variant.add_argument("--attempts", type=int, default=10)
@@ -487,7 +547,9 @@ def build_parser() -> argparse.ArgumentParser:
     lab_compare_variant = lab_subparsers.add_parser("compare-variant", help="Compare variant evidence")
     lab_compare_variant.add_argument("variant_id")
 
-    lab_promote_variant = lab_subparsers.add_parser("promote-variant", help="Promote a passing route variant")
+    lab_promote_variant = lab_subparsers.add_parser(
+        "promote-variant", help="Legacy metadata-only command; exact promotion uses lab patch"
+    )
     lab_promote_variant.add_argument("variant_id")
 
     return parser
@@ -885,6 +947,46 @@ def main() -> None:
             print(write_codex_task_latest(args.issue).to_text())
         except LabError as exc:
             parser.error(str(exc))
+        return
+
+    if args.command == "lab" and args.lab_command == "patch":
+        try:
+            if args.patch_command == "import":
+                result = import_route_patch(Path(args.patch_file))
+            elif args.patch_command == "review":
+                result = review_route_patch(args.patch_id)
+            elif args.patch_command == "preview":
+                result = preview_route_patch(args.patch_id)
+            elif args.patch_command == "prepare":
+                result = prepare_route_patch(args.patch_id)
+            elif args.patch_command == "validate":
+                game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+                result = validate_route_patch(
+                    args.patch_id,
+                    game_path=Path(game_file) if game_file else None,
+                    timeout_seconds=args.timeout_seconds,
+                )
+            elif args.patch_command == "compare":
+                result = compare_route_patch(args.patch_id)
+            elif args.patch_command == "promote":
+                result = promote_route_patch(
+                    args.patch_id,
+                    confirm_patch_id=args.confirm or args.patch_id,
+                )
+            elif args.patch_command == "rollback":
+                result = rollback_route_patch(
+                    args.patch_id,
+                    confirm_patch_id=args.confirm or args.patch_id,
+                    reason=args.reason,
+                )
+            elif args.patch_command == "reject":
+                result = reject_route_patch(args.patch_id, args.reason)
+            else:
+                parser.error(f"Unsupported patch command: {args.patch_command}")
+                return
+        except (RoutePatchError, FileNotFoundError) as exc:
+            parser.error(str(exc))
+        print(result.to_text())
         return
 
     if args.command == "lab" and args.lab_command == "ui":

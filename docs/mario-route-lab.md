@@ -70,6 +70,14 @@ surface runs the World 1 king diagnostic.
 Unit tests, phase gate, HTML render check, refresh, note, lifecycle, and Codex
 task actions remain secondary or quiet controls.
 
+For the selected actionable issue, the Fix Issue panel also shows its task
+packet and normalized route patch: lifecycle state, changed files, base commit,
+review record, exact unified diff, internally selected profile, validation
+result, promotion blockers, and rollback availability. Import, review, preview,
+prepare, validate, compare, promote, and rollback remain quiet controls.
+Promote and rollback require typing the exact patch id. These forms call the
+same functions and write the same artifacts as `lab patch` CLI commands.
+
 ## Evidence behavior
 
 The selected route row drives the evidence and teaching panels. Evidence may

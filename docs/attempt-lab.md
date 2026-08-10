@@ -223,23 +223,31 @@ The reviewer may use Codex for synthesis, but the facts must come from artifacts
 
 ## Variant Lifecycle
 
-Route edits should happen through variants:
+Route edits happen through normalized, reviewed route patches linked to a
+descriptive variant:
 
 ```text
 baseline
 -> proposed variant
--> validation candidate
--> promoted baseline or archived experiment
+-> imported route patch
+-> reviewed patch
+-> isolated candidate
+-> candidate validation and parent comparison
+-> exact promotion or retained failed/rejected experiment
+-> optional audited rollback
 ```
 
 Rules:
 
-- Baseline route files are not edited directly by review automation.
+- Baseline route files are never edited by review or candidate automation.
 - A proposed variant records its parent route, source issue, source notes, and
-  reason.
+  bounded intent, but is not executable by itself.
 - Every actionable issue can produce zero or one proposed variant.
-- Every variant has a validation command.
-- Promotion requires a passing gate.
+- Codex or Route Lab returns a `beat-mario.route-patch/v1` artifact containing
+  exact content and hashes, never an arbitrary validation command.
+- Route Lab selects the validation profile from changed files.
+- Promotion requires a passing isolated candidate, a no-regression comparison,
+  unchanged validation artifacts, and an exact diff/hash match.
 - Failed variants stay available for comparison unless explicitly cleaned.
 
 Example:
@@ -255,8 +263,13 @@ source_issue: issue_world_1_1_001
 changes:
   - file: data/routes/scripts/world_1_1_clear_v0.yaml
     summary: Adjust jump before hole and add verification marker.
+route_patch:
+  required: true
+  schema_version: beat-mario.route-patch/v1
+  patch_id: null
+  execution_status: awaiting_normalized_patch
 validation:
-  command: python -m smb3_agent lab validate-variant world_1_1_harden_hole_320_a --attempts 10
+  profile: internally_selected_after_patch_import
   promotion_gate: 10/10 for world_1_1, no regression in world_1_king smoke
 ```
 
@@ -288,7 +301,7 @@ Minimum UI data endpoints/files:
 - issue ledger
 - review summary
 - variant proposals
-- validation result summaries
+- route-patch lifecycle, exact diff, validation, promotion, and rollback state
 
 The CLI remains the source of truth. Mario Route Lab is a front end over
 session, note, issue, review, and variant artifacts.
@@ -309,7 +322,8 @@ Packet contents:
 - nearby route-log excerpts
 - current segment catalog
 - relevant route source files
-- requested validation command
+- relevant-file allowlist
+- required `beat-mario.route-patch/v1` output contract
 - expected output format
 
 Planned command:
@@ -318,8 +332,10 @@ Planned command:
 python -m smb3_agent lab codex-task latest --issue ISSUE_ID
 ```
 
-The packet should ask for a concrete patch proposal and validation plan. The lab
-should still own applying, validating, comparing, and promoting changes.
+The packet asks for concrete normalized operations and hashes. It must not
+request or accept shell commands, review decisions, or validation results. The
+lab owns review, isolated application, validation, comparison, promotion, and
+rollback.
 
 ## Commands To Build
 
@@ -332,13 +348,19 @@ python -m smb3_agent lab review latest
 python -m smb3_agent lab issues latest
 python -m smb3_agent lab propose-variants latest
 python -m smb3_agent lab codex-task latest --issue ISSUE_ID
-python -m smb3_agent lab run-variant world_1_1_harden_hole_320_a --attempts 10
-python -m smb3_agent lab promote-variant world_1_1_harden_hole_320_a
+python -m smb3_agent lab patch import PATCH.yaml
+python -m smb3_agent lab patch review PATCH_ID
+python -m smb3_agent lab patch preview PATCH_ID
+python -m smb3_agent lab patch prepare PATCH_ID
+python -m smb3_agent lab patch validate PATCH_ID
+python -m smb3_agent lab patch compare PATCH_ID
+python -m smb3_agent lab patch promote PATCH_ID --confirm PATCH_ID
+python -m smb3_agent lab patch rollback PATCH_ID --confirm PATCH_ID --reason "operator rollback"
 ```
 
 The implemented lab pass supports sessions, notes, issue ledgers, one review
-artifact, single or multi-proposal creation, UI-ready summaries, Codex task
-packets, variant validation, and guarded promotion.
+artifact, single or multi-proposal creation, UI-ready summaries, concrete Codex
+patch packets, isolated candidate validation, exact promotion, and rollback.
 
 ## Phase 6 Build Order
 
@@ -347,7 +369,7 @@ packets, variant validation, and guarded promotion.
 3. Speed-aware run wrapper that records exact run settings.
 4. Review command that joins notes with route logs.
 5. Variant proposal scaffold.
-6. Variant validation command.
+6. Versioned route patch, candidate isolation, validation, promotion, and rollback.
 7. Promotion command with backup and rollback metadata.
 8. Issue ledger grouped by segment and problem type.
 9. Multi-proposal generation from actionable issues.

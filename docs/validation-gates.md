@@ -314,3 +314,46 @@ git ls-files | rg -i '\.(nes|fds|sav|fc[0-9]|state)$' && exit 1 || true
 
 Pass condition: only intentional source, catalog, test, and documentation
 changes are tracked; local game assets and generated evidence remain ignored.
+
+## Gate 16: Rank 33 disposable route-patch loop
+
+```bash
+.venv/bin/python -m pytest -q tests/test_route_patch.py
+```
+
+Pass condition: the reviewed parent fixture fails its intended assertion, the
+patched detached candidate passes, comparison recommends the exact diff,
+promotion verifies postimages, and rollback restores the original bytes. CLI
+import and HTTP Route Lab actions must share one backend lifecycle and artifact
+set.
+
+Accepted 2026-08-10 Rank 33 ROM-free result: 135 tests passed in the canonical
+gate, including 20 route-patch cases after parameter expansion.
+
+## Gate 17: Rank 33 safety and atomicity
+
+The same ROM-free suite must reject unreviewed or stale patches, path and
+symlink escape, undeclared/generated/binary files, commands and self-approval,
+malformed/duplicate/no-op operations, parent execution, candidate or validation
+artifact tampering, dirty targets, duplicate promotion, partial promotion, and
+rollback over later edits. Documentation-only validation is non-promotable.
+
+## Gate 18: Rank 33 required live regressions
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_double_whistle --runs 5 --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks --runs 3 --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition: Rank 27 remains 5/5 at the World 8 arrival boundary and Rank 28
+remains 3/3 at the Big Tanks post-clear map. These are product-route regression
+proof, not a demonstration patch, and do not extend later World 8 gameplay.
+
+Accepted Rank 33 regression reports:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T215451.255693Z_reliability/
+artifacts/reliability/world_8_big_tanks/20260810T215605.922925Z_reliability/
+```

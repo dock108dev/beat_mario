@@ -120,7 +120,8 @@ class VariantProposalResult:
                 f"source_session={self.proposal['source_session']}",
                 f"source_issue={self.proposal.get('source_issue', 'none')}",
                 f"source_notes={','.join(self.proposal['source_notes'])}",
-                f"validation_command={self.proposal['validation']['command']}",
+                f"route_patch_required={str(self.proposal['route_patch']['required']).lower()}",
+                f"validation_profile={self.proposal['validation']['profile']}",
             ]
         )
 
@@ -496,6 +497,9 @@ def build_issue_ledger(session_dir: Path) -> IssueLedgerResult:
     manifest = _load_session_manifest(session_dir)
     notes = _load_notes(session_dir)
     issues = _issues_from_notes(str(manifest["session_id"]), notes)
+    contract = load_goal_contract(resolve_goal_path(str(manifest["goal_id"])))
+    for issue in issues:
+        issue["relevant_files"] = _relevant_files_for_issue(issue, contract.catalog_path)
     issues_path = session_dir / "issues.yaml"
     _write_yaml(
         issues_path,
@@ -627,12 +631,16 @@ def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
     excerpt_path = session_dir / "excerpts" / f"{issue_id}.log"
     excerpt_path.parent.mkdir(parents=True, exist_ok=True)
     excerpt_path.write_text(_route_log_excerpt(route_log, issue), encoding="utf-8")
+    task_path = session_dir / "codex_tasks" / f"{issue_id}.yaml"
     task = {
         "task_id": f"codex_{issue_id}",
         "created_at": _now(),
         "session_id": manifest["session_id"],
         "issue_id": issue_id,
-        "objective": "Propose a route patch and validation plan for the selected issue.",
+        "objective": (
+            "Return one concrete Beat Mario route-patch/v1 artifact for the selected "
+            "bounded issue. Do not declare review, approval, or validation results."
+        ),
         "selected_issue": issue,
         "relevant_notes": notes,
         "inputs": {
@@ -645,13 +653,39 @@ def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
             "relevant_files": _relevant_files_for_issue(issue, contract.catalog_path),
         },
         "expected_output": {
-            "proposal_summary": "One-paragraph explanation of the route change.",
-            "changed_files": "List of files that should change.",
-            "validation_command": _validation_command_for_issue(issue),
-            "rollback_notes": "How to discard the attempt if validation fails.",
+            "artifact": "One YAML document using schema_version beat-mario.route-patch/v1.",
+            "source": {
+                "kind": "codex_task",
+                "session_id": manifest["session_id"],
+                "issue_id": issue_id,
+                "note_ids": [str(note["id"]) for note in notes],
+                "task_id": f"codex_{issue_id}",
+                "task_packet": str(task_path),
+            },
+            "required_fields": [
+                "patch_id",
+                "variant_id",
+                "parent_variant",
+                "repository_base_commit",
+                "allowed_files",
+                "preimage_sha256",
+                "operations",
+                "expected_postimage_sha256",
+                "summary",
+                "rollback_description",
+                "timestamps",
+                "provenance",
+            ],
+            "operation_contract": (
+                "Use replace_text operations containing path, complete UTF-8 content, "
+                "preimage_sha256, and expected_postimage_sha256."
+            ),
+            "validation": (
+                "Do not supply a command or result. Route Lab selects and runs an "
+                "internal validation profile after review and isolated application."
+            ),
         },
     }
-    task_path = session_dir / "codex_tasks" / f"{issue_id}.yaml"
     _write_yaml(task_path, task)
     return CodexTaskResult(
         session_id=str(manifest["session_id"]),
@@ -668,32 +702,12 @@ def run_variant(
     attempts: int,
     artifacts_root: Path = Path("artifacts/sessions"),
 ) -> LabSessionResult:
-    proposal_path = _variant_path(variant_id)
-    proposal = _load_variant(proposal_path)
-    if proposal["status"] not in {"proposed", "validated"}:
-        raise LabError(f"Variant cannot be run from status: {proposal['status']}")
-
-    result = start_session(
-        f"run world 1 king diagnostic gate {attempts} times",
-        game_path=game_path,
-        attempts=attempts,
-        artifacts_root=artifacts_root,
-        route_variant=variant_id,
-        capture_images=False,
-        capture_ticks=True,
+    del game_path, attempts, artifacts_root
+    _load_variant(_variant_path(variant_id))
+    raise LabError(
+        "Metadata-only variants cannot be validated. Import a beat-mario.route-patch/v1 "
+        "artifact and use the lab patch workflow so validation executes patched candidate content."
     )
-    status = "passed" if result.goal_result.metrics_passed else "failed"
-    proposal["status"] = "validated"
-    proposal["outcome"] = {
-        "status": status,
-        "artifacts_dir": str(result.session_dir),
-        "session_id": result.session_id,
-        "metrics_passed": result.goal_result.metrics_passed,
-        "successes": f"{result.goal_result.summary.success_count}/{result.goal_result.summary.total}",
-        "post_probe_clear": result.goal_result.summary.post_probe_clear,
-    }
-    _write_yaml(proposal_path, proposal)
-    return result
 
 
 def compare_variant(variant_id: str) -> VariantCompareResult:
@@ -717,6 +731,10 @@ def compare_variant(variant_id: str) -> VariantCompareResult:
 def promote_variant(variant_id: str) -> VariantPromotionResult:
     proposal_path = _variant_path(variant_id)
     proposal = _load_variant(proposal_path)
+    if not proposal.get("route_patch_id"):
+        raise LabError(
+            "Promotion refused: metadata-only variants are not promotable; use lab patch promote"
+        )
     outcome = proposal.get("outcome", {})
     if proposal["status"] != "validated" or not outcome.get("metrics_passed"):
         raise LabError("Promotion refused: variant has no passing validation artifact")
@@ -1335,8 +1353,15 @@ def _proposal_from_issue(manifest: dict[str, Any], issue: dict[str, Any]) -> dic
                 "summary": issue["proposed_next_step"],
             }
         ],
+        "route_patch": {
+            "required": True,
+            "schema_version": "beat-mario.route-patch/v1",
+            "patch_id": None,
+            "execution_status": "awaiting_normalized_patch",
+        },
         "validation": {
-            "command": f"python -m smb3_agent lab run-variant {variant_id} --attempts 10",
+            "profile": "internally_selected_after_patch_import",
+            "workflow": f"python -m smb3_agent lab patch validate PATCH_ID  # variant {variant_id}",
             "promotion_gate": "10/10 for targeted segment or configured goal gate, with no parent-route regression",
         },
         "outcome": {
@@ -1396,12 +1421,6 @@ def _relevant_files_for_issue(issue: dict[str, Any], catalog_path: Path) -> list
     segment_id = str(issue.get("segment_id", ""))
     files = [_suggested_change_file(segment_id), str(catalog_path)]
     return list(dict.fromkeys(files))
-
-
-def _validation_command_for_issue(issue: dict[str, Any]) -> str:
-    if issue.get("type") in {"recovery_bug", "wrong_route_state"}:
-        return "python -m smb3_agent lab run-variant VARIANT_ID --attempts 10"
-    return "python -m smb3_agent lab run-variant VARIANT_ID --attempts 3"
 
 
 def _route_log_excerpt(route_log: Path, issue: dict[str, Any], max_lines: int = 80) -> str:

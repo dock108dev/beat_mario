@@ -41,6 +41,10 @@ return, and stops before another stage.
 - The Rank 28 runner is also executable. It passed three fresh, byte-identical,
   no-bridge processes with five authoritative screenshots per run and a
   separate watchable review.
+- Rank 33 completes the reviewed route-patch loop. CLI and Mario Route Lab use
+  one hash-bound patch contract, detached candidate worktrees, internal
+  validation profiles, exact atomic promotion, and conflict-safe rollback.
+  No production route content was changed to prove the workflow.
 - `world_1_king` remains available only as a legacy diagnostic route. It uses
   explicit bridges and is not product progress.
 
@@ -195,6 +199,29 @@ double-whistle milestones and does not show World 1-4 as required.
 Use the goal switcher to review the separate Big Tanks extension without
 changing the default route.
 
+## Rank 33 route patches
+
+Reviewed issues and Codex task packets now converge on one executable,
+hash-bound `beat-mario.route-patch/v1` artifact. The accepted working tree is
+never used as an experiment: the backend previews the exact diff, applies it in
+a detached temporary Git worktree, validates code from that candidate, compares
+parent and candidate evidence, and promotes only the exact validated diff.
+
+```bash
+python -m smb3_agent lab patch import PATCH.yaml
+python -m smb3_agent lab patch review PATCH_ID
+python -m smb3_agent lab patch preview PATCH_ID
+python -m smb3_agent lab patch prepare PATCH_ID
+python -m smb3_agent lab patch validate PATCH_ID
+python -m smb3_agent lab patch compare PATCH_ID
+python -m smb3_agent lab patch promote PATCH_ID --confirm PATCH_ID
+python -m smb3_agent lab patch rollback PATCH_ID --confirm PATCH_ID --reason "operator rollback"
+```
+
+Promotion and rollback are explicit and atomic. Neither commits, pushes, opens
+a pull request, nor changes product route metadata outside the reviewed diff.
+See [Route patch schema](docs/route-patch-schema.md).
+
 ## Project docs
 
 - [Product direction](docs/product-direction.md)
@@ -205,6 +232,7 @@ changing the default route.
 - [Reliability gate](docs/reliability-gate.md)
 - [Route status](docs/route-status.md)
 - [Mario Route Lab](docs/mario-route-lab.md)
+- [Route patch schema](docs/route-patch-schema.md)
 - [FCEUX harness](docs/fceux-harness.md)
 
 ## Working rule

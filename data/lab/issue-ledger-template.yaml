@@ -7,6 +7,8 @@ issues:
     status: open
     source_notes:
       - note_001
+    relevant_files:
+      - data/routes/scripts/world_1_1_clear_v0.yaml
     summary: Mario falls into a hole at 283 on the clock.
     proposed_next_step: Add a safer jump or progress guard near the hazard.
   - id: issue_world_1_3_whistle_001
@@ -16,6 +18,8 @@ issues:
     status: accepted
     source_notes:
       - note_002
+    relevant_files:
+      - scripts/fceux_1_1_agent.lua
     summary: Leaving 1-3 through the whistle path is expected.
     proposed_next_step: Do not treat this as a failed course clear.
   - id: issue_world_1_fortress_whistle_001
@@ -25,5 +29,7 @@ issues:
     status: open
     source_notes:
       - note_003
+    relevant_files:
+      - scripts/fceux_1_1_agent.lua
     summary: Fortress death appears to leak inputs and sends the route toward 1-4.
     proposed_next_step: Add input cleanup and post-death map-state recovery.
