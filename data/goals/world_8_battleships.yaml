@@ -1,0 +1,88 @@
+id: world_8_battleships
+game: smb3
+goal_type: product_goal
+execution_status: executable
+user_directive: From a fresh game, complete the accepted Big Tanks route, enter World 8-Battleships by normal map input, clear its fleet and Boom Boom through normal gameplay, and stop on the stable post-clear World 8 map before a Hand Trap.
+
+objective:
+  type: route_completion
+  target: world_8_battleships_post_clear
+
+runner:
+  backend: fceux
+  preset: fceux_world_8_battleships
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_8_battleships
+  require_perfect: true
+  executable: true
+
+route:
+  catalog: data/segments/world_8_double_whistle.yaml
+  prefix_goal: world_8_big_tanks
+  segments:
+    - id: world_8_battleships_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-10_normal_entry_boss_clear_and_map_return]
+
+bridged_segments: []
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: false
+  preserve_attempt_artifacts: true
+  explain_failures: true
+  start_from_power_on: true
+  stop_before_hand_trap_or_later_stage: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: false
+  blind_state_mutation: false
+
+success_metrics:
+  - id: accepted_big_tanks_prefix
+    type: event_present
+    value: post_probe_world_8_big_tanks_post_clear
+  - id: exact_battleships_entry
+    type: event_present
+    value: post_probe_world_8_battleships_entered
+  - id: normal_battleships_gameplay
+    type: event_present
+    value: post_probe_world_8_battleships_gameplay
+  - id: game_enforced_battleships_clear
+    type: event_present
+    value: post_probe_world_8_battleships_clear
+  - id: stable_post_clear_boundary
+    type: final_event
+    value: post_probe_world_8_battleships_post_clear
+  - id: no_unexpected_next_stage
+    type: event_absent
+    value: post_probe_world_8_battleships_unexpected_next_stage
+  - id: accepted_observer_trace
+    type: summary_field
+    field: post_probe_clear
+    equals: true
+
+recovery_policy:
+  wrong_map:
+    action: stop_and_review
+  wrong_stage:
+    action: stop_and_review
+  wrong_entry_state:
+    action: stop_and_review
+  death:
+    action: stop_and_review
+  gameplay_stall:
+    action: stop_and_review
+  timeout:
+    action: stop_and_review
+  false_clear:
+    action: stop_and_review
+  missing_post_clear:
+    action: stop_and_review
+  unexpected_next_stage:
+    action: stop_and_review
+  ambiguous_state:
+    action: capture_artifacts_and_stop

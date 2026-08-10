@@ -11,7 +11,9 @@ remains `world_8_double_whistle`:
 World 8 arrival remains that goal's boundary. Rank 28 adds a separate
 `world_8_big_tanks` product goal: it reuses the accepted 15-segment prefix,
 clears the first reachable World 8 stage (Big Tanks), observes the normal map
-return, and stops before another stage.
+return, and stops before another stage. The cumulative `world_8_battleships`
+goal reuses that accepted 16-segment route, clears Battleships, and stops on the
+stable map before a Hand Trap.
 
 ## Current truth
 
@@ -20,6 +22,9 @@ return, and stops before another stage.
 - `data/goals/world_8_big_tanks.yaml` is a distinct product contract. It
   composes the accepted default prefix with one catalog-owned segment,
   `world_8_big_tanks_clear`, for 16 ordered acceptance events.
+- `data/goals/world_8_battleships.yaml` composes `world_8_big_tanks` with only
+  `world_8_battleships_clear`, for 17 ordered events and zero bridges. The 15-
+  and 16-segment goals remain unchanged.
 - World 1-4 is not in the active route.
 - World 1-5 and World 1-6 are retained as the route to the final World 1
   castle after the owner corrected the boundary to require World 2 before
@@ -41,6 +46,9 @@ return, and stops before another stage.
 - The Rank 28 runner is also executable. It passed three fresh, byte-identical,
   no-bridge processes with five authoritative screenshots per run and a
   separate watchable review.
+- The Battleships runner passed three fresh, byte-identical, no-bridge
+  processes with five authoritative screenshots per run. Its separate
+  review-only playback passed at a validated `0.0001`-second throttle.
 - Rank 33 completes the reviewed route-patch loop. CLI and Mario Route Lab use
   one hash-bound patch contract, detached candidate worktrees, internal
   validation profiles, exact atomic promotion, and conflict-safe rollback.
@@ -94,11 +102,13 @@ python -m smb3_agent segment validate \
 python -m smb3_agent goal status world_8_double_whistle
 python -m smb3_agent goal validate data/goals/world_8_big_tanks.yaml
 python -m smb3_agent goal status world_8_big_tanks
+python -m smb3_agent goal validate data/goals/world_8_battleships.yaml
+python -m smb3_agent goal status world_8_battleships
 python -m smb3_agent command parse \
   "run world 8 double whistle arrival 3 times"
 ```
 
-Both goals run product routes directly and never fall back to the king
+All three goals run product routes directly and never fall back to the king
 diagnostic. Omitting `--goal` from reliability commands preserves the Rank 27
 default.
 
@@ -162,6 +172,38 @@ Its accepted contact sheet and tick trace are under
 `artifacts/review/world_8_big_tanks/20260810T212112.984218Z_watchable/`. The
 0.0001-second throttle is the validated Rank 28 review setting; the
 authoritative gate remains unthrottled.
+
+## World 8-Battleships proof
+
+Run the cumulative 17-segment gate:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_battleships \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Every run begins at power-on, completes the accepted 16-segment prefix, consumes
+the retained P-Wing through normal inventory input, moves right twice from the
+Big Tanks post-clear cursor, and accepts the game's automatic Battleships entry.
+The controller traverses the fleet, uses the normal end pipe, defeats Boom Boom,
+and requires the game-owned object transition and return-map flag while Mario is
+alive. It then stabilizes at cursor `(128,112)` without entering a Hand Trap.
+The accepted 3/3 aggregate is under
+`artifacts/reliability/world_8_battleships/20260810T225906.177318Z_reliability/`.
+
+The separate review command is:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_battleships \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.0001
+```
+
+Its accepted non-promotable report, tick trace, and five-frame contact sheet are
+under
+`artifacts/review/world_8_battleships/20260810T224805.096938Z_watchable/`.
 
 ## Legacy diagnostic
 

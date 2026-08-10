@@ -8,6 +8,7 @@ import subprocess
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.reliability import (
+    BATTLESHIPS_FINAL_EVENT,
     BIG_TANKS_FINAL_EVENT,
     FINAL_EVENT,
     run_reliability_gate,
@@ -83,6 +84,30 @@ def _write_log(
             suffix = (
                 " world_number=7 object_set=0 map_cursor_x=64 map_cursor_y=112 "
                 "evidence=stable_world_8_map_after_game_clear"
+            )
+        elif event == "post_probe_world_8_battleships_entered":
+            suffix = (
+                " x=0 y=320 entry_x=0 entry_y=320 entry_air=0 world_number=7 "
+                "object_set=10 map_enter_via_id=13 map_node_x=128 map_node_y=112 "
+                "stage_identity=world_8_battleships "
+                "evidence=normal_right_right_automatic_entry_from_64_112"
+            )
+        elif event == "post_probe_world_8_battleships_gameplay":
+            suffix = (
+                " world_number=7 object_set=10 "
+                "evidence=normal_autoscroll_fleet_gameplay"
+            )
+        elif event == "post_probe_world_8_battleships_clear":
+            suffix = (
+                " world_number=7 object_set=10 return_map=1 mario_alive=1 "
+                "player_is_dying=0 boss_object_id_75_active=0 boss_stomps=4 "
+                "evidence=game_owned_return_map_transition_after_defeated_boss_object"
+            )
+        elif event == BATTLESHIPS_FINAL_EVENT:
+            suffix = (
+                " world_number=7 object_set=0 map_cursor_x=128 map_cursor_y=112 "
+                "hand_trap_region_accessible=1 hand_trap_entered=0 player_is_dying=0 "
+                "evidence=stable_world_8_map_after_boom_boom"
             )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
@@ -164,6 +189,14 @@ def _fake_runner_factory(
                     BIG_TANKS_FINAL_EVENT,
                 ]
                 if goal_id == "world_8_big_tanks"
+                else [
+                    "post_probe_world_8_big_tanks_post_clear",
+                    "post_probe_world_8_battleships_entered",
+                    "post_probe_world_8_battleships_gameplay",
+                    "post_probe_world_8_battleships_clear",
+                    BATTLESHIPS_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_battleships"
                 else []
             )
             image_events = focused_events or ["review"]
@@ -300,6 +333,160 @@ def test_two_big_tanks_successes_are_not_authoritative(tmp_path: Path) -> None:
 
     assert result.report["successful_runs"] == 2
     assert result.passed is False
+
+
+def test_battleships_requires_three_fresh_successes_and_five_images(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_battleships",
+        artifacts_root=tmp_path / "battleships",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_battleships", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["route_segment_count"] == 17
+    assert result.report["required_final_event"] == BATTLESHIPS_FINAL_EVENT
+    assert all(len(run["focused_screenshots"]) == 5 for run in result.report["runs"])
+    assert all(call["clean_product_env"] is True for call in calls)
+
+
+def test_two_battleships_successes_are_not_authoritative(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_battleships",
+        requested_runs=2,
+        artifacts_root=tmp_path / "battleships",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_battleships", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.report["successful_runs"] == 2
+    assert result.report["success_rate"] == 1.0
+    assert result.passed is False
+
+
+def test_only_battleships_requires_byte_identical_logs(tmp_path: Path) -> None:
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    def run_with_distinct_log(goal_id: str, artifacts_root: Path):
+        calls: list[dict] = []
+        base_runner = _fake_runner_factory(
+            calls,
+            goal_id=goal_id,
+            write_image=goal_id == "world_8_battleships",
+        )
+
+        def distinct_runner(contract, **kwargs):
+            result = base_runner(contract, **kwargs)
+            log_path = kwargs["artifacts_dir"] / "fceux_1_1.log"
+            with log_path.open("a") as handle:
+                handle.write(f"frame=999 event=diagnostic_variant_{len(calls)}\n")
+            return result
+
+        return run_reliability_gate(
+            game_path=game_path,
+            goal_id=goal_id,
+            artifacts_root=artifacts_root,
+            goal_runner=distinct_runner,
+            emulator_resolver=lambda _: "/fake/fceux",
+        )
+
+    default = run_with_distinct_log(
+        "world_8_double_whistle", tmp_path / "default-distinct"
+    )
+    battleships = run_with_distinct_log(
+        "world_8_battleships", tmp_path / "battleships-distinct"
+    )
+
+    assert default.report["byte_identical_logs"] is False
+    assert default.passed is True
+    assert battleships.report["byte_identical_logs"] is False
+    assert battleships.passed is False
+
+
+def test_battleships_failure_retains_big_tanks_boundary_and_missing_milestone(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_battleships",
+        requested_runs=1,
+        artifacts_root=tmp_path / "battleships-failure",
+        goal_runner=_fake_runner_factory(
+            calls,
+            goal_id="world_8_battleships",
+            failing_run=1,
+            partial_count=16,
+            extra_line="frame=99 event=post_probe_world_8_battleships_wrong_stage",
+            write_image=True,
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["failure_classification"] == "wrong-stage"
+    assert run["last_accepted_segment"] == "world_8_big_tanks_clear"
+    assert run["first_missing_milestone"] == {
+        "segment_id": "world_8_battleships_clear",
+        "event": BATTLESHIPS_FINAL_EVENT,
+    }
+
+
+def test_battleships_rejects_missing_or_corrupt_focused_screenshot(
+    tmp_path: Path,
+) -> None:
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    for mode in ("missing", "corrupt"):
+        calls: list[dict] = []
+        base_runner = _fake_runner_factory(
+            calls, goal_id="world_8_battleships", write_image=True
+        )
+
+        def damaged_runner(contract, *, _mode=mode, **kwargs):
+            result = base_runner(contract, **kwargs)
+            target = kwargs["artifacts_dir"] / "images" / (
+                "000005_post_probe_world_8_battleships_post_clear.gd"
+            )
+            if _mode == "missing":
+                target.unlink()
+            else:
+                target.write_bytes(b"corrupt")
+            return result
+
+        result = run_reliability_gate(
+            game_path=game_path,
+            goal_id="world_8_battleships",
+            requested_runs=1,
+            artifacts_root=tmp_path / f"battleships-{mode}",
+            goal_runner=damaged_runner,
+            emulator_resolver=lambda _: "/fake/fceux",
+        )
+
+        run = result.report["runs"][0]
+        assert run["passed"] is False
+        assert run["failure_classification"] == "artifact-integrity"
+        assert run["screenshot_evidence_error"] is not None
 
 
 def test_big_tanks_failure_retains_prefix_boundary_and_missing_segment(

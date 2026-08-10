@@ -201,3 +201,14 @@ locations:
       - Big Tanks
       - Boomerang Brother
       - Super Star chest
+  - id: world_8_battleships
+    segment_id: world_8_battleships_clear
+    label: World 8-Battleships
+    type: level
+    default_status: works
+    objective: Enter the automatic Battleships node, traverse the fleet, defeat Boom Boom, and stop on the stable map before a Hand Trap.
+    guide_terms:
+      - Dark Land
+      - Battleships
+      - Boom Boom
+      - Hand Trap boundary

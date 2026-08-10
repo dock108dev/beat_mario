@@ -100,6 +100,12 @@ def parse_fceux_log(
     valid_world_8_big_tanks_entry = False
     valid_world_8_big_tanks_gameplay = False
     valid_world_8_big_tanks_clear = False
+    valid_world_8_big_tanks_post_clear = False
+    valid_world_8_battleships_entry = False
+    valid_world_8_battleships_gameplay = False
+    valid_world_8_battleships_boss_defeated = False
+    valid_world_8_battleships_clear = False
+    battleships_sequence_failed = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -285,6 +291,7 @@ def parse_fceux_log(
                 valid_world_8_big_tanks_entry = False
                 valid_world_8_big_tanks_gameplay = False
                 valid_world_8_big_tanks_clear = False
+                valid_world_8_big_tanks_post_clear = False
                 post_probe_clear = False
             if event == "post_probe_world_8_big_tanks_entered":
                 valid_world_8_big_tanks_entry = (
@@ -318,7 +325,7 @@ def parse_fceux_log(
                 )
                 post_probe_clear = False
             if event == "post_probe_world_8_big_tanks_post_clear":
-                post_probe_clear = (
+                valid_world_8_big_tanks_post_clear = (
                     valid_world_8_big_tanks_clear
                     and "evidence=stable_world_8_map_after_game_clear" in line
                     and "world_number=7" in line
@@ -327,6 +334,7 @@ def parse_fceux_log(
                     and "map_cursor_y=112" in line
                     and not playback_contaminated
                 )
+                post_probe_clear = valid_world_8_big_tanks_post_clear
             if event.startswith("post_probe_world_8_big_tanks_") and any(
                 token in event
                 for token in (
@@ -341,6 +349,107 @@ def parse_fceux_log(
                     "_unstable_",
                 )
             ):
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_started":
+                valid_world_8_battleships_entry = False
+                valid_world_8_battleships_gameplay = False
+                valid_world_8_battleships_boss_defeated = False
+                valid_world_8_battleships_clear = False
+                battleships_sequence_failed = not valid_world_8_big_tanks_post_clear
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_entered":
+                valid_world_8_battleships_entry = (
+                    valid_world_8_big_tanks_post_clear
+                    and not battleships_sequence_failed
+                    and "evidence=normal_right_right_automatic_entry_from_64_112" in line
+                    and "map_node_x=128" in line
+                    and "map_node_y=112" in line
+                    and "stage_identity=world_8_battleships" in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and "map_enter_via_id=13" in line
+                    and "entry_x=0" in line
+                    and "entry_y=320" in line
+                    and "entry_air=0" in line
+                    and not playback_contaminated
+                )
+                if not valid_world_8_battleships_entry:
+                    battleships_sequence_failed = True
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_gameplay":
+                valid_world_8_battleships_gameplay = (
+                    valid_world_8_battleships_entry
+                    and not battleships_sequence_failed
+                    and "evidence=normal_autoscroll_fleet_gameplay" in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and not playback_contaminated
+                )
+                if not valid_world_8_battleships_gameplay:
+                    battleships_sequence_failed = True
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_boss_defeated":
+                valid_world_8_battleships_boss_defeated = (
+                    valid_world_8_battleships_gameplay
+                    and not battleships_sequence_failed
+                    and "evidence=game_owned_boss_object_75_to_defeated_transition_object_74" in line
+                    and "mario_alive=1" in line
+                    and "player_is_dying=0" in line
+                    and "boss_object_id_75_active=0" in line
+                    and "defeated_transition_object_id_74_active=1" in line
+                    and not playback_contaminated
+                )
+                if not valid_world_8_battleships_boss_defeated:
+                    battleships_sequence_failed = True
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_clear":
+                valid_world_8_battleships_clear = (
+                    valid_world_8_battleships_boss_defeated
+                    and not battleships_sequence_failed
+                    and "evidence=game_owned_return_map_transition_after_defeated_boss_object" in line
+                    and "mario_alive=1" in line
+                    and "player_is_dying=0" in line
+                    and "return_map=1" in line
+                    and "boss_object_id_75_active=0" in line
+                    and "defeated_transition_object_id_74_observed=1" in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and not playback_contaminated
+                )
+                if not valid_world_8_battleships_clear:
+                    battleships_sequence_failed = True
+                post_probe_clear = False
+            if event == "post_probe_world_8_battleships_post_clear":
+                if not valid_world_8_battleships_clear:
+                    battleships_sequence_failed = True
+                post_probe_clear = (
+                    valid_world_8_battleships_clear
+                    and not battleships_sequence_failed
+                    and "evidence=stable_world_8_map_after_boom_boom" in line
+                    and "world_number=7" in line
+                    and "object_set=0" in line
+                    and "map_cursor_x=128" in line
+                    and "map_cursor_y=112" in line
+                    and "hand_trap_region_accessible=1" in line
+                    and "hand_trap_entered=0" in line
+                    and "player_is_dying=0" in line
+                    and not playback_contaminated
+                )
+            if event.startswith("post_probe_world_8_battleships_") and any(
+                token in event
+                for token in (
+                    "_wrong_",
+                    "_death",
+                    "_stall",
+                    "_timeout",
+                    "_false_clear",
+                    "_missing_",
+                    "_unexpected_next_stage",
+                    "_ambiguous_",
+                    "_unstable_",
+                )
+            ):
+                battleships_sequence_failed = True
                 post_probe_clear = False
             if x_match is not None:
                 x = int(x_match.group("x"))

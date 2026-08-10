@@ -238,3 +238,44 @@ segments:
     acceptance_event: post_probe_world_8_big_tanks_post_clear
     evidence: [bounded_live_fceux_2026-08-10_normal_entry_and_clear]
     notes: Uses normal map input, autoscrolling tank traversal, normal pipe entry, and a normal Boomerang Brother defeat; stops after a 180-frame stable map observation before another segment.
+
+  - id: world_8_battleships_clear
+    name: Clear World 8-Battleships and stop before a Hand Trap
+    status: solved
+    start_condition:
+      type: conjunction
+      conditions:
+        - {type: map_state, world: 8}
+        - {type: map_cursor, x: 64, y: 112}
+        - {type: post_probe_event, value: post_probe_world_8_big_tanks_post_clear}
+        - {type: inventory_item_count, item: p_wing, equals: 1}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, object_set: 10, map_enter_via_id: 13, x: 0, y: 320, air: 0}
+        - {type: post_probe_event, value: post_probe_world_8_battleships_entered}
+        - {type: post_probe_event, value: post_probe_world_8_battleships_gameplay}
+        - {type: boss_defeat, object_id: 75, defeated_transition_object_id: 74, proof: game_owned_object_replacement}
+        - {type: game_return_flag, address: "0x14", value: 1}
+        - {type: post_probe_event, value: post_probe_world_8_battleships_clear}
+        - {type: stable_map_state, world: 8, cursor_x: 128, cursor_y: 112}
+        - {type: post_probe_event, value: post_probe_world_8_battleships_post_clear}
+    failure_conditions:
+      - {type: wrong_map}
+      - {type: wrong_stage}
+      - {type: wrong_entry_state}
+      - {type: death}
+      - {type: false_boss_clear}
+      - {type: gameplay_stall}
+      - {type: timeout, seconds: 300}
+      - {type: missing_gameplay}
+      - {type: missing_clear}
+      - {type: missing_post_clear}
+      - {type: event_reordering}
+      - {type: unexpected_next_stage}
+      - {type: screenshot_integrity}
+      - {type: ambiguous_state}
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_battleships_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_normal_entry_boss_clear_and_map_return]
+    notes: Consumes the normally acquired World 1 P-Wing through inventory input, moves right twice to the automatic Battleships node, traverses the autoscrolling fleet, enters the final pipe, defeats object 75 through observed game-owned lifecycle transitions, and stops after a 180-frame stable map observation at cursor (128,112) without entering a Hand Trap.

@@ -34,6 +34,7 @@ from smb3_agent.segments import (
 
 FINAL_EVENT = "post_probe_world_8_map_arrival"
 BIG_TANKS_FINAL_EVENT = "post_probe_world_8_big_tanks_post_clear"
+BATTLESHIPS_FINAL_EVENT = "post_probe_world_8_battleships_post_clear"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -87,6 +88,7 @@ class ReliabilityProfile:
     minimum_authoritative_runs: int
     accepted_boundary: dict[str, int]
     focused_events: tuple[str, ...] = ()
+    require_byte_identical_logs: bool = False
 
 
 RELIABILITY_PROFILES = {
@@ -115,6 +117,26 @@ RELIABILITY_PROFILES = {
             "post_probe_world_8_big_tanks_clear",
             "post_probe_world_8_big_tanks_post_clear",
         ),
+    ),
+    "world_8_battleships": ReliabilityProfile(
+        goal_id="world_8_battleships",
+        preset="fceux_world_8_battleships",
+        final_event=BATTLESHIPS_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={
+            "world_number": 7,
+            "object_set": 0,
+            "map_cursor_x": 128,
+            "map_cursor_y": 112,
+        },
+        focused_events=(
+            "post_probe_world_8_big_tanks_post_clear",
+            "post_probe_world_8_battleships_entered",
+            "post_probe_world_8_battleships_gameplay",
+            "post_probe_world_8_battleships_clear",
+            "post_probe_world_8_battleships_post_clear",
+        ),
+        require_byte_identical_logs=True,
     ),
 }
 
@@ -314,6 +336,9 @@ def run_reliability_gate(
     successes = sum(1 for run in runs if run["passed"])
     log_hashes = [run["structured_log_sha256"] for run in runs]
     non_null_hashes = [digest for digest in log_hashes if digest is not None]
+    byte_identical_logs = len(non_null_hashes) == requested_runs and len(
+        set(non_null_hashes)
+    ) == 1
     base_report.update(
         {
             "runs": runs,
@@ -322,10 +347,10 @@ def run_reliability_gate(
             "success_rate": round(successes / requested_runs, 6),
             "overall_pass": requested_runs >= profile.minimum_authoritative_runs
             and len(runs) == requested_runs
-            and successes == requested_runs,
+            and successes == requested_runs
+            and (byte_identical_logs or not profile.require_byte_identical_logs),
             "structured_log_sha256s": log_hashes,
-            "byte_identical_logs": len(non_null_hashes) == requested_runs
-            and len(set(non_null_hashes)) == 1,
+            "byte_identical_logs": byte_identical_logs,
             "failure_classifications": dict(
                 Counter(
                     run["failure_classification"]
@@ -839,11 +864,17 @@ def _final_observable(text: str) -> dict[str, Any]:
         "world_number": _to_int(fields.get("world_number")),
         "mode": fields.get("mode"),
         "object_set": _to_int(fields.get("object_set")),
+        "map_cursor_x": _to_int(fields.get("map_cursor_x")),
+        "map_cursor_y": _to_int(fields.get("map_cursor_y")),
         "inventory": inventory,
         "lives": _to_int(
             fields.get("lives") or fields.get("life_count") or fields.get("m_count")
         ),
         "form": _to_int(fields.get("form")),
+        "player_is_dying": _to_int(fields.get("player_is_dying")),
+        "starting_lives": _to_int(fields.get("starting_lives")),
+        "current_lives": _to_int(fields.get("current_lives")),
+        "hand_trap_entered": _to_int(fields.get("hand_trap_entered")),
         "event": fields.get("event"),
         "frame": _to_int(fields.get("frame")),
     }

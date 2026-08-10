@@ -21,6 +21,17 @@ local world_8_focused_capture_events = {
   post_probe_world_8_big_tanks_clear = true,
   post_probe_world_8_big_tanks_post_clear = true,
 }
+if world_8_extension_mode == "battleships"
+  or world_8_extension_mode == "battleships_discovery"
+then
+  world_8_focused_capture_events = {
+    post_probe_world_8_big_tanks_post_clear = true,
+    post_probe_world_8_battleships_entered = true,
+    post_probe_world_8_battleships_gameplay = true,
+    post_probe_world_8_battleships_clear = true,
+    post_probe_world_8_battleships_post_clear = true,
+  }
+end
 local world_8_discovery_sequence = os.getenv("SMB3_WORLD_8_DISCOVERY_SEQUENCE") or "right,A"
 local world_8_big_tanks_jump_period =
   tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_JUMP_PERIOD") or "72")
@@ -7184,6 +7195,450 @@ local function run_1_6_probe()
   log_1_6("post_probe_1_6_done")
 end
 
+-- World 8-Battleships shares object set 10 with the accepted World 8 convoy
+-- and airship stages.  The stage is distinguished by the game-owned automatic
+-- map entry at node (128,112), its observed entry coordinates, and the normal
+-- pipe transition into the grounded Boom Boom room.  RAM used below is
+-- observer-only: 0x727 is the zero-based world number, 0x70A is the object set,
+-- 0x79/0x75 are the map cursor coordinates, 0x1E is the map-entry object id,
+-- 0x14 is the game-owned return-to-map flag, 0x736 is the lives counter, and
+-- 0xF1 is the player death state. Active object slots are 0x660+slot, their ids
+-- are 0x670+slot, and their lifecycle bytes are 0xD8+slot. Object id 75 is the
+-- live Boom Boom; its game-owned defeated transition replaces it with active
+-- object id 74 before 0x14 returns Mario to the map.
+local function run_world_8_battleships_extension(discovery_mode)
+  if memory.readbyte(0x727) ~= 7
+    or memory.readbyte(0x70A) ~= 0
+    or memory.readbyte(0x79) ~= 64
+    or memory.readbyte(0x75) ~= 112
+  then
+    log_state(
+      "post_probe_world_8_battleships_wrong_map",
+      "failure_classification=wrong_map expected_world_number=7 expected_object_set=0 expected_cursor_x=64 expected_cursor_y=112"
+    )
+    return
+  end
+  if discovery_mode then
+    log_state(
+      "post_probe_world_8_battleships_discovery_controller",
+      "review_only=1 promotable=0 counts_toward_reliability=0"
+    )
+  end
+  log_state(
+    "post_probe_world_8_battleships_started",
+    "evidence=accepted_big_tanks_post_clear_boundary cursor_x=64 cursor_y=112"
+  )
+  local starting_p_wing_count = inventory_item_count(8)
+  if starting_p_wing_count ~= 1 then
+    log_state(
+      "post_probe_world_8_battleships_missing_powerup",
+      "failure_classification=wrong_entry_state expected_normally_acquired_p_wing_count=1 observed_p_wing_count="
+        .. tostring(starting_p_wing_count)
+    )
+    return
+  end
+  press("B", 18, "post_probe_world_8_battleships_inventory_open")
+  advance(300, "post_probe_world_8_battleships_inventory_settle")
+  press("right", 18, "post_probe_world_8_battleships_inventory_select_p_wing")
+  advance(60, "post_probe_world_8_battleships_inventory_selected_p_wing")
+  press("A", 18, "post_probe_world_8_battleships_inventory_use_p_wing")
+  advance(300, "post_probe_world_8_battleships_inventory_use_settle")
+  if inventory_item_count(8) ~= starting_p_wing_count - 1 then
+    log_state(
+      "post_probe_world_8_battleships_wrong_powerup",
+      "failure_classification=wrong_entry_state evidence=p_wing_not_consumed_by_normal_inventory_input"
+    )
+    return
+  end
+  log_state(
+    "post_probe_world_8_battleships_p_wing_used",
+    "evidence=normal_inventory_B_right_A acquired_from_world_1_king p_wing_before="
+      .. tostring(starting_p_wing_count)
+      .. " p_wing_after=" .. tostring(inventory_item_count(8))
+  )
+  advance(180, "post_probe_world_8_battleships_entry_wait")
+  press("right", 18, "post_probe_world_8_battleships_entry_right_1")
+  advance(60, "post_probe_world_8_battleships_entry_after_right_1")
+  press("right", 18, "post_probe_world_8_battleships_entry_right_2")
+
+  local entered_stage = false
+  local entry_x = -1
+  local entry_y = -1
+  local entry_air = -1
+  for _ = 1, 300 do
+    local candidate = mario()
+    if memory.readbyte(0x727) == 7
+      and memory.readbyte(0x70A) == 10
+      and candidate.x < 8192
+      and candidate.y ~= 0
+    then
+      entered_stage = true
+      entry_x = candidate.x
+      entry_y = candidate.y
+      entry_air = candidate.air
+      break
+    end
+    advance_frame()
+  end
+  if not entered_stage then
+    log_state(
+      "post_probe_world_8_battleships_wrong_stage",
+      "failure_classification=failed_entry expected_world_number=7 expected_object_set=10 map_node_x=128 map_node_y=112"
+    )
+    return
+  end
+  if entry_x ~= 0
+    or entry_y ~= 320
+    or entry_air ~= 0
+    or memory.readbyte(0x1E) ~= 13
+  then
+    log_state(
+      "post_probe_world_8_battleships_wrong_entry_state",
+      "failure_classification=wrong_entry_state expected_entry_x=0 expected_entry_y=320 expected_entry_air=0 expected_map_enter_via_id=13 observed_entry_x="
+        .. tostring(entry_x)
+        .. " observed_entry_y=" .. tostring(entry_y)
+        .. " observed_entry_air=" .. tostring(entry_air)
+        .. " observed_map_enter_via_id=" .. tostring(memory.readbyte(0x1E))
+    )
+    return
+  end
+  advance(90, "post_probe_world_8_battleships_entry_visual_settle")
+  log_state(
+    "post_probe_world_8_battleships_entered",
+    "evidence=normal_right_right_automatic_entry_from_64_112 map_node_x=128 map_node_y=112 stage_identity=world_8_battleships entry_x="
+      .. tostring(entry_x)
+      .. " entry_y=" .. tostring(entry_y)
+      .. " entry_air=" .. tostring(entry_air)
+  )
+
+  local starting_lives = memory.readbyte(0x736)
+  local max_x = entry_x
+  local stage_frames = 0
+  local last_x = entry_x
+  local stuck_frames = 0
+  local gameplay_evidence_logged = false
+  local pipe_started = false
+  local pipe_jump_started = false
+  local pipe_jump_frames = 0
+  local boss_room_entered = false
+  local boss_ready = false
+  local boss_frames = 0
+  local boss_jump_frames = 0
+  local boss_last_state = nil
+  local boss_stomp_transitions = 0
+  local boss_seen = false
+  local boss_defeated = false
+  local stage_clear_logged = false
+  local returned_to_map = false
+  local return_cursor_x = -1
+  local return_cursor_y = -1
+
+  for frame = 1, 9000 do
+    local m = mario()
+    local object_set = memory.readbyte(0x70A)
+    local world_number = memory.readbyte(0x727)
+    local player_is_dying = memory.readbyte(0xF1)
+    if player_is_dying ~= 0 or memory.readbyte(0x736) < starting_lives then
+      log_state(
+        "post_probe_world_8_battleships_death",
+        "failure_classification=death player_is_dying="
+          .. tostring(player_is_dying)
+          .. " starting_lives=" .. tostring(starting_lives)
+          .. " current_lives=" .. tostring(memory.readbyte(0x736))
+          .. " max_x=" .. tostring(max_x)
+      )
+      return
+    end
+    if world_number == 7 and object_set == 0 then
+      returned_to_map = true
+      return_cursor_x = memory.readbyte(0x79)
+      return_cursor_y = memory.readbyte(0x75)
+      break
+    end
+    if world_number ~= 7 or (object_set ~= 10 and object_set ~= 0) then
+      log_state(
+        "post_probe_world_8_battleships_unexpected_next_stage",
+        "failure_classification=unexpected_next_stage world_number="
+          .. tostring(world_number)
+          .. " object_set=" .. tostring(object_set)
+      )
+      return
+    end
+    if world_number ~= 7 or object_set ~= 10 or m.x >= 8192 or m.y == 0 then
+      held.A = false
+      held.B = false
+      held.right = false
+      held.left = false
+      held.down = false
+      held.up = false
+      apply()
+      advance_frame()
+    else
+      stage_frames = stage_frames + 1
+      max_x = math.max(max_x, m.x)
+      if not gameplay_evidence_logged and max_x >= 600 then
+        gameplay_evidence_logged = true
+        log_state(
+          "post_probe_world_8_battleships_gameplay",
+          "evidence=normal_autoscroll_fleet_gameplay max_x=" .. tostring(max_x)
+        )
+      end
+      if math.abs(m.x - last_x) <= 1 and m.air == 0 then
+        stuck_frames = stuck_frames + 1
+      else
+        stuck_frames = 0
+        last_x = m.x
+      end
+      if not boss_room_entered and max_x < 2480 and stuck_frames >= 900 then
+        log_state(
+          "post_probe_world_8_battleships_gameplay_stall",
+          "failure_classification=gameplay_stall max_x=" .. tostring(max_x)
+        )
+        return
+      end
+      if not boss_room_entered and max_x >= 1200 and m.x < 512 then
+        boss_room_entered = true
+        pipe_started = true
+        log_state(
+          "post_probe_world_8_battleships_boss_room_entered",
+          "evidence=normal_end_pipe_transition max_x=" .. tostring(max_x)
+        )
+      end
+
+      held.up = false
+      held.down = false
+      if boss_room_entered then
+        boss_frames = boss_frames + 1
+        local boss_enemy = nearest_enemy_between(m, -240, 240)
+        local boss_state = object_internal_state(75)
+        if boss_enemy ~= nil and boss_enemy.id ~= 75 then
+          boss_enemy = nil
+        end
+        if boss_enemy ~= nil then
+          boss_seen = true
+        end
+        if boss_state ~= nil and boss_state ~= boss_last_state then
+          if boss_last_state == 4 and boss_state == 0 then
+            boss_stomp_transitions = boss_stomp_transitions + 1
+            log_state(
+              "post_probe_world_8_battleships_boss_stomp_confirmed",
+              "evidence=boss_state_4_to_0 hit=" .. tostring(boss_stomp_transitions)
+            )
+          end
+          boss_last_state = boss_state
+          log_state(
+            "post_probe_world_8_battleships_boss_state",
+            "boss_state=" .. tostring(boss_state)
+          )
+        end
+        if boss_seen
+          and not has_active_enemy_id(75)
+          and has_active_enemy_id(74)
+          and not boss_defeated
+        then
+          boss_defeated = true
+          log_state(
+            "post_probe_world_8_battleships_boss_defeated",
+            "evidence=game_owned_boss_object_75_to_defeated_transition_object_74 mario_alive=1 player_is_dying=0 starting_lives="
+              .. tostring(starting_lives)
+              .. " current_lives=" .. tostring(memory.readbyte(0x736))
+              .. " boss_object_id_75_active=0 defeated_transition_object_id_74_active=1 boss_state_transitions="
+              .. tostring(boss_stomp_transitions)
+          )
+        end
+        if boss_defeated
+          and not stage_clear_logged
+          and memory.readbyte(0x14) == 1
+          and not has_active_enemy_id(75)
+        then
+          stage_clear_logged = true
+          log_state(
+            "post_probe_world_8_battleships_clear",
+            "evidence=game_owned_return_map_transition_after_defeated_boss_object mario_alive=1 player_is_dying=0 starting_lives="
+              .. tostring(starting_lives)
+              .. " current_lives=" .. tostring(memory.readbyte(0x736))
+              .. " return_map=1 boss_object_id_75_active=0 defeated_transition_object_id_74_observed=1 boss_state_transitions="
+              .. tostring(boss_stomp_transitions)
+          )
+        end
+        if not boss_ready then
+          held.A = false
+          held.B = false
+          held.right = false
+          held.left = false
+          if m.air == 0 and m.y >= 100 then
+            boss_ready = true
+            log_state("post_probe_world_8_battleships_boss_ready")
+          end
+        elseif boss_enemy ~= nil and boss_state == 4 then
+          if m.air == 0 and boss_jump_frames == 0 then
+            boss_jump_frames = 32
+          end
+          held.A = boss_jump_frames > 0
+          if boss_jump_frames > 0 then
+            boss_jump_frames = boss_jump_frames - 1
+          end
+          held.B = false
+          held.right = boss_enemy.dx > 4
+          held.left = boss_enemy.dx < -4
+        elseif boss_enemy ~= nil then
+          if m.air == 0 and boss_jump_frames == 0 then
+            boss_jump_frames = 28
+          end
+          held.A = boss_jump_frames > 0
+          if boss_jump_frames > 0 then
+            boss_jump_frames = boss_jump_frames - 1
+          end
+          held.B = false
+          held.right = boss_enemy.dx < 0 and m.sx < 216
+          held.left = boss_enemy.dx > 0 and m.sx > 40
+        else
+          held.A = false
+          held.B = false
+          held.right = m.sx < 128
+          held.left = m.sx > 160
+        end
+      elseif pipe_started or max_x >= 2480 then
+        if not pipe_started then
+          pipe_started = true
+          log_state(
+            "post_probe_world_8_battleships_pipe_approach",
+            "evidence=observed_end_of_third_ship max_x=" .. tostring(max_x)
+          )
+        end
+        if not pipe_jump_started
+          and m.y < 60000
+          and m.y >= 280
+          and m.air == 0
+          and m.sx <= 102
+        then
+          pipe_jump_started = true
+          pipe_jump_frames = 40
+          log_state(
+            "post_probe_world_8_battleships_pipe_jump",
+            "evidence=normal_jump_onto_observed_end_pipe"
+          )
+        end
+        held.B = false
+        if pipe_jump_started then
+          held.right = m.sx < 116
+          held.left = m.sx > 124
+        else
+          held.right = m.sx < 88
+          held.left = m.sx > 98
+        end
+        if pipe_jump_frames > 0 then
+          held.A = true
+          held.down = false
+          pipe_jump_frames = pipe_jump_frames - 1
+        else
+          held.A = false
+          held.down = pipe_jump_started
+            and m.sx >= 112
+            and m.sx <= 132
+            and m.air == 0
+            and m.y <= 260
+        end
+      else
+        local current_form = memory.readbyte(0xED)
+        local p_wing_flight = current_form == 3
+          and memory.readbyte(0x56E) == 255
+        if p_wing_flight then
+          held.right = m.sx < 185
+          held.left = m.sx > 215
+          held.B = true
+          held.A = (stage_frames % 24) < 12
+        elseif m.y >= 350 then
+          held.right = m.sx < 150
+          held.left = m.sx > 185
+          held.B = true
+          held.A = (stage_frames % 16) < 10
+          held.up = true
+        else
+          held.right = m.sx < 150
+          held.left = m.sx > 185
+          held.B = frame % 12 ~= 0
+          held.A = (stage_frames % 48) < 32
+        end
+      end
+      apply()
+      if discovery_mode
+        and ((pipe_started and frame % 10 == 0) or frame % 120 == 0)
+      then
+        log_state(
+          "post_probe_world_8_battleships_discovery_tick",
+          "max_x=" .. tostring(max_x)
+            .. " stage_frames=" .. tostring(stage_frames)
+            .. " " .. object_summary_between(m, -240, 320, 240)
+        )
+      end
+      advance_frame()
+    end
+  end
+
+  held.A = false
+  held.B = false
+  held.right = false
+  held.left = false
+  held.down = false
+  held.up = false
+  apply()
+  if not returned_to_map then
+    log_state(
+      "post_probe_world_8_battleships_timeout",
+      "failure_classification=controller_timeout max_x="
+        .. tostring(max_x)
+        .. " stage_frames=" .. tostring(stage_frames)
+        .. " boss_room_entered=" .. tostring(boss_room_entered and 1 or 0)
+        .. " boss_stomps=" .. tostring(boss_stomp_transitions)
+    )
+    return
+  end
+  if not boss_defeated or not stage_clear_logged then
+    log_state(
+      "post_probe_world_8_battleships_false_clear",
+      "failure_classification=false_clear evidence=map_return_without_observed_defeated_boss_and_game_owned_clear_transition boss_defeated="
+        .. tostring(boss_defeated and 1 or 0)
+        .. " stage_clear_logged=" .. tostring(stage_clear_logged and 1 or 0)
+        .. " boss_stomps=" .. tostring(boss_stomp_transitions)
+    )
+    return
+  end
+  if return_cursor_x ~= 128 or return_cursor_y ~= 112 then
+    log_state(
+      "post_probe_world_8_battleships_wrong_post_clear_map",
+      "failure_classification=wrong_post_clear_map expected_cursor_x=128 expected_cursor_y=112 observed_cursor_x="
+        .. tostring(return_cursor_x)
+        .. " observed_cursor_y=" .. tostring(return_cursor_y)
+    )
+    return
+  end
+  for _ = 1, 180 do
+    advance_frame()
+    if memory.readbyte(0x727) ~= 7 or memory.readbyte(0x70A) ~= 0 then
+      log_state("post_probe_world_8_battleships_unexpected_next_stage")
+      return
+    end
+    if memory.readbyte(0x79) ~= 128
+      or memory.readbyte(0x75) ~= 112
+    then
+      log_state("post_probe_world_8_battleships_unstable_post_clear")
+      return
+    end
+  end
+  log_state(
+    "post_probe_world_8_battleships_post_clear",
+    "evidence=stable_world_8_map_after_boom_boom cursor_x="
+      .. tostring(return_cursor_x)
+      .. " cursor_y=" .. tostring(return_cursor_y)
+      .. " hand_trap_region_accessible=1 hand_trap_entered=0 max_x="
+      .. tostring(max_x)
+      .. " stage_frames=" .. tostring(stage_frames)
+      .. " player_is_dying=0 starting_lives=" .. tostring(starting_lives)
+      .. " current_lives=" .. tostring(memory.readbyte(0x736))
+  )
+end
+
 local function run_1_castle_probe()
   log_state("post_probe_1_castle_start")
   if memory.readbyte(0x70A) ~= 10 and apply_airship_stage_bridge() then
@@ -7598,7 +8053,10 @@ local function run_1_castle_probe()
       "post_probe_world_8_discovery_observed",
       "review_only=1 promotable=0 counts_toward_reliability=0"
     )
-  elseif world_8_extension_mode == "big_tanks" then
+  elseif world_8_extension_mode == "big_tanks"
+    or world_8_extension_mode == "battleships"
+    or world_8_extension_mode == "battleships_discovery"
+  then
     if memory.readbyte(0x727) ~= 7
       or memory.readbyte(0x70A) ~= 0
       or memory.readbyte(0x79) ~= 32
@@ -8446,6 +8904,13 @@ local function run_1_castle_probe()
         .. tostring(max_x)
         .. " stage_frames=" .. tostring(stage_frames)
     )
+    if world_8_extension_mode == "battleships"
+      or world_8_extension_mode == "battleships_discovery"
+    then
+      run_world_8_battleships_extension(
+        world_8_extension_mode == "battleships_discovery"
+      )
+    end
   end
 end
 

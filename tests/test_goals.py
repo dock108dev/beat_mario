@@ -211,6 +211,41 @@ def test_world_8_big_tanks_is_a_separate_one_segment_extension() -> None:
     assert extension.execution_status == "executable"
 
 
+def test_world_8_battleships_is_the_seventeenth_cumulative_segment() -> None:
+    arrival = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+    big_tanks = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    battleships = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
+
+    assert len(arrival.segments) == 15
+    assert len(big_tanks.segments) == 16
+    assert len(battleships.segments) == 17
+    assert battleships.prefix_goal == big_tanks.id
+    assert battleships.segments[:16] == big_tanks.segments
+    assert battleships.segments[16:] == ("world_8_battleships_clear",)
+    assert battleships.bridged_segments == ()
+    assert battleships.preset == "fceux_world_8_battleships"
+    assert arrival.segments[-1] == "world_8_map_arrival"
+    assert big_tanks.segments[-1] == "world_8_big_tanks_clear"
+
+
+def test_battleships_goal_cannot_pass_on_prefix_or_entry_alone() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
+    attempts = (
+        AttemptSummary(1, True, False, True, True, 3136),
+    )
+    summary = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_battleships_entered",
+        post_probe_clear=False,
+        post_probe_events=(
+            "post_probe_world_8_big_tanks_post_clear",
+            "post_probe_world_8_battleships_entered",
+        ),
+    )
+
+    assert evaluate_success_metrics(contract, summary) is False
+
+
 def test_goal_contract_rejects_prefix_cycles(tmp_path: Path) -> None:
     cycle = tmp_path / "cycle.yaml"
     cycle.write_text(Path("data/goals/world_8_big_tanks.yaml").read_text())

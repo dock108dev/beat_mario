@@ -4,6 +4,7 @@ A goal contract is the machine-readable source of truth for a user objective.
 The default product contract remains
 `data/goals/world_8_double_whistle.yaml`. Rank 28 adds the explicitly selected
 `data/goals/world_8_big_tanks.yaml` contract without changing that default.
+`data/goals/world_8_battleships.yaml` is the next cumulative product contract.
 
 ## Route semantics
 
@@ -18,7 +19,7 @@ The default product contract remains
   cannot satisfy a goal that disallows it.
 
 Route need and execution status are separate. All 15 default product steps and
-the one Big Tanks extension step are `normal_gameplay`; the legacy
+the Big Tanks and Battleships extension steps are `normal_gameplay`; the legacy
 diagnostic's bridges remain isolated and are not product proof.
 
 ## Default contract shape
@@ -130,6 +131,47 @@ a stable World 8 map observation at cursor `(64,112)`. The final success event
 is `post_probe_world_8_big_tanks_post_clear`; no later World 8 stage may be
 entered.
 
+## World 8-Battleships composed contract
+
+Battleships declares the accepted Big Tanks goal as its prefix and owns exactly
+one segment:
+
+```yaml
+id: world_8_battleships
+game: smb3
+goal_type: product_goal
+execution_status: executable
+
+objective:
+  type: route_completion
+  target: world_8_battleships_post_clear
+
+route:
+  prefix_goal: world_8_big_tanks
+  catalog: data/segments/world_8_double_whistle.yaml
+  segments:
+    - id: world_8_battleships_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+
+runner:
+  preset: fceux_world_8_battleships
+  executable: true
+```
+
+Resolution produces exactly 17 ordered segments and zero bridges while leaving
+the 15- and 16-segment goals unchanged. The observer requires the accepted Big
+Tanks post-clear cursor `(64,112)`, normal automatic entry at map node
+`(128,112)`, stage object set `10`, entry id `13`, and original entry state
+`x=0`, `y=320`, `air=0`. A delayed screenshot does not rewrite that captured
+entry identity.
+
+Boss success is game-owned: live object id `75` must be replaced by the
+defeated-transition object id `74` while Mario is alive, then return flag
+`0x14=1` must occur. The final event is
+`post_probe_world_8_battleships_post_clear` at cursor `(128,112)`, after a
+180-frame stable map observation with `hand_trap_entered=0`.
+
 ## Legacy diagnostic
 
 `data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its
@@ -148,8 +190,11 @@ explicitly selected, and its king marker remains local to that diagnostic.
 .venv/bin/python -m smb3_agent goal validate \
   data/goals/world_8_big_tanks.yaml
 .venv/bin/python -m smb3_agent goal status world_8_big_tanks
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_battleships.yaml
+.venv/bin/python -m smb3_agent goal status world_8_battleships
 ```
 
 `goal run world_8_double_whistle` executes the product preset directly and
-never routes to `world_1_king`. The Big Tanks preset is selected only by the
-separate goal.
+never routes to `world_1_king`. The Big Tanks and Battleships presets are
+selected only by their separate goals; neither may fall back to another preset.

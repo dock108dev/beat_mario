@@ -94,3 +94,30 @@ def test_world_8_big_tanks_catalog_adds_exactly_one_solved_segment() -> None:
     validate_goal_segments(extension, catalog)
     assert len(extension.segments) == len(prefix.segments) + 1
     assert catalog.by_id["world_8_big_tanks_clear"].status == "solved"
+
+
+def test_world_8_battleships_catalog_adds_exactly_one_more_solved_segment() -> None:
+    big_tanks = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    battleships = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
+    catalog = load_segment_catalog(battleships.catalog_path)
+
+    validate_goal_segments(battleships, catalog)
+    assert len(big_tanks.segments) == 16
+    assert len(battleships.segments) == 17
+    assert catalog.by_id["world_8_battleships_clear"].status == "solved"
+    assert catalog.by_id["world_8_battleships_clear"].acceptance_event == (
+        "post_probe_world_8_battleships_post_clear"
+    )
+    success_events = {
+        condition.get("value")
+        for condition in catalog.by_id[
+            "world_8_battleships_clear"
+        ].success_condition["conditions"]
+        if condition.get("type") == "post_probe_event"
+    }
+    assert success_events == {
+        "post_probe_world_8_battleships_entered",
+        "post_probe_world_8_battleships_gameplay",
+        "post_probe_world_8_battleships_clear",
+        "post_probe_world_8_battleships_post_clear",
+    }

@@ -28,6 +28,15 @@ def test_reliability_cli_selects_big_tanks_as_an_explicit_separate_goal() -> Non
     assert args.runs is None
 
 
+def test_reliability_cli_selects_battleships_without_fallback() -> None:
+    args = build_parser().parse_args(
+        ["reliability", "run", "--goal", "world_8_battleships"]
+    )
+
+    assert args.goal == "world_8_battleships"
+    assert args.runs is None
+
+
 def test_parse_world_1_king_gate_command() -> None:
     command = parse_command("run world 1 king gate 3 times")
 

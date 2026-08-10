@@ -3,7 +3,8 @@
 Reliability is profile-driven by goal. The default Rank 27 profile proves
 repeatable arrival at the accepted World 8 map boundary. The separate Rank 28
 profile reuses that complete prefix, clears Big Tanks, and proves the normal
-post-clear map return.
+post-clear map return. The Battleships profile adds one cumulative segment and
+stops before a Hand Trap.
 
 ## Authoritative command
 
@@ -52,6 +53,20 @@ stall, timeout, enemy disappearance without a live boss defeat, missing chest
 clear, missing stable post-clear state, or unexpected next-stage entry fails
 closed with a bounded classification.
 
+The Battleships profile is selected explicitly:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_battleships \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+It requires at least three runs, all 17 ordered events, exactly five focused
+screenshots per run, and byte-identical structured logs across the batch.
+Wrong map, stage, entry state, death, false boss clear, missing or reordered
+events, stall, timeout, unexpected next-stage entry, screenshot omission or
+corruption, or fewer than three fresh successes fails the aggregate.
+
 ## Watchable command
 
 ```bash
@@ -77,6 +92,11 @@ Select the Big Tanks review profile with `--goal world_8_big_tanks`. The
 accepted Rank 28 review used `--throttle-seconds 0.0001`; it retains exactly
 the five focused contact-sheet frames plus a state/tick trace and remains
 non-promotable.
+
+Select `world_8_battleships` for the cumulative review. The accepted playback
+used the independently validated `--throttle-seconds 0.0001`, retained exactly
+five contact-sheet frames plus a 668-line tick trace, and remains `review_only`,
+`promotable=false`, and excluded from authoritative reliability.
 
 ## Artifact layout
 
@@ -118,6 +138,11 @@ The equivalent Rank 28 roots are
 also contain `evidence/png/01_...` through `05_...` for the required focused
 screenshots.
 
+The Battleships roots are
+`artifacts/reliability/world_8_battleships/` and
+`artifacts/review/world_8_battleships/`; its authoritative runs also contain
+the five focused `evidence/png/` files.
+
 Each aggregate records goal and route-catalog hashes, source commit and dirty
 state, start/finish/elapsed time, run count, artifact paths, contract metrics,
 final events, structured-log SHA-256 values, success rate, and overall result.
@@ -141,6 +166,9 @@ distinguish:
 Rank 28 refines gameplay failures into actionable wrong-map, wrong-stage,
 wrong-entry-state, death, gameplay-stall, timeout, false-clear,
 missing-post-clear, unexpected-next-stage, and ambiguous-state outcomes.
+Battleships additionally rejects false boss clear, missing gameplay or clear,
+event reordering, screenshot integrity failures, and a batch below its
+three-fresh-success minimum.
 
 Every run report includes the last accepted product event and segment, the first
 missing milestone, the first violated event when available, the final observable

@@ -70,6 +70,68 @@ again at:
 artifacts/reliability/world_8_double_whistle/20260810T212451.471392Z_reliability/
 ```
 
+## World 8-Battleships cumulative goal
+
+`world_8_battleships` declares `world_8_big_tanks` as its prefix and adds only
+`world_8_battleships_clear`. Resolution contains exactly 17 normal-gameplay
+segments and zero bridges; the 15-segment default and 16-segment Big Tanks
+contracts are unchanged.
+
+From the accepted Big Tanks post-clear cursor `(64,112)`, the route normally
+consumes the retained P-Wing, moves right twice, and accepts the game's
+automatic entry at node `(128,112)`. The observed Battleships identity is
+`world_number=7`, `object_set=10`, `map_enter_via_id=13`, with original entry
+state `x=0`, `y=320`, `air=0`. The controller traverses the three-ship
+autoscroller, enters the normal end pipe, and fights Boom Boom.
+
+Boss proof does not rely on disappearance or a fixed hit count. Active object
+id `75` is the live Boom Boom. The game-owned defeated transition removes id
+`75` and activates id `74`; only then may return flag `0x14=1` prove the clear,
+with Mario alive and lives unchanged. The returned map stabilizes for 180 frames
+at cursor `(128,112)`, reports `hand_trap_region_accessible=1` and
+`hand_trap_entered=0`, and stops before another stage.
+
+The observer assignments used by this extension are documented in the runner:
+
+- `0x727`: zero-based world number; `0x70A`: object set.
+- `0x79`/`0x75`: map cursor coordinates; `0x1E`: map-entry object id.
+- `0x90` + `0x75*256` and `0xA2` + `0x87*256`: Mario world coordinates;
+  `0xD8`: Mario air state.
+- `0x736`: lives; `0xF1`: player death state; `0x14`: return-to-map flag.
+- `0x660+slot`: active object; `0x670+slot`: object id; `0xD8+slot`: object
+  lifecycle state.
+
+The authoritative command passed 3/3 with `success_rate=1.0`,
+`overall_pass=true`, 17/17 ordered events, five focused screenshots per run,
+and byte-identical structured logs:
+
+```text
+artifacts/reliability/world_8_battleships/20260810T225906.177318Z_reliability/
+```
+
+All three logs have SHA-256:
+
+```text
+9b278b158415144ceb188f13773ac457f6f4ada15493a0758e3ac21172b8ec2c
+```
+
+The separate review-only run passed at the independently validated
+`0.0001`-second throttle and retained a five-frame contact sheet plus a 668-line
+tick trace:
+
+```text
+artifacts/review/world_8_battleships/20260810T224805.096938Z_watchable/
+```
+
+After the shared runner, observer, catalog, and harness changes, the unchanged
+Rank 27 route passed 5/5 at World 8 arrival and the unchanged Rank 28 route
+passed 3/3 at the Big Tanks post-clear map:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T230007.756761Z_reliability/
+artifacts/reliability/world_8_big_tanks/20260810T230122.959142Z_reliability/
+```
+
 ## Rank 27 reliability evidence
 
 The authoritative command passed 5/5:
@@ -139,10 +201,12 @@ observed in the accepted batch.
 | 14 | World 8 pipe | objective milestone | normal gameplay | solved via right then A from the World 8 tier |
 | 15 | World 8 map arrival | objective milestone | normal gameplay | solved; `world_number=7`, `object_set=0` |
 | 16 | World 8 Big Tanks clear | objective milestone in separate goal | normal gameplay | solved 3/3; stable post-clear map return |
+| 17 | World 8-Battleships clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; stable map before Hand Trap |
 
-Row 16 belongs only to `world_8_big_tanks`; the default contract still ends at
-row 15. World 1-4 is absent. World 7 is not entered; it is only one of the
-labels on the expected first Warp Zone tier.
+Row 16 belongs to `world_8_big_tanks` and the Battleships prefix; row 17 belongs
+only to `world_8_battleships`. The default contract still ends at row 15. World
+1-4 is absent. World 7 is not entered; it is only one of the labels on the
+expected first Warp Zone tier.
 
 ## Fresh live investigation
 

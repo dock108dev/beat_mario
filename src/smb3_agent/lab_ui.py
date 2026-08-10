@@ -56,6 +56,7 @@ SUPPORTED_ATTEMPTS = ("1", "3", "5", "10")
 LAB_GOALS = (
     (ACTIVE_PRODUCT_GOAL_ID, "World 8 Arrival"),
     ("world_8_big_tanks", "World 8 Big Tanks"),
+    ("world_8_battleships", "World 8-Battleships"),
 )
 LAB_GOAL_IDS = frozenset(goal_id for goal_id, _ in LAB_GOALS)
 
@@ -2189,6 +2190,7 @@ def _location_id_for_artifact(value: str) -> str:
         "warp_zone_world_8_tier": "warp_zone_world_8",
         "world_8_pipe_entry": "world_8_pipe",
         "world_8_big_tanks_clear": "world_8_big_tanks",
+        "world_8_battleships_clear": "world_8_battleships",
         "world_8_map_arrival": "world_8_map",
         "fortress": "world_1_fortress",
         "castle": "world_1_airship",
@@ -2261,6 +2263,8 @@ def _location_url(
 
 
 def _goal_subtitle(goal_id: str) -> str:
+    if goal_id == "world_8_battleships":
+        return "World 2-first double-whistle route through World 8-Battleships"
     if goal_id == "world_8_big_tanks":
         return "World 2-first double-whistle route through World 8 Big Tanks"
     return "World 2-first double-whistle route to World 8"

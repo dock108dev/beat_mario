@@ -39,6 +39,11 @@ does not change the default selection, modify the Rank 27 goal, or include a
 later World 8 stage. A URL may select it directly with
 `/?goal=world_8_big_tanks`.
 
+The switcher also exposes `world_8_battleships`. That view composes the same
+16-row Big Tanks route with row 17, World 8-Battleships, and can be selected
+directly with `/?goal=world_8_battleships`. It contains no Hand Trap or later
+World 8 row.
+
 Each route row uses player-facing language and displays its role:
 
 - `goal milestone` for owner-required outcomes;
@@ -64,7 +69,8 @@ structure.
 
 `Run World 8 Route` remains the only strong primary button and retains the
 default Rank 27 behavior. The goal switcher is a route/evidence review control;
-use the goal-specific CLI reliability command to execute Big Tanks. Neither
+use the goal-specific CLI reliability command to execute Big Tanks or
+Battleships. Neither
 surface runs the World 1 king diagnostic.
 
 Unit tests, phase gate, HTML render check, refresh, note, lifecycle, and Codex
@@ -90,6 +96,10 @@ view, all 16 rows have normal-gameplay evidence; the extension has three fresh
 byte-identical authoritative runs plus a separate five-frame review contact
 sheet.
 
+In the Battleships view, all 17 rows have normal-gameplay evidence. The final
+row links to three fresh authoritative runs with five focused screenshots each
+and the separate five-frame review contact sheet.
+
 ## Route roles and observations
 
 Notes and issues continue to use human locations while retaining segment ids in
@@ -103,6 +113,7 @@ artifacts. New active mappings include:
 - `world_8_pipe_entry` -> World 8 Pipe
 - `world_8_map_arrival` -> World 8 Map
 - `world_8_big_tanks_clear` -> World 8 Big Tanks
+- `world_8_battleships_clear` -> World 8-Battleships
 
 ## Commands
 
@@ -124,6 +135,7 @@ Inspect the contract independently:
 ```bash
 python -m smb3_agent goal status world_8_double_whistle
 python -m smb3_agent goal status world_8_big_tanks
+python -m smb3_agent goal status world_8_battleships
 ```
 
 ## Visual contract

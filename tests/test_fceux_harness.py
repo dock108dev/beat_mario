@@ -215,6 +215,36 @@ def _world_8_big_tanks_lines() -> list[str]:
     ]
 
 
+def _world_8_battleships_lines() -> list[str]:
+    return _world_8_big_tanks_lines() + [
+        "frame=110 event=post_probe_world_8_battleships_started "
+        "world_number=7 object_set=0 map_cursor_x=64 map_cursor_y=112",
+        "frame=120 event=post_probe_world_8_battleships_entered x=0 y=320 "
+        "entry_x=0 entry_y=320 entry_air=0 world_number=7 object_set=10 "
+        "map_enter_via_id=13 map_node_x=128 map_node_y=112 "
+        "stage_identity=world_8_battleships "
+        "evidence=normal_right_right_automatic_entry_from_64_112",
+        "frame=130 event=post_probe_world_8_battleships_gameplay x=600 y=200 "
+        "world_number=7 object_set=10 evidence=normal_autoscroll_fleet_gameplay",
+        "frame=140 event=post_probe_world_8_battleships_boss_defeated "
+        "world_number=7 object_set=10 mario_alive=1 player_is_dying=0 "
+        "starting_lives=5 current_lives=5 boss_object_id_75_active=0 "
+        "defeated_transition_object_id_74_active=1 boss_state_transitions=4 "
+        "evidence=game_owned_boss_object_75_to_defeated_transition_object_74",
+        "frame=150 event=post_probe_world_8_battleships_clear "
+        "world_number=7 object_set=10 mario_alive=1 player_is_dying=0 "
+        "starting_lives=5 current_lives=5 return_map=1 "
+        "boss_object_id_75_active=0 defeated_transition_object_id_74_observed=1 "
+        "boss_state_transitions=4 "
+        "evidence=game_owned_return_map_transition_after_defeated_boss_object",
+        "frame=160 event=post_probe_world_8_battleships_post_clear "
+        "world_number=7 object_set=0 map_cursor_x=128 map_cursor_y=112 "
+        "hand_trap_region_accessible=1 hand_trap_entered=0 player_is_dying=0 "
+        "starting_lives=5 current_lives=5 "
+        "evidence=stable_world_8_map_after_boom_boom",
+    ]
+
+
 def test_parse_fceux_log_accepts_exact_big_tanks_completion_sequence(
     tmp_path: Path,
 ) -> None:
@@ -271,6 +301,75 @@ def test_parse_fceux_log_requires_big_tanks_milestones_in_order(
     summary = parse_fceux_log(log_path)
 
     assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_accepts_exact_battleships_completion_sequence(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(_world_8_battleships_lines()))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is True
+    assert summary.post_probe_last_event == "post_probe_world_8_battleships_post_clear"
+
+
+@pytest.mark.parametrize(
+    ("line_index", "replacement"),
+    (
+        (-5, "frame=120 event=post_probe_world_8_battleships_wrong_stage"),
+        (
+            -5,
+            "frame=120 event=post_probe_world_8_battleships_entered x=24 y=368 "
+            "entry_x=24 entry_y=368 entry_air=0 world_number=7 object_set=10 "
+            "map_enter_via_id=12 stage_identity=world_8_battleships "
+            "evidence=normal_right_right_automatic_entry_from_64_112",
+        ),
+        (-3, "frame=140 event=post_probe_world_8_battleships_death failure_classification=death"),
+        (
+            -2,
+            "frame=150 event=post_probe_world_8_battleships_clear world_number=7 "
+            "object_set=10 evidence=enemy_disappearance",
+        ),
+        (-2, "frame=150 event=post_probe_world_8_battleships_gameplay_stall"),
+        (-2, "frame=150 event=post_probe_world_8_battleships_timeout"),
+        (-1, "frame=160 event=post_probe_world_8_battleships_unexpected_next_stage"),
+    ),
+)
+def test_parse_fceux_log_rejects_battleships_fail_closed_events(
+    tmp_path: Path,
+    line_index: int,
+    replacement: str,
+) -> None:
+    lines = _world_8_battleships_lines()
+    lines[line_index] = replacement
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    assert parse_fceux_log(log_path).post_probe_clear is False
+
+
+@pytest.mark.parametrize("missing_index", (-5, -4, -2, -1))
+def test_parse_fceux_log_requires_all_battleships_acceptance_events(
+    tmp_path: Path,
+    missing_index: int,
+) -> None:
+    lines = _world_8_battleships_lines()
+    del lines[missing_index]
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    assert parse_fceux_log(log_path).post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_battleships_event_reordering(tmp_path: Path) -> None:
+    lines = _world_8_battleships_lines()
+    lines[-5], lines[-4] = lines[-4], lines[-5]
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    assert parse_fceux_log(log_path).post_probe_clear is False
 
 
 @pytest.mark.parametrize(

@@ -183,6 +183,21 @@ def test_route_lab_surfaces_big_tanks_without_changing_the_default_goal() -> Non
     assert "World 2-first double-whistle route through World 8 Big Tanks" in html
 
 
+def test_route_lab_renders_and_switches_to_battleships() -> None:
+    default = build_control_panel_summary()
+    big_tanks = build_control_panel_summary("world_8_big_tanks")
+    battleships = build_control_panel_summary("world_8_battleships")
+    html = render_lab_ui(goal_id="world_8_battleships")
+
+    assert len(default["locations"]) == 15
+    assert len(big_tanks["locations"]) == 16
+    assert battleships["goal_id"] == "world_8_battleships"
+    assert len(battleships["locations"]) == 17
+    assert battleships["locations"][-1]["label"] == "World 8-Battleships"
+    assert 'href="/?goal=world_8_battleships&amp;location=world_8_battleships"' in html
+    assert "World 2-first double-whistle route through World 8-Battleships" in html
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

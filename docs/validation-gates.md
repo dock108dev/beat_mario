@@ -357,3 +357,88 @@ Accepted Rank 33 regression reports:
 artifacts/reliability/world_8_double_whistle/20260810T215451.255693Z_reliability/
 artifacts/reliability/world_8_big_tanks/20260810T215605.922925Z_reliability/
 ```
+
+## Gate 19: Battleships goal and observer contract
+
+```bash
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_battleships.yaml
+.venv/bin/python -m smb3_agent goal status world_8_battleships
+```
+
+Pass condition:
+
+- `world_8_double_whistle` remains 15 segments and `world_8_big_tanks` remains
+  16 segments;
+- `world_8_battleships` composes the Big Tanks goal plus exactly
+  `world_8_battleships_clear`, for 17 ordered events and zero bridges;
+- selection uses `fceux_world_8_battleships` without fallback;
+- the four ordered catalog-owned acceptance events prove exact entry, gameplay,
+  game-owned clear, and stable post-clear map state;
+- wrong stage or entry, death, false clear, missing or reordered events, stall,
+  timeout, later-stage entry, and ambiguous evidence fail closed.
+
+## Gate 20: Battleships authoritative reliability
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_battleships \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition: at least three isolated fresh-power-on processes each make one
+attempt, complete all 17 milestones, report `metrics_passed=true`, retain the
+five required focused screenshots, keep Mario alive, observe the live object
+`75` to defeated-transition object `74` replacement and the game return flag,
+and stabilize at cursor `(128,112)` without Hand Trap entry. The aggregate also
+requires byte-identical logs, `success_rate=1.0`, and `overall_pass=true`.
+
+Accepted evidence:
+
+```text
+artifacts/reliability/world_8_battleships/20260810T225906.177318Z_reliability/
+```
+
+## Gate 21: Battleships watchable review
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_battleships \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.0001
+```
+
+Pass condition: the route passes from fresh power-on; the contact sheet contains
+exactly the five focused frames; the tick trace is retained; and the report says
+`review_only`, `promotable=false`, and `counts_toward_reliability=false`.
+
+Accepted evidence:
+
+```text
+artifacts/review/world_8_battleships/20260810T224805.096938Z_watchable/
+```
+
+## Gate 22: Battleships regressions and hygiene
+
+```bash
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_double_whistle --runs 5 --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks --runs 3 --game-file "$SMB3_GAME_FILE"
+git diff --check
+```
+
+Pass condition: the canonical ROM-free gate passes; the unchanged Rank 27 goal
+remains 5/5 and stops at World 8 arrival; the unchanged Rank 28 goal remains 3/3
+and stops after Big Tanks; only intentional source, contract, test, and
+documentation changes are uncommitted; and no ROM, state, generated evidence,
+temporary worktree, log, screenshot, report, trace, or credential is tracked.
+
+Accepted result: the canonical gate passed 158 tests. The live regression
+reports are:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T230007.756761Z_reliability/
+artifacts/reliability/world_8_big_tanks/20260810T230122.959142Z_reliability/
+```

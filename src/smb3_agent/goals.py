@@ -8,7 +8,11 @@ from typing import Any
 import yaml
 
 from smb3_agent.fceux_harness import BatchSummary, run_fceux_1_1
-from smb3_agent.presets import WORLD_1_KING_ENV, WORLD_8_BIG_TANKS_ENV
+from smb3_agent.presets import (
+    WORLD_1_KING_ENV,
+    WORLD_8_BATTLESHIPS_ENV,
+    WORLD_8_BIG_TANKS_ENV,
+)
 
 
 ACTIVE_PRODUCT_GOAL_ID = "world_8_double_whistle"
@@ -26,6 +30,7 @@ SUPPORTED_PRESETS = {
     "fceux_world_1_king",
     "fceux_world_8_double_whistle",
     "fceux_world_8_big_tanks",
+    "fceux_world_8_battleships",
     "unavailable",
 }
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
@@ -274,6 +279,7 @@ def run_goal_contract(
         "fceux_world_1_king",
         "fceux_world_8_double_whistle",
         "fceux_world_8_big_tanks",
+        "fceux_world_8_battleships",
     }:
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
 
@@ -281,6 +287,7 @@ def run_goal_contract(
         "fceux_world_1_king": WORLD_1_KING_ENV,
         "fceux_world_8_double_whistle": (),
         "fceux_world_8_big_tanks": WORLD_8_BIG_TANKS_ENV,
+        "fceux_world_8_battleships": WORLD_8_BATTLESHIPS_ENV,
     }[contract.preset]
 
     run_dir = artifacts_dir or _default_artifacts_dir(contract)
