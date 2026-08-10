@@ -29,8 +29,9 @@ current goal.
   from the Warp Zone before a numbered-world pipe is entered.
 - Only `post_probe_world_8_map_arrival` can satisfy the active goal. The legacy
   king marker cannot.
-- The active product runner is executable and passed three fresh, byte-identical,
-  no-bridge playbacks plus an independent `goal run` validation.
+- The active product runner is executable. Rank 27 passed the structural
+  reliability gate with five fresh, byte-identical, no-bridge processes plus a
+  separate successful review-only watchable playback and contact sheet.
 - `world_1_king` remains available only as a legacy diagnostic route. It uses
   explicit bridges and is not product progress.
 
@@ -85,6 +86,36 @@ python -m smb3_agent command parse \
 The active goal runs the product route directly and never falls back to the
 king diagnostic.
 
+## Rank 27 reliability and watchable review
+
+Set the local game path once, then run the authoritative gate:
+
+```bash
+export SMB3_GAME_FILE=/path/to/local-game-file.nes
+.venv/bin/python -m smb3_agent reliability run
+```
+
+The command launches five separate FCEUX processes. Every process receives one
+attempt, starts from power-on, writes to its own directory, and uses a sanitized
+product environment with no throttle, savestate, retry checkpoint, bridge,
+mutation, discovery search, or diagnostic fallback. The aggregate passes only
+when at least five requested runs all report `metrics_passed=true`, complete all
+15 catalog-owned acceptance events in order, and end at
+`post_probe_world_8_map_arrival` with `world_number=7`, `object_set=0`.
+
+Run the separate review-only playback with:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch
+```
+
+Watchable playback uses the documented `0.0035`-second frame throttle, captures
+review images and ticks, and creates a contact sheet. It is always labeled
+`review_only`, writes under `artifacts/review/`, and never counts toward the
+five-run reliability result. Reliability evidence writes under
+`artifacts/reliability/`. See [Reliability gate](docs/reliability-gate.md) for
+the artifact layout, failure classifications, and exact pass rules.
+
 ## Legacy diagnostic
 
 The explicitly named diagnostic remains useful for World 1 regression work:
@@ -126,6 +157,7 @@ double-whistle milestones and does not show World 1-4 as required.
 - [Agent architecture](docs/agent-architecture.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Validation gates](docs/validation-gates.md)
+- [Reliability gate](docs/reliability-gate.md)
 - [Route status](docs/route-status.md)
 - [Mario Route Lab](docs/mario-route-lab.md)
 - [FCEUX harness](docs/fceux-harness.md)

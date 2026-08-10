@@ -4,6 +4,8 @@ import os
 import re
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 
@@ -334,6 +336,9 @@ def run_fceux_1_1(
     post_1_1_probe: str | None = None,
     env_overrides: tuple[str, ...] = (),
     allow_bridges: bool = False,
+    clean_product_env: bool = False,
+    frame_sleep_seconds: float = 0.0,
+    timeout_seconds: int | None = None,
 ) -> BatchSummary:
     if not game_path.is_file():
         raise FileNotFoundError(f"Local game file not found: {game_path}")
@@ -345,8 +350,14 @@ def run_fceux_1_1(
     image_dir = artifacts_dir / "images"
 
     env = os.environ.copy()
+    if clean_product_env:
+        env = {key: value for key, value in env.items() if not key.startswith("SMB3_")}
     env["SMB3_AGENT_LOG"] = str(log_path.resolve())
     env["SMB3_AGENT_ATTEMPTS"] = str(attempts)
+    if frame_sleep_seconds > 0:
+        env["SMB3_AGENT_FRAME_SLEEP_SECONDS"] = str(frame_sleep_seconds)
+    else:
+        env.pop("SMB3_AGENT_FRAME_SLEEP_SECONDS", None)
     if after_attempt_frames is not None:
         env["SMB3_AFTER_ATTEMPT_FRAMES"] = str(after_attempt_frames)
     if capture_ticks:
@@ -364,9 +375,28 @@ def run_fceux_1_1(
     else:
         env.pop("SMB3_AGENT_IMAGE_DIR", None)
 
+    effective_timeout = timeout_seconds or int(
+        env.get("SMB3_FCEUX_TIMEOUT_SECONDS", "180")
+    )
+    started_at = datetime.now(timezone.utc)
+    execution = {
+        "started_at": started_at.isoformat(),
+        "attempts": attempts,
+        "fresh_process": True,
+        "clean_product_env": clean_product_env,
+        "frame_sleep_seconds": frame_sleep_seconds,
+        "capture_images": capture_images,
+        "capture_ticks": capture_ticks,
+        "timeout_seconds": effective_timeout,
+        "timed_out": False,
+        "returncode": None,
+        "launch_error": None,
+    }
+    execution_path = artifacts_dir / "fceux_execution.json"
+    launch_error: OSError | None = None
     try:
         with stdout_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
-            subprocess.run(
+            completed = subprocess.run(
                 [
                     "fceux",
                     "--no-config",
@@ -381,10 +411,26 @@ def run_fceux_1_1(
                 env=env,
                 stdout=stdout_file,
                 stderr=stderr_file,
-                timeout=int(env.get("SMB3_FCEUX_TIMEOUT_SECONDS", "180")),
+                timeout=effective_timeout,
             )
+            execution["returncode"] = completed.returncode
     except subprocess.TimeoutExpired:
-        pass
+        execution["timed_out"] = True
+    except OSError as exc:
+        execution["launch_error"] = f"{type(exc).__name__}: {exc}"
+        launch_error = exc
+    finally:
+        finished_at = datetime.now(timezone.utc)
+        execution["finished_at"] = finished_at.isoformat()
+        execution["elapsed_seconds"] = round(
+            (finished_at - started_at).total_seconds(), 6
+        )
+        execution_path.write_text(
+            json.dumps(execution, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    if launch_error is not None:
+        raise launch_error
     return parse_fceux_log(
         log_path, expected_attempts=attempts, allow_bridges=allow_bridges
     )

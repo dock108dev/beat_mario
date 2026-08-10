@@ -44,6 +44,13 @@ def test_single_attempt_playback_skips_retry_checkpoint() -> None:
     assert 'advance(10, "attempt_1_fresh_start")' in single_attempt
 
 
+def test_agent_uses_supported_fceux_shutdown_api() -> None:
+    source = LUA_AGENT_PATH.read_text()
+
+    assert source.rstrip().endswith("emu.exit()")
+    assert not source.rstrip().endswith("os.exit()")
+
+
 def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     log_path = tmp_path / "route.log"
     log_path.write_text(

@@ -1,6 +1,6 @@
 # Route Status
 
-Last updated: 2026-08-09.
+Last updated: 2026-08-10.
 
 ## Active goal
 
@@ -9,10 +9,61 @@ genuine World 8 map observation. The owner corrected the route boundary during
 live investigation: Mario must clear the final World 1 castle/airship, arrive
 safely in World 2 with both whistles, and use the first whistle from World 2.
 
-The active goal is now `executable`. Three independent fresh product replays
-completed all 15 route steps with byte-identical logs, and the promoted
-`goal run world_8_double_whistle` command independently passed its metrics.
-The legacy `world_1_king` gate remains a separate diagnostic.
+The active goal is `executable`. Rank 27 launched five independent fresh FCEUX
+processes; all five completed all 15 route steps, reported
+`metrics_passed=true`, and ended at `post_probe_world_8_map_arrival`. Their
+structured logs are byte-identical. A separate throttled playback also passed
+and produced review images, ticks, and a contact sheet, but is explicitly
+non-promotable. The legacy `world_1_king` gate remains a separate diagnostic.
+
+## Rank 27 reliability evidence
+
+The authoritative command passed 5/5:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run --game-file roms/smb3.nes
+```
+
+Accepted aggregate:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T160716.743170Z_reliability/
+```
+
+Every `run_01` through `run_05` record shows a new process, one attempt, fresh
+game, clean product environment, zero throttle, all 15 ordered milestones,
+`metrics_passed=true`, and final `world_number=7`, `object_set=0`. All FCEUX
+processes exited zero. The five route-log SHA-256 values are identical:
+
+```text
+610c95128c06207d6a04bd7d41f4f1e2e4e59cd6b8d807570e4a85e4a0adb8df
+```
+
+The separate watchable command passed:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch --game-file roms/smb3.nes
+```
+
+Review-only artifacts:
+
+```text
+artifacts/review/world_8_double_whistle/20260810T160828.873705Z_watchable/
+```
+
+The report is labeled `review_only`, `promotable=false`, and
+`counts_toward_reliability=false`. It retained 1,398 source/converted review
+images, a 621-line state/tick trace, and `review/contact_sheet.png`.
+
+Two fail-closed classifications were observed before final acceptance. A broken
+`game-file.nes` symlink was classified `preflight` with zero executions. The
+first live batch recorded 4/5 because FCEUX 2.6.6 received SIGSEGV during raw
+`os.exit()` Qt teardown after run 5 had already written a complete,
+byte-identical passing route log. That process remained failed. The route script
+was changed to FCEUX's supported `emu.exit()` API, covered by a ROM-free test,
+and the complete five-run gate was rerun successfully. No gameplay,
+observer/contract, prohibited-tactic, timeout, or artifact-integrity failure was
+observed in the accepted batch.
 
 ## Ordered route
 
@@ -137,8 +188,9 @@ a World 8 success marker and is rejected by the active goal metrics.
 
 ## Next bounded task
 
-Rank 10 is complete at the genuine World 8 map boundary. World 8 gameplay is a
-separate future goal; it was not started by this route.
+Rank 27 is complete at the genuine World 8 map boundary. Rank 28 remains
+unstarted. World 8 gameplay is a separate future goal and was not started by
+this route.
 
 ## Roaming placement note
 

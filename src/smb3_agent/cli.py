@@ -34,6 +34,12 @@ from smb3_agent.lab_ui import LabUiError, render_lab_ui, run_lab_ui_server
 from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.recovery import RecoveryError, simulate_recovery
+from smb3_agent.reliability import (
+    RELIABILITY_ARTIFACTS_ROOT,
+    WATCHABLE_ARTIFACTS_ROOT,
+    run_reliability_gate,
+    run_watchable_playback,
+)
 from smb3_agent.review import compare_logs, review_log
 from smb3_agent.segments import (
     SegmentValidationError,
@@ -291,6 +297,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path for the contact sheet; defaults to OUTPUT_DIR/contact_sheet.png",
     )
     fceux_contact_sheet.add_argument("--columns", type=int, default=4)
+
+    reliability = subparsers.add_parser(
+        "reliability", help="Run the fresh-process product reliability gate or review playback"
+    )
+    reliability_subparsers = reliability.add_subparsers(
+        dest="reliability_command", required=True
+    )
+
+    reliability_run = reliability_subparsers.add_parser(
+        "run", help="Run independent fresh product-route executions"
+    )
+    reliability_run.add_argument(
+        "--game-file", default=None, help="Path to the local game file"
+    )
+    reliability_run.add_argument("--runs", type=int, default=5)
+    reliability_run.add_argument(
+        "--artifacts-root", default=str(RELIABILITY_ARTIFACTS_ROOT)
+    )
+    reliability_run.add_argument("--timeout-seconds", type=int, default=180)
+
+    reliability_watch = reliability_subparsers.add_parser(
+        "watch", help="Run one throttled review-only product-route playback"
+    )
+    reliability_watch.add_argument(
+        "--game-file", default=None, help="Path to the local game file"
+    )
+    reliability_watch.add_argument(
+        "--artifacts-root", default=str(WATCHABLE_ARTIFACTS_ROOT)
+    )
+    reliability_watch.add_argument(
+        "--throttle-seconds", type=float, default=0.0035
+    )
+    reliability_watch.add_argument("--timeout-seconds", type=int, default=600)
+    reliability_watch.add_argument("--columns", type=int, default=4)
 
     goal = subparsers.add_parser("goal", help="Validate and run goal contracts")
     goal_subparsers = goal.add_subparsers(dest="goal_command", required=True)
@@ -585,6 +625,39 @@ def main() -> None:
         write_contact_sheet(converted, sheet_path, columns=args.columns)
         print(f"converted={len(converted)}")
         print(f"sheet={sheet_path}")
+        return
+
+    if args.command == "reliability" and args.reliability_command == "run":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("reliability run requires --game-file or SMB3_GAME_FILE")
+        result = run_reliability_gate(
+            game_path=Path(game_file),
+            requested_runs=args.runs,
+            artifacts_root=Path(args.artifacts_root),
+            timeout_seconds=args.timeout_seconds,
+            progress=lambda message: print(message, flush=True),
+        )
+        print(result.to_text())
+        if not result.passed:
+            raise SystemExit(1)
+        return
+
+    if args.command == "reliability" and args.reliability_command == "watch":
+        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
+        if not game_file:
+            parser.error("reliability watch requires --game-file or SMB3_GAME_FILE")
+        result = run_watchable_playback(
+            game_path=Path(game_file),
+            artifacts_root=Path(args.artifacts_root),
+            frame_sleep_seconds=args.throttle_seconds,
+            timeout_seconds=args.timeout_seconds,
+            contact_sheet_columns=args.columns,
+            progress=lambda message: print(message, flush=True),
+        )
+        print(result.to_text())
+        if not result.passed:
+            raise SystemExit(1)
         return
 
     if args.command == "goal" and args.goal_command == "validate":

@@ -146,34 +146,64 @@ This explicit `artifacts/` command is for local inspection only and its output
 is ignored. The canonical local/hosted gate instead renders to a temporary
 directory and deletes the HTML after the assertions pass.
 
-## Gate 8: Live product boundary
-
-This gate passes. Three fresh no-bridge replays reached World 8 with
-byte-identical logs, followed by an independent promoted goal-run pass.
-
-Accepted command shape:
+## Gate 8: Rank 27 end-to-end reliability
 
 ```bash
 export SMB3_GAME_FILE=/path/to/local-game-file
-.venv/bin/python -m smb3_agent goal run world_8_double_whistle \
-  --game-file "$SMB3_GAME_FILE" \
-  --attempts 1 \
-  --capture-images
+.venv/bin/python -m smb3_agent reliability run
 ```
 
-Accepted boundary:
+Pass condition:
 
-- retain the accepted real 1-5, 1-6, and observer-gated Hammer Bro prefix;
-- real Airship/King gameplay after both whistles;
-- genuine World 2 map observation;
-- two whistle items still observable;
-- first whistle use after Mario settles in World 2;
-- second whistle use from the observed 5/6/7 tier;
-- World 8 tier, pipe entry, and genuine World 8 map observation;
-- no completion-flag, map-position, airship-stage, or inventory bridge;
-- structured logs and minimal screenshots in ignored artifacts.
+- five requested runs create five distinct `run_NN` directories;
+- every run record says one attempt, new FCEUX process, fresh power-on game,
+  clean product environment, and unthrottled reliability mode;
+- all 15 acceptance events from the active segment catalog appear in contract
+  order;
+- every run reports `metrics_passed=true` and final event
+  `post_probe_world_8_map_arrival`;
+- every final observer boundary is `world_number=7`, `object_set=0`;
+- no bridge, mutation, savestate/search, diagnostic route, retry checkpoint, or
+  prior emulator process contributes evidence;
+- completed and successful runs are both five, success rate is `1.0`, and
+  `overall_pass=true`.
 
-## Gate 9: Legacy king diagnostic
+Any failure leaves its route log when created, FCEUX stdout/stderr, execution
+record, last accepted segment, first missing milestone, final observable state,
+classification, and next bounded investigation. Missing or ambiguous evidence
+fails closed. The aggregate report and per-run reports live under the ignored
+`artifacts/reliability/world_8_double_whistle/` tree.
+
+## Gate 9: Watchable review playback
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch
+```
+
+Pass condition: the same product route completes from a fresh game, review
+images and a state/tick trace are retained, and `review/contact_sheet.png` is
+created. The report must say `review_only`, `promotable=false`, and
+`counts_toward_reliability=false`. The default frame throttle is 0.0035 seconds.
+Capture and throttle overhead can change gameplay, so this result never repairs
+or supplements a failed reliability aggregate.
+
+Both live commands stop at the genuine World 8 map boundary. Entering or playing
+World 8 is outside Rank 27.
+
+Accepted 2026-08-10 Rank 27 evidence:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T160716.743170Z_reliability/
+artifacts/review/world_8_double_whistle/20260810T160828.873705Z_watchable/
+```
+
+The authoritative report records 5/5, success rate `1.0`, all 15 milestones,
+`metrics_passed=true`, the required final event, accepted World 8 map state,
+and byte-identical SHA-256 logs. The watchable report records a successful
+review-only route, 1,398 converted review images, a 621-line tick trace, and a
+contact sheet; it is excluded from reliability evidence.
+
+## Gate 10: Legacy king diagnostic
 
 ```bash
 .venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
@@ -187,7 +217,7 @@ Pass condition:
 - no default product command or Route Lab route selects it;
 - a diagnostic pass is never reported as World 8 progress.
 
-## Gate 10: Tracked-surface hygiene
+## Gate 11: Tracked-surface hygiene
 
 ```bash
 git diff --check

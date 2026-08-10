@@ -239,6 +239,9 @@ def run_goal_contract(
     capture_images: bool = False,
     capture_ticks: bool = False,
     env_overrides: tuple[str, ...] = (),
+    clean_product_env: bool = False,
+    frame_sleep_seconds: float = 0.0,
+    timeout_seconds: int | None = None,
 ) -> GoalRunResult:
     if not contract.executable:
         raise GoalValidationError(
@@ -261,6 +264,9 @@ def run_goal_contract(
         post_1_1_probe="run_1_castle_after_1_6",
         env_overrides=preset_env + tuple(contract.runner.get("env", ())) + env_overrides,
         allow_bridges=contract.preset == "fceux_world_1_king",
+        clean_product_env=clean_product_env,
+        frame_sleep_seconds=frame_sleep_seconds,
+        timeout_seconds=timeout_seconds,
     )
     return GoalRunResult(
         contract=contract,

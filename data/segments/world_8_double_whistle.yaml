@@ -9,6 +9,7 @@ segments:
     success_condition: {type: map_entry, target: world_1_1}
     failure_conditions: [{type: timeout, seconds: 30}, {type: wrong_screen}]
     current_method: {type: lua_scripted_inputs, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: attempt_1_fresh_start
     evidence: [live_fceux_2026-08-09_fresh_route]
     notes: Required only because the route starts from a fresh game.
 
@@ -19,6 +20,7 @@ segments:
     success_condition: {type: course_clear, marker: attempt_success_course_clear}
     failure_conditions: [{type: bad_state_marker}, {type: timeout, seconds: 180}]
     current_method: {type: memory_aware_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: attempt_1_success_course_clear
     evidence: [fceux_1_1_reliability_gate]
     notes: Game-enforced path traversal, not an owner objective milestone.
 
@@ -29,6 +31,7 @@ segments:
     success_condition: {type: post_probe_event, value: post_probe_1_2_success_course_clear}
     failure_conditions: [{type: timeout, seconds: 180}, {type: wrong_map_node}]
     current_method: {type: post_probe_script, probe: run_1_2_naive}
+    acceptance_event: post_probe_1_2_success_course_clear
     evidence: [live_fceux_2026-08-09_fresh_route]
     notes: Game-enforced path traversal, not an owner objective milestone.
 
@@ -43,6 +46,7 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 1}
     failure_conditions: [{type: missed_white_block}, {type: timeout, seconds: 240}]
     current_method: {type: post_probe_script, probe: run_1_3_whistle_to_castle}
+    acceptance_event: post_probe_1_3_whistle_room_success
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Owner objective milestone; three accepted full-route replays collected the whistle and continued normally.
 
@@ -57,6 +61,7 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: flight_setup_failed}, {type: timeout, seconds: 300}]
     current_method: {type: post_probe_script, probe: run_1_fortress_whistle}
+    acceptance_event: post_probe_1_fortress_whistle_room_success
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Owner objective milestone; three accepted full-route replays collected both whistles without an inventory bridge.
 
@@ -67,6 +72,7 @@ segments:
     success_condition: {type: post_probe_event, value: post_probe_1_5_water_success_course_clear}
     failure_conditions: [{type: wrong_map_node}, {type: timeout, seconds: 240}]
     current_method: {type: post_probe_script, probe: run_1_5_clear_after_fortress}
+    acceptance_event: post_probe_1_5_water_success_course_clear
     evidence: [live_fceux_2026-08-09_world_1_5_clear_with_two_whistles]
     notes: Retained as the game path to the final World 1 castle after the owner corrected the boundary to World 2.
 
@@ -81,6 +87,7 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: wrong_map_node}, {type: timeout, seconds: 240}]
     current_method: {type: memory_aware_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_1_6_map_returned
     evidence: [live_fceux_2026-08-09_1_6_fresh_playback]
     notes: Accepted fresh playback clears 1-6 as Raccoon, returns normally to the map, preserves both whistles, and uses no savestate, position, inventory, or completion bridge.
 
@@ -95,6 +102,7 @@ segments:
     success_condition: {type: post_probe_event, value: post_probe_1_airship_boss_defeated}
     failure_conditions: [{type: airship_marker_missing}, {type: timeout, seconds: 300}]
     current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_1_airship_boss_defeated
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Real Airship deck, pipe, boss, and King transition passed three fresh no-bridge playbacks.
 
@@ -109,6 +117,7 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: wrong_world}, {type: whistle_inventory_mismatch}, {type: timeout, seconds: 180}]
     current_method: {type: observed_map_transition, marker: post_probe_world_2_map_two_whistles}
+    acceptance_event: post_probe_world_2_map_two_whistles
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: World number 1, object set 0, item_0=12, item_1=12, and earned item_2=9 were observed before whistle use.
 
@@ -127,6 +136,7 @@ segments:
         - {type: warp_zone_transition_started, source_world: 2}
     failure_conditions: [{type: whistle_not_consumed}, {type: wrong_transition}, {type: timeout, seconds: 120}]
     current_method: {type: observer_input_route, input: B_then_A_after_map_settle}
+    acceptance_event: post_probe_world_2_first_whistle_used
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Must happen after World 2 arrival, never from World 1 in the active contract.
 
@@ -137,6 +147,7 @@ segments:
     success_condition: {type: visible_warp_zone_tier, worlds: [5, 6, 7]}
     failure_conditions: [{type: wrong_warp_zone_tier}, {type: numbered_world_pipe_entered}, {type: timeout, seconds: 120}]
     current_method: {type: observed_warp_tier, cursor: [64, 112]}
+    acceptance_event: post_probe_warp_zone_5_6_7_tier
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: No numbered-world pipe is entered before the second whistle.
 
@@ -155,6 +166,7 @@ segments:
         - {type: second_whistle_transition_started}
     failure_conditions: [{type: numbered_world_pipe_entered}, {type: whistle_not_consumed}, {type: timeout, seconds: 120}]
     current_method: {type: observer_input_route, input: B_then_A_after_tier_settle}
+    acceptance_event: post_probe_warp_zone_second_whistle_used
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Distinct from first-whistle use and performed from the Warp Zone.
 
@@ -165,6 +177,7 @@ segments:
     success_condition: {type: visible_warp_zone_tier, worlds: [8]}
     failure_conditions: [{type: wrong_warp_zone_tier}, {type: timeout, seconds: 120}]
     current_method: {type: observed_warp_tier, cursor: [128, 144]}
+    acceptance_event: post_probe_warp_zone_world_8_tier
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Warp Zone state is not yet World 8 map arrival.
 
@@ -175,6 +188,7 @@ segments:
     success_condition: {type: pipe_transition_started, destination_world: 8}
     failure_conditions: [{type: wrong_pipe}, {type: timeout, seconds: 120}]
     current_method: {type: observer_input_route, input: right_then_A, cursor: [160, 144]}
+    acceptance_event: post_probe_world_8_pipe_entered
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: The pipe transition is distinct from both the tier and destination-map observations.
 
@@ -189,5 +203,6 @@ segments:
         - {type: post_probe_event, value: post_probe_world_8_map_arrival}
     failure_conditions: [{type: wrong_world}, {type: level_entered_before_map_observation}, {type: timeout, seconds: 180}]
     current_method: {type: observed_map_transition, marker: post_probe_world_8_map_arrival}
+    acceptance_event: post_probe_world_8_map_arrival
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: This alone satisfies the product goal; it is not equivalent to beating World 8.

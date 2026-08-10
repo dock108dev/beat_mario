@@ -81,21 +81,35 @@ The contact sheet is a review aid only. Structured log markers are the source of
 truth for this diagnostic's pass/fail; the selected goal contract determines
 whether those markers mean product success.
 
-## Watchable Demo Mode
+## Product reliability mode
 
-For a visible demo, add a small frame sleep:
+Use the operator-facing product gate instead of a multi-attempt low-level
+invocation:
 
 ```bash
-SMB3_AGENT_FRAME_SLEEP_SECONDS=0.0035 \
-python -m smb3_agent task fceux-world-1-king \
-  --attempts 1 \
-  --artifacts-dir artifacts/fceux/show_world_1_king \
-  --capture-images \
-  --capture-ticks
+export SMB3_GAME_FILE=/path/to/local-game-file.nes
+.venv/bin/python -m smb3_agent reliability run
 ```
 
-Leave frame sleep unset for reliability gates. Demo mode can alter timing and
-should be treated as a debugging view.
+The outer orchestrator invokes the existing product goal five times with
+`attempts=1`. Each invocation starts a new FCEUX process and gets isolated
+stdout, stderr, route log, execution metadata, invocation metadata, and result
+report. Reliability mode removes inherited `SMB3_*` tuning variables before
+setting its required product environment and leaves frame sleep at zero.
+
+## Watchable product review
+
+Use the separate review command:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch
+```
+
+This fresh product-route run uses a 0.0035-second per-frame sleep, captures
+images and ticks, converts review PNGs, and writes a contact sheet. Its report
+is permanently `review_only` and excluded from reliability evidence. Watchable
+timing and capture overhead can alter gameplay; leave them out of reliability
+mode.
 
 ## Environment Overrides
 

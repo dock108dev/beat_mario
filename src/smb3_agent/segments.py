@@ -34,6 +34,7 @@ class RouteSegment:
     success_condition: dict[str, Any]
     failure_conditions: tuple[dict[str, Any], ...]
     current_method: dict[str, Any]
+    acceptance_event: str | None
     evidence: tuple[str, ...]
     notes: str
 
@@ -142,6 +143,14 @@ def _load_segment(index: int, raw: Any) -> RouteSegment:
     if not isinstance(notes, str):
         raise SegmentValidationError(f"{segment_id}.notes must be a string")
 
+    acceptance_event = raw.get("acceptance_event")
+    if acceptance_event is not None and (
+        not isinstance(acceptance_event, str) or not acceptance_event
+    ):
+        raise SegmentValidationError(
+            f"{segment_id}.acceptance_event must be a non-empty string"
+        )
+
     return RouteSegment(
         id=segment_id,
         name=str(raw["name"]),
@@ -150,6 +159,7 @@ def _load_segment(index: int, raw: Any) -> RouteSegment:
         success_condition=raw["success_condition"],
         failure_conditions=tuple(failures),
         current_method=raw["current_method"],
+        acceptance_event=acceptance_event,
         evidence=tuple(evidence),
         notes=notes,
     )

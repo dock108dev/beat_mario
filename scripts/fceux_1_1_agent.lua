@@ -9161,4 +9161,4 @@ else
 end
 
 log:close()
-os.exit()
+emu.exit()
