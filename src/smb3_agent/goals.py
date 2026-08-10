@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 
 from smb3_agent.fceux_harness import BatchSummary, run_fceux_1_1
-from smb3_agent.presets import WORLD_1_KING_ENV
+from smb3_agent.presets import WORLD_1_KING_ENV, WORLD_8_BIG_TANKS_ENV
 
 
 ACTIVE_PRODUCT_GOAL_ID = "world_8_double_whistle"
@@ -25,6 +25,7 @@ SUPPORTED_EXECUTION_MODES = {"normal_gameplay", "bridge", "planned"}
 SUPPORTED_PRESETS = {
     "fceux_world_1_king",
     "fceux_world_8_double_whistle",
+    "fceux_world_8_big_tanks",
     "unavailable",
 }
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
@@ -71,6 +72,7 @@ class GoalContract:
     success_metrics: tuple[dict[str, Any], ...]
     recovery_policy: dict[str, Any]
     runner: dict[str, Any]
+    prefix_goal: str | None
     bridged_segments: tuple[str, ...]
     path: Path
 
@@ -106,9 +108,12 @@ def resolve_goal_path(goal: str, goals_dir: Path = Path("data/goals")) -> Path:
     return goals_dir / f"{goal}.yaml"
 
 
-def load_goal_contract(path: Path) -> GoalContract:
+def load_goal_contract(path: Path, *, _seen: frozenset[Path] = frozenset()) -> GoalContract:
     if not path.is_file():
         raise GoalValidationError(f"Goal contract not found: {path}")
+    resolved_path = path.resolve()
+    if resolved_path in _seen:
+        raise GoalValidationError(f"Goal prefix cycle detected at: {path}")
 
     raw = yaml.safe_load(path.read_text()) or {}
     if not isinstance(raw, dict):
@@ -159,7 +164,23 @@ def load_goal_contract(path: Path) -> GoalContract:
     segments = route["segments"]
     if not isinstance(segments, list) or not segments:
         raise GoalValidationError("route.segments must be a non-empty list")
-    route_steps = tuple(_load_route_step(index, item) for index, item in enumerate(segments))
+    local_route_steps = tuple(
+        _load_route_step(index, item) for index, item in enumerate(segments)
+    )
+    prefix_goal = route.get("prefix_goal")
+    prefix_route_steps: tuple[RouteStep, ...] = ()
+    if prefix_goal is not None:
+        if not isinstance(prefix_goal, str) or not prefix_goal:
+            raise GoalValidationError("route.prefix_goal must be a non-empty string")
+        prefix = load_goal_contract(
+            resolve_goal_path(prefix_goal), _seen=_seen | {resolved_path}
+        )
+        if prefix.catalog_path != Path(route["catalog"]):
+            raise GoalValidationError(
+                "prefixed goals must use the same route catalog as their prefix"
+            )
+        prefix_route_steps = prefix.route_steps
+    route_steps = prefix_route_steps + local_route_steps
     route_ids = [step.id for step in route_steps]
     duplicates = sorted({segment_id for segment_id in route_ids if route_ids.count(segment_id) > 1})
     if duplicates:
@@ -225,6 +246,7 @@ def load_goal_contract(path: Path) -> GoalContract:
         success_metrics=metrics,
         recovery_policy=raw["recovery_policy"],
         runner=runner,
+        prefix_goal=prefix_goal,
         bridged_segments=tuple(bridged_segments),
         path=path,
     )
@@ -248,10 +270,18 @@ def run_goal_contract(
             f"Goal {contract.id} is planned and not yet executable; "
             "no diagnostic runner fallback is permitted"
         )
-    if contract.preset not in {"fceux_world_1_king", "fceux_world_8_double_whistle"}:
+    if contract.preset not in {
+        "fceux_world_1_king",
+        "fceux_world_8_double_whistle",
+        "fceux_world_8_big_tanks",
+    }:
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
 
-    preset_env = WORLD_1_KING_ENV if contract.preset == "fceux_world_1_king" else ()
+    preset_env = {
+        "fceux_world_1_king": WORLD_1_KING_ENV,
+        "fceux_world_8_double_whistle": (),
+        "fceux_world_8_big_tanks": WORLD_8_BIG_TANKS_ENV,
+    }[contract.preset]
 
     run_dir = artifacts_dir or _default_artifacts_dir(contract)
     summary = run_fceux_1_1(

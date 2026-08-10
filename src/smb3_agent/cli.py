@@ -35,8 +35,6 @@ from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.recovery import RecoveryError, simulate_recovery
 from smb3_agent.reliability import (
-    RELIABILITY_ARTIFACTS_ROOT,
-    WATCHABLE_ARTIFACTS_ROOT,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -311,9 +309,12 @@ def build_parser() -> argparse.ArgumentParser:
     reliability_run.add_argument(
         "--game-file", default=None, help="Path to the local game file"
     )
-    reliability_run.add_argument("--runs", type=int, default=5)
     reliability_run.add_argument(
-        "--artifacts-root", default=str(RELIABILITY_ARTIFACTS_ROOT)
+        "--goal", default=ACTIVE_PRODUCT_GOAL_ID, help="Product goal reliability profile"
+    )
+    reliability_run.add_argument("--runs", type=int, default=None)
+    reliability_run.add_argument(
+        "--artifacts-root", default=None
     )
     reliability_run.add_argument("--timeout-seconds", type=int, default=180)
 
@@ -324,7 +325,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--game-file", default=None, help="Path to the local game file"
     )
     reliability_watch.add_argument(
-        "--artifacts-root", default=str(WATCHABLE_ARTIFACTS_ROOT)
+        "--goal", default=ACTIVE_PRODUCT_GOAL_ID, help="Product goal review profile"
+    )
+    reliability_watch.add_argument(
+        "--artifacts-root", default=None
     )
     reliability_watch.add_argument(
         "--throttle-seconds", type=float, default=0.0035
@@ -634,8 +638,9 @@ def main() -> None:
         result = run_reliability_gate(
             game_path=Path(game_file),
             requested_runs=args.runs,
-            artifacts_root=Path(args.artifacts_root),
+            artifacts_root=Path(args.artifacts_root) if args.artifacts_root else None,
             timeout_seconds=args.timeout_seconds,
+            goal_id=args.goal,
             progress=lambda message: print(message, flush=True),
         )
         print(result.to_text())
@@ -649,10 +654,11 @@ def main() -> None:
             parser.error("reliability watch requires --game-file or SMB3_GAME_FILE")
         result = run_watchable_playback(
             game_path=Path(game_file),
-            artifacts_root=Path(args.artifacts_root),
+            artifacts_root=Path(args.artifacts_root) if args.artifacts_root else None,
             frame_sleep_seconds=args.throttle_seconds,
             timeout_seconds=args.timeout_seconds,
             contact_sheet_columns=args.columns,
+            goal_id=args.goal,
             progress=lambda message: print(message, flush=True),
         )
         print(result.to_text())

@@ -1,7 +1,9 @@
 # Goal Contract
 
 A goal contract is the machine-readable source of truth for a user objective.
-The active product contract is `data/goals/world_8_double_whistle.yaml`.
+The default product contract remains
+`data/goals/world_8_double_whistle.yaml`. Rank 28 adds the explicitly selected
+`data/goals/world_8_big_tanks.yaml` contract without changing that default.
 
 ## Route semantics
 
@@ -15,11 +17,11 @@ The active product contract is `data/goals/world_8_double_whistle.yaml`.
   evidence that the game requires a segment. Bridge use must be declared and
   cannot satisfy a goal that disallows it.
 
-Route need and execution status are separate. All 15 active product steps are
-now `normal_gameplay`; the legacy diagnostic's bridges remain isolated and are
-not product proof.
+Route need and execution status are separate. All 15 default product steps and
+the one Big Tanks extension step are `normal_gameplay`; the legacy
+diagnostic's bridges remain isolated and are not product proof.
 
-## Active contract shape
+## Default contract shape
 
 ```yaml
 id: world_8_double_whistle
@@ -72,7 +74,7 @@ and an explicit execution mode. Unknown classifications, modes, presets,
 recovery actions, bridge declarations, duplicate segments, and missing catalog
 segments fail validation.
 
-## Active route invariants
+## Default route invariants
 
 - Both World 1 whistle acquisitions are owner milestones.
 - World 1-4 is absent.
@@ -89,6 +91,45 @@ segments fail validation.
 - Only `post_probe_world_8_map_arrival` can be the final success event.
 - Planned segments are never rendered or reported as solved.
 
+## Rank 28 composed contract
+
+The Big Tanks goal declares the accepted default goal as its prefix and owns
+only the new segment:
+
+```yaml
+id: world_8_big_tanks
+game: smb3
+goal_type: product_goal
+execution_status: executable
+
+objective:
+  type: route_completion
+  target: world_8_big_tanks_post_clear
+
+route:
+  prefix_goal: world_8_double_whistle
+  catalog: data/segments/world_8_double_whistle.yaml
+  segments:
+    - id: world_8_big_tanks_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+
+runner:
+  preset: fceux_world_8_big_tanks
+  executable: true
+```
+
+Resolution produces the unchanged 15-segment prefix followed by exactly one
+extension segment. Prefix cycles, cross-catalog composition, a missing prefix,
+duplicate segments, or an unsupported preset fail validation.
+
+The extension cannot pass on World 8 map arrival or stage entry. Its ordered
+observer evidence requires Big Tanks entry, genuine scrolling gameplay, live
+boss defeat with no life loss, chest collection and game return-map flag, then
+a stable World 8 map observation at cursor `(64,112)`. The final success event
+is `post_probe_world_8_big_tanks_post_clear`; no later World 8 stage may be
+entered.
+
 ## Legacy diagnostic
 
 `data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its
@@ -104,7 +145,11 @@ explicitly selected, and its king marker remains local to that diagnostic.
   data/segments/world_8_double_whistle.yaml \
   --goal world_8_double_whistle
 .venv/bin/python -m smb3_agent goal status world_8_double_whistle
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_big_tanks.yaml
+.venv/bin/python -m smb3_agent goal status world_8_big_tanks
 ```
 
 `goal run world_8_double_whistle` executes the product preset directly and
-never routes to `world_1_king`.
+never routes to `world_1_king`. The Big Tanks preset is selected only by the
+separate goal.

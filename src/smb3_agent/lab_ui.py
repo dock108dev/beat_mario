@@ -39,6 +39,11 @@ LOCAL_ASSET_DIR = Path("public/assets/local")
 ARTIFACT_DIR = Path("artifacts")
 SUPPORTED_SPEEDS = ("1", "2", "4", "10", "25", "50", "100")
 SUPPORTED_ATTEMPTS = ("1", "3", "5", "10")
+LAB_GOALS = (
+    (ACTIVE_PRODUCT_GOAL_ID, "World 8 Arrival"),
+    ("world_8_big_tanks", "World 8 Big Tanks"),
+)
+LAB_GOAL_IDS = frozenset(goal_id for goal_id, _ in LAB_GOALS)
 
 
 class LabUiError(ValueError):
@@ -65,8 +70,16 @@ class _Handler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/":
             query = parse_qs(parsed.query)
+            goal_id = query.get("goal", [ACTIVE_PRODUCT_GOAL_ID])[0]
+            if goal_id not in LAB_GOAL_IDS:
+                self._send_html(
+                    render_error(f"Unsupported Route Lab goal: {goal_id}"),
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
             self._send_html(
                 render_lab_ui(
+                    goal_id=goal_id,
                     selected_location_id=query.get("location", [""])[0] or None,
                     selected_note_id=query.get("note", [""])[0] or None,
                     selected_issue_id=query.get("issue", [""])[0] or None,
@@ -75,7 +88,12 @@ class _Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/summary":
-            self._send_json(build_control_panel_summary())
+            query = parse_qs(parsed.query)
+            goal_id = query.get("goal", [ACTIVE_PRODUCT_GOAL_ID])[0]
+            if goal_id not in LAB_GOAL_IDS:
+                self.send_error(HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(build_control_panel_summary(goal_id))
             return
         if path.startswith("/assets/local/"):
             self._send_local_asset(path.removeprefix("/assets/local/"))
@@ -234,12 +252,15 @@ class _Handler(BaseHTTPRequestHandler):
 
 def render_lab_ui(
     *,
+    goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
     selected_location_id: str | None = None,
     selected_note_id: str | None = None,
     selected_issue_id: str | None = None,
     selected_mode: str | None = None,
 ) -> str:
-    summary = build_control_panel_summary()
+    if goal_id not in LAB_GOAL_IDS:
+        raise GoalValidationError(f"Unsupported Route Lab goal: {goal_id}")
+    summary = build_control_panel_summary(goal_id)
     last_command = _load_yaml(LAST_COMMAND_PATH)
     locations = _list_dicts(summary.get("locations", []))
     selected = _selected_location(locations, selected_location_id=selected_location_id)
@@ -258,9 +279,10 @@ def render_lab_ui(
               {_asset_icon('leaf_icon.png', 'LAB', 'Route lab local asset')}
               <div>
                 <h1>Mario Route Lab</h1>
-                <p>Current session: {_esc(str(summary.get('session_label', 'No active session')))} · World 2-first double-whistle route to World 8</p>
+                <p>Current session: {_esc(str(summary.get('session_label', 'No active session')))} · {_esc(_goal_subtitle(goal_id))}</p>
               </div>
             </div>
+            {_goal_switcher(goal_id)}
             {_run_bar(last_command)}
           </header>
 
@@ -271,13 +293,13 @@ def render_lab_ui(
                 <p>Where is Mario?</p>
               </div>
               <nav class="route-list">
-                {''.join(_route_item(location, selected) for location in locations)}
+                {''.join(_route_item(location, selected, goal_id) for location in locations)}
               </nav>
             </aside>
 
             {_evidence_viewer(evidence, selected, last_command)}
 
-            {_teaching_panel(selected, selected_notes, selected_issues, mode, selected_note, selected_issue)}
+            {_teaching_panel(selected, selected_notes, selected_issues, mode, selected_note, selected_issue, goal_id)}
           </main>
 
           <section class="lab-bottom">
@@ -331,13 +353,15 @@ def _run_bar(last_command: dict[str, object]) -> str:
             </div>"""
 
 
-def _route_item(location: dict[str, object], selected: dict[str, object]) -> str:
+def _route_item(
+    location: dict[str, object], selected: dict[str, object], goal_id: str
+) -> str:
     location_id = str(location["id"])
     label = str(location.get("label", location_id))
     state = _route_state(location)
     selected_class = " route-item-selected" if selected.get("id") == location_id else ""
     return f"""
-                <a class="route-step route-item status-{_state_class(state)}{selected_class}" href="{_esc(_location_url(location_id))}">
+                <a class="route-step route-item status-{_state_class(state)}{selected_class}" href="{_esc(_location_url(location_id, goal_id=goal_id))}">
                   {_asset_icon(_icon_name_for_location(location), _icon_fallback(location), f'{label} icon')}
                   <span class="route-copy">
                     <strong>{_esc(label)}</strong>
@@ -394,13 +418,14 @@ def _teaching_panel(
     mode: str,
     selected_note: dict[str, object] | None,
     selected_issue: dict[str, object] | None,
+    goal_id: str,
 ) -> str:
     location_id = str(selected.get("id", ""))
     label = str(selected.get("label", "Route"))
     content = {
         "add": _add_observation_mode(selected),
-        "notes": _review_notes_mode(location_id, observations, selected_note),
-        "issue": _fix_issue_mode(location_id, issues, selected_issue),
+        "notes": _review_notes_mode(location_id, observations, selected_note, goal_id),
+        "issue": _fix_issue_mode(location_id, issues, selected_issue, goal_id),
     }.get(mode, _add_observation_mode(selected))
     return f"""
             <aside class="teaching-panel">
@@ -413,9 +438,9 @@ def _teaching_panel(
                 <p>{_esc(str(selected.get('objective', '')))}</p>
               </div>
               <nav class="mode-tabs segmented-control" aria-label="Teach Mario modes">
-                {_mode_link(location_id, 'add', 'Add Observation', mode)}
-                {_mode_link(location_id, 'notes', 'Review Notes', mode)}
-                {_mode_link(location_id, 'issue', 'Fix Issue', mode)}
+                {_mode_link(location_id, 'add', 'Add Observation', mode, goal_id)}
+                {_mode_link(location_id, 'notes', 'Review Notes', mode, goal_id)}
+                {_mode_link(location_id, 'issue', 'Fix Issue', mode, goal_id)}
               </nav>
               {content}
               <form method="post" action="/test" class="mini-actions">
@@ -426,9 +451,15 @@ def _teaching_panel(
             </aside>"""
 
 
-def _mode_link(location_id: str, mode: str, label: str, selected_mode: str) -> str:
+def _mode_link(
+    location_id: str,
+    mode: str,
+    label: str,
+    selected_mode: str,
+    goal_id: str,
+) -> str:
     selected_class = " segment-active" if mode == selected_mode else ""
-    return f'<a class="mode-tab{selected_class}" href="{_esc(_location_url(location_id, mode=mode))}">{_esc(label)}</a>'
+    return f'<a class="mode-tab{selected_class}" href="{_esc(_location_url(location_id, mode=mode, goal_id=goal_id))}">{_esc(label)}</a>'
 
 
 def _add_observation_mode(selected: dict[str, object]) -> str:
@@ -464,12 +495,13 @@ def _review_notes_mode(
     location_id: str,
     observations: list[dict[str, object]],
     selected_note: dict[str, object] | None,
+    goal_id: str,
 ) -> str:
     selected_note = selected_note or (observations[0] if observations else None)
     return f"""
               <section class="mode-panel">
                 <div class="compact-list">
-                  {''.join(_observation_compact_row(note, location_id, selected_note) for note in observations) or '<p class="empty">No observations for this location yet.</p>'}
+                  {''.join(_observation_compact_row(note, location_id, selected_note, goal_id) for note in observations) or '<p class="empty">No observations for this location yet.</p>'}
                 </div>
                 {_observation_detail(selected_note, location_id) if selected_note else ''}
               </section>"""
@@ -479,12 +511,13 @@ def _fix_issue_mode(
     location_id: str,
     issues: list[dict[str, object]],
     selected_issue: dict[str, object] | None,
+    goal_id: str,
 ) -> str:
     selected_issue = selected_issue or (issues[0] if issues else None)
     return f"""
               <section class="mode-panel">
                 <div class="compact-list">
-                  {''.join(_issue_compact_row(issue, location_id, selected_issue) for issue in issues) or '<p class="empty">No open issues for this location.</p>'}
+                  {''.join(_issue_compact_row(issue, location_id, selected_issue, goal_id) for issue in issues) or '<p class="empty">No open issues for this location.</p>'}
                 </div>
                 {_issue_detail(selected_issue, location_id) if selected_issue else ''}
               </section>"""
@@ -619,6 +652,23 @@ def _page(*, title: str, body: str) -> str:
       gap: 10px;
     }}
     .lab-title p, .section-title p, .meta {{ margin: 0; color: var(--muted); font-size: 12px; }}
+    .goal-switcher {{
+      display: flex;
+      gap: 4px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-alt);
+    }}
+    .goal-choice {{
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }}
+    .goal-choice.goal-selected {{ background: var(--navy); color: #fff; }}
     .section-title {{
       justify-content: space-between;
       align-items: baseline;
@@ -1047,7 +1097,7 @@ def _issue_row(issue: dict[str, object], summary: dict[str, object], selected: d
       <span>{_esc(_human_issue_type(str(issue.get('type', 'unknown'))))}</span>
       <p>{_esc(_short_text(str(issue.get('summary', '')), 120))}</p>
       <span class="meta">{_esc(str(issue.get('status', 'unknown')))}</span>
-      <a class="review-link" href="{_esc(_location_url(location_id, mode='issue', issue_id=str(issue.get('id', ''))))}">Review</a>
+      <a class="review-link" href="{_esc(_location_url(location_id, mode='issue', issue_id=str(issue.get('id', '')), goal_id=str(summary.get('goal_id', ACTIVE_PRODUCT_GOAL_ID))))}">Review</a>
     </article>"""
 
 
@@ -1064,7 +1114,7 @@ def _note_row(note: dict[str, object], summary: dict[str, object], selected: dic
       <span>{_esc(str(note.get('severity')))}</span>
       <p>{_esc(_short_text(str(note.get('text', '')), 120))}</p>
       <span class="meta">{_esc(_title_status(str(note.get('ui_state', 'open'))))}</span>
-      <a class="review-link" href="{_esc(_location_url(location_id, mode='notes', note_id=str(note.get('id', ''))))}">Review</a>
+      <a class="review-link" href="{_esc(_location_url(location_id, mode='notes', note_id=str(note.get('id', '')), goal_id=str(summary.get('goal_id', ACTIVE_PRODUCT_GOAL_ID))))}">Review</a>
     </article>"""
 
 
@@ -1072,11 +1122,12 @@ def _observation_compact_row(
     note: dict[str, object],
     location_id: str,
     selected_note: dict[str, object] | None,
+    goal_id: str,
 ) -> str:
     note_id = str(note.get("id", ""))
     selected_class = " selected-row" if selected_note and selected_note.get("id") == note_id else ""
     return f"""
-      <a class="compact-pick{selected_class}" href="{_esc(_location_url(location_id, mode='notes', note_id=note_id))}">
+      <a class="compact-pick{selected_class}" href="{_esc(_location_url(location_id, mode='notes', note_id=note_id, goal_id=goal_id))}">
         <span>{_esc(str(note.get('severity', 'note')))}</span>
         <strong>{_esc(_short_text(str(note.get('text', '')), 76))}</strong>
         <small>{_esc(_title_status(str(note.get('ui_state', 'open'))))}</small>
@@ -1087,11 +1138,12 @@ def _issue_compact_row(
     issue: dict[str, object],
     location_id: str,
     selected_issue: dict[str, object] | None,
+    goal_id: str,
 ) -> str:
     issue_id = str(issue.get("id", ""))
     selected_class = " selected-row" if selected_issue and selected_issue.get("id") == issue_id else ""
     return f"""
-      <a class="compact-pick{selected_class}" href="{_esc(_location_url(location_id, mode='issue', issue_id=issue_id))}">
+      <a class="compact-pick{selected_class}" href="{_esc(_location_url(location_id, mode='issue', issue_id=issue_id, goal_id=goal_id))}">
         <span class="{_esc(str(issue.get('priority', 'low')))}">{_esc(str(issue.get('priority', 'low')))}</span>
         <strong>{_esc(_short_text(str(issue.get('summary', '')), 78))}</strong>
         <small>{_esc(str(issue.get('status', 'open')))}</small>
@@ -1906,6 +1958,7 @@ def _location_id_for_artifact(value: str) -> str:
         "warp_zone_second_whistle_use": "warp_zone_second_whistle",
         "warp_zone_world_8_tier": "warp_zone_world_8",
         "world_8_pipe_entry": "world_8_pipe",
+        "world_8_big_tanks_clear": "world_8_big_tanks",
         "world_8_map_arrival": "world_8_map",
         "fortress": "world_1_fortress",
         "castle": "world_1_airship",
@@ -1961,17 +2014,37 @@ def _location_url(
     mode: str | None = None,
     note_id: str | None = None,
     issue_id: str | None = None,
+    goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
 ) -> str:
-    if not location_id:
-        return "/"
-    params = [f"location={_esc(_location_id_for_artifact(location_id))}"]
+    params = []
+    if goal_id != ACTIVE_PRODUCT_GOAL_ID:
+        params.append(f"goal={_esc(goal_id)}")
+    if location_id:
+        params.append(f"location={_esc(_location_id_for_artifact(location_id))}")
     if mode:
         params.append(f"mode={_esc(mode)}")
     if note_id:
         params.append(f"note={_esc(note_id)}")
     if issue_id:
         params.append(f"issue={_esc(issue_id)}")
-    return "/?" + "&".join(params)
+    return "/?" + "&".join(params) if params else "/"
+
+
+def _goal_subtitle(goal_id: str) -> str:
+    if goal_id == "world_8_big_tanks":
+        return "World 2-first double-whistle route through World 8 Big Tanks"
+    return "World 2-first double-whistle route to World 8"
+
+
+def _goal_switcher(goal_id: str) -> str:
+    links = []
+    for candidate_id, label in LAB_GOALS:
+        selected = " goal-selected" if candidate_id == goal_id else ""
+        href = "/" if candidate_id == ACTIVE_PRODUCT_GOAL_ID else f"/?goal={candidate_id}"
+        links.append(
+            f'<a class="goal-choice{selected}" href="{_esc(href)}">{_esc(label)}</a>'
+        )
+    return '<nav class="goal-switcher" aria-label="Goal">' + "".join(links) + "</nav>"
 
 
 def _now() -> str:

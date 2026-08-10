@@ -9,7 +9,7 @@ Mario Route Lab is the local evidence-first route review surface. It answers:
 It is not a generic operations dashboard. The CLI, goal contract, catalog, and
 artifact schemas remain the source of truth.
 
-## Active route
+## Goal selection
 
 The default selected goal is `world_8_double_whistle`. Route Lab loads its
 declared segment catalog and renders exactly this contract order:
@@ -32,6 +32,12 @@ declared segment catalog and renders exactly this contract order:
 
 World 1-4 is not rendered because it is not in the active contract. World 7 is
 not a route destination; it appears only in the visible Warp Zone tier label.
+
+The goal switcher exposes `world_8_big_tanks` as a distinct review surface.
+That view renders the same 15-row prefix plus row 16, World 8 Big Tanks. It
+does not change the default selection, modify the Rank 27 goal, or include a
+later World 8 stage. A URL may select it directly with
+`/?goal=world_8_big_tanks`.
 
 Each route row uses player-facing language and displays its role:
 
@@ -56,9 +62,10 @@ structure.
 
 ## Primary action
 
-`Run World 8 Route` is the only strong primary button. The active goal is
-executable and selects the product preset. It does not run the World 1 king
-diagnostic.
+`Run World 8 Route` remains the only strong primary button and retains the
+default Rank 27 behavior. The goal switcher is a route/evidence review control;
+use the goal-specific CLI reliability command to execute Big Tanks. Neither
+surface runs the World 1 king diagnostic.
 
 Unit tests, phase gate, HTML render check, refresh, note, lifecycle, and Codex
 task actions remain secondary or quiet controls.
@@ -70,8 +77,10 @@ come from a screenshot, contact sheet, log, state trace, note, issue, or
 proposal. Assisted evidence must remain labeled; a bridge screenshot cannot be
 presented as normal gameplay proof.
 
-The accepted live boundary is the genuine World 8 map. All 15 rows have
-normal-gameplay evidence from three fresh byte-identical playbacks.
+The default live boundary remains the genuine World 8 map. In the Big Tanks
+view, all 16 rows have normal-gameplay evidence; the extension has three fresh
+byte-identical authoritative runs plus a separate five-frame review contact
+sheet.
 
 ## Route roles and observations
 
@@ -85,6 +94,7 @@ artifacts. New active mappings include:
 - `warp_zone_world_8_tier` -> Warp Zone World 8
 - `world_8_pipe_entry` -> World 8 Pipe
 - `world_8_map_arrival` -> World 8 Map
+- `world_8_big_tanks_clear` -> World 8 Big Tanks
 
 ## Commands
 
@@ -105,6 +115,7 @@ Inspect the contract independently:
 
 ```bash
 python -m smb3_agent goal status world_8_double_whistle
+python -m smb3_agent goal status world_8_big_tanks
 ```
 
 ## Visual contract

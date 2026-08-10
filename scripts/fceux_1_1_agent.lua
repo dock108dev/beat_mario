@@ -12,6 +12,26 @@ local capture_ticks = os.getenv("SMB3_CAPTURE_TICKS") == "1"
 local post_1_1_probe = os.getenv("SMB3_POST_1_1_PROBE") or ""
 local speed_mode = os.getenv("SMB3_AGENT_SPEED_MODE")
 local frame_sleep_seconds = tonumber(os.getenv("SMB3_AGENT_FRAME_SLEEP_SECONDS") or "0")
+local world_8_extension_mode = os.getenv("SMB3_WORLD_8_EXTENSION_MODE") or ""
+local world_8_focused_capture = os.getenv("SMB3_WORLD_8_FOCUSED_CAPTURE") == "1"
+local world_8_focused_capture_events = {
+  post_probe_world_8_map_arrival = true,
+  post_probe_world_8_big_tanks_entered = true,
+  post_probe_world_8_big_tanks_gameplay = true,
+  post_probe_world_8_big_tanks_clear = true,
+  post_probe_world_8_big_tanks_post_clear = true,
+}
+local world_8_discovery_sequence = os.getenv("SMB3_WORLD_8_DISCOVERY_SEQUENCE") or "right,A"
+local world_8_big_tanks_jump_period =
+  tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_JUMP_PERIOD") or "72")
+local world_8_big_tanks_jump_on_frames =
+  tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_JUMP_ON_FRAMES") or "36")
+local world_8_big_tanks_jump_offset =
+  tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_JUMP_OFFSET") or "0")
+local world_8_big_tanks_screen_target =
+  tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_SCREEN_TARGET") or "220")
+local world_8_big_tanks_screen_max =
+  tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_SCREEN_MAX") or "245")
 local post_1_2_route_mode = os.getenv("SMB3_1_2_ROUTE_MODE") or "naive"
 local post_1_2_enemy_min_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MIN_DX") or "0")
 local post_1_2_enemy_max_dx = tonumber(os.getenv("SMB3_1_2_ENEMY_MAX_DX") or "95")
@@ -1034,7 +1054,15 @@ function nearest_object_id_between(m, target_id, min_dx, max_dx, max_abs_dy)
       local dy = ey - m.y
       if dx >= min_dx and dx <= max_dx and math.abs(dy) <= max_abs_dy then
         if best == nil or math.abs(dx) < math.abs(best.dx) then
-          best = {slot = i, x = ex, y = ey, dx = dx, dy = dy, id = target_id}
+          best = {
+            slot = i,
+            x = ex,
+            y = ey,
+            dx = dx,
+            dy = dy,
+            id = target_id,
+            state = memory.readbyte(0x660 + i),
+          }
         end
       end
     end
@@ -1148,14 +1176,17 @@ local function log_state(event, extra)
   end
   log:write(table.concat(parts, " ") .. "\n")
   log:flush()
-  if image_dir ~= nil and (
-    string.find(event, "bad_state")
-    or string.find(event, "reached_end")
-    or string.find(event, "jump_")
-    or string.find(event, "post_")
-    or (capture_ticks and event == "tick")
-    or (event == "agent_tick" and m.x > 1200)
-  ) then
+  local should_capture_image = world_8_focused_capture
+    and world_8_focused_capture_events[event]
+  if not world_8_focused_capture then
+    should_capture_image = string.find(event, "bad_state")
+      or string.find(event, "reached_end")
+      or string.find(event, "jump_")
+      or string.find(event, "post_")
+      or (capture_ticks and event == "tick")
+      or (event == "agent_tick" and m.x > 1200)
+  end
+  if image_dir ~= nil and should_capture_image then
     local safe_event = string.gsub(event, "[^A-Za-z0-9_%-]", "_")
     local path = image_dir .. "/" .. string.format("%06d_%s.gd", movie.framecount(), safe_event)
     local screenshot = gui.gdscreenshot()
@@ -7553,6 +7584,869 @@ local function run_1_castle_probe()
     "post_probe_world_8_map_arrival",
     "evidence=world_number_7_object_set_0_after_warp_pipe"
   )
+  if world_8_extension_mode == "discovery_entry" then
+    log_state(
+      "post_probe_world_8_discovery_pre_entry",
+      "review_only=1 promotable=0 counts_toward_reliability=0"
+    )
+    run_map_sequence(
+      world_8_discovery_sequence,
+      "post_probe_world_8_discovery_input"
+    )
+    advance(600, "post_probe_world_8_discovery_observe")
+    log_state(
+      "post_probe_world_8_discovery_observed",
+      "review_only=1 promotable=0 counts_toward_reliability=0"
+    )
+  elseif world_8_extension_mode == "big_tanks" then
+    if memory.readbyte(0x727) ~= 7
+      or memory.readbyte(0x70A) ~= 0
+      or memory.readbyte(0x79) ~= 32
+      or memory.readbyte(0x75) ~= 80
+    then
+      log_state(
+        "post_probe_world_8_big_tanks_wrong_map",
+        "expected_world_number=7 expected_object_set=0 expected_cursor_x=32 expected_cursor_y=80"
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_big_tanks_started",
+      "evidence=accepted_world_8_map_boundary cursor_x=32 cursor_y=80"
+    )
+    advance(180, "post_probe_world_8_big_tanks_entry_wait")
+    press("down", 18, "post_probe_world_8_big_tanks_entry_down")
+    advance(60, "post_probe_world_8_big_tanks_entry_after_down")
+    press("right", 18, "post_probe_world_8_big_tanks_entry_right")
+    advance(60, "post_probe_world_8_big_tanks_entry_after_right")
+    press("A", 18, "post_probe_world_8_big_tanks_entry_A")
+    local entered_stage = false
+    for _ = 1, 300 do
+      local candidate = mario()
+      if memory.readbyte(0x727) == 7
+        and memory.readbyte(0x70A) == 10
+        and candidate.x == 24
+        and candidate.y == 368
+      then
+        entered_stage = true
+        break
+      end
+      advance_frame()
+    end
+    if not entered_stage then
+      local failure_event = "post_probe_world_8_big_tanks_wrong_stage"
+      if memory.readbyte(0x727) == 7 and memory.readbyte(0x70A) == 10 then
+        failure_event = "post_probe_world_8_big_tanks_wrong_entry_state"
+      end
+      log_state(
+        failure_event,
+        "failure_classification=failed_entry expected_world_number=7 expected_object_set=10 expected_x=24 expected_y=368"
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_big_tanks_entered",
+      "evidence=normal_down_right_A_from_32_80 map_node_x=64 map_node_y=112 stage_identity=world_8_big_tanks expected_x=24 expected_y=368"
+    )
+    local max_x = 0
+    local returned_to_map = false
+    local return_cursor_x = -1
+    local return_cursor_y = -1
+    local stage_frames = 0
+    local last_x = -1
+    local stuck_frames = 0
+    local obstacle_recoveries = 0
+    local obstacle_backup_frames = 0
+    local obstacle_jump_frames = 0
+    local first_cannon_release_frames = 0
+    local first_cannon_jump_frames = 0
+    local first_cannon_jump_done = false
+    local second_cannon_release_frames = 0
+    local second_cannon_jump_frames = 0
+    local second_cannon_jump_done = false
+    local third_cannon_release_frames = 0
+    local third_cannon_jump_frames = 0
+    local third_cannon_jump_done = false
+    local early_convoy_release_frames = 0
+    local early_convoy_hop_frames = 0
+    local early_convoy_hops = 0
+    local early_enemy_backup_frames = 0
+    local early_enemy_run_frames = 0
+    local early_enemy_jump_frames = 0
+    local early_enemy_direct_jump = false
+    local early_enemy_last_x = -1000
+    local early_enemy_maneuvers = 0
+    local reactive_cannon_jump_frames = 0
+    local reactive_cannon_jump_total_frames = 240
+    local reactive_cannon_jump_cooldown = 0
+    local reactive_screen_target = 210
+    local reactive_screen_max = 218
+    local reactive_track_convoy = false
+    local final_wall_backup_frames = 0
+    local final_wall_run_frames = 0
+    local final_wall_release_frames = 0
+    local final_wall_jump_frames = 0
+    local final_wall_done = false
+    local final_tank_observe_frames = 0
+    local final_tank_transfer_frames = 0
+    local final_second_tank_observe_frames = 0
+    local final_second_tank_transfer_frames = 0
+    local final_third_tank_observe_frames = 0
+    local final_third_tank_release_frames = 0
+    local final_third_tank_hop_frames = 0
+    local final_big_tank_ride_frames = 0
+    local final_big_tank_release_frames = 0
+    local final_big_tank_hop_frames = 0
+    local pipe_tank_backup_frames = 0
+    local pipe_tank_run_frames = 0
+    local pipe_tank_jump_frames = 0
+    local pipe_tank_seek_frames = 0
+    local pipe_entry_frames = 0
+    local pipe_tank_maneuver_started = false
+    local final_chamber_entered = false
+    local final_chamber_enemy_seen = false
+    local final_chamber_enemy_defeated = false
+    local final_chamber_clear_observed = false
+    local final_chamber_post_clear_frames = 0
+    local final_chamber_release_frames = 0
+    local final_chamber_jump_frames = 0
+    local final_tank_observe_done = false
+    local gameplay_evidence_logged = false
+    local starting_lives = memory.readbyte(0x736)
+    local starting_star_count = inventory_item_count(9)
+    local final_chamber_frames = 0
+    for frame = 1, 9000 do
+      local m = mario()
+      local enemy = nearest_enemy_ahead(m)
+      local chamber_enemy = nearest_object_id_between(m, -126, -240, 240, 240)
+      local object_set = memory.readbyte(0x70A)
+      local world_number = memory.readbyte(0x727)
+      local player_is_dying = memory.readbyte(0xF1)
+      if player_is_dying ~= 0 then
+        log_state(
+          "post_probe_world_8_big_tanks_death",
+          "failure_classification=death player_is_dying="
+            .. tostring(player_is_dying)
+            .. " starting_lives=" .. tostring(starting_lives)
+            .. " current_lives=" .. tostring(memory.readbyte(0x736))
+            .. " max_x=" .. tostring(max_x)
+        )
+        return
+      end
+      if memory.readbyte(0x736) < starting_lives then
+        log_state(
+          "post_probe_world_8_big_tanks_death",
+          "failure_classification=death starting_lives="
+            .. tostring(starting_lives)
+            .. " current_lives=" .. tostring(memory.readbyte(0x736))
+            .. " max_x=" .. tostring(max_x)
+        )
+        return
+      end
+      if object_set == 10 and m.x < 8192 and m.y ~= 0 then
+        stage_frames = stage_frames + 1
+        reactive_cannon_jump_cooldown = math.max(0, reactive_cannon_jump_cooldown - 1)
+        max_x = math.max(max_x, m.x)
+        if not gameplay_evidence_logged and max_x >= 600 then
+          gameplay_evidence_logged = true
+          log_state(
+            "post_probe_world_8_big_tanks_gameplay",
+            "evidence=normal_autoscroll_gameplay max_x=" .. tostring(max_x)
+          )
+        end
+        if not final_chamber_entered and max_x >= 3090 and m.x < 512 then
+          final_chamber_entered = true
+          pipe_entry_frames = 0
+          pipe_tank_seek_frames = 0
+          final_chamber_release_frames = 4
+          log_state(
+            "post_probe_world_8_big_tanks_final_chamber_entered",
+            "evidence=normal_down_pipe_transition"
+          )
+        end
+        if final_chamber_entered and chamber_enemy ~= nil then
+          final_chamber_enemy_seen = true
+        end
+        if final_chamber_entered then
+          final_chamber_frames = final_chamber_frames + 1
+        end
+        if final_chamber_enemy_seen
+          and not final_chamber_enemy_defeated
+          and chamber_enemy ~= nil
+          and chamber_enemy.state == 6
+          and player_is_dying == 0
+          and memory.readbyte(0x736) == starting_lives
+        then
+          final_chamber_enemy_defeated = true
+          log_state(
+            "post_probe_world_8_big_tanks_boss_defeated",
+            "evidence=enemy_minus_126_object_state_6_game_enforced_stomp"
+          )
+        end
+        if final_chamber_enemy_defeated then
+          final_chamber_post_clear_frames = final_chamber_post_clear_frames + 1
+        end
+        if final_chamber_enemy_defeated
+          and not final_chamber_clear_observed
+          and memory.readbyte(0x14) == 1
+          and inventory_item_count(9) > starting_star_count
+        then
+          final_chamber_clear_observed = true
+          log_state(
+            "post_probe_world_8_big_tanks_clear",
+            "evidence=treasure_chest_super_star_collected_with_game_return_flag"
+          )
+        end
+        if m.x >= 550 then
+          second_cannon_jump_done = true
+          third_cannon_jump_done = true
+        end
+        if early_enemy_backup_frames == 0
+          and early_enemy_run_frames == 0
+          and early_enemy_jump_frames == 0
+          and early_enemy_maneuvers < 5
+          and m.x - early_enemy_last_x >= 80
+          and m.air == 0
+          and m.y >= 300
+          and (
+            (
+              m.x >= 820
+              and m.x < 1000
+              and enemy ~= nil
+              and enemy.id == -83
+              and enemy.dx >= 0
+              and enemy.dx <= 55
+            )
+            or (m.x >= 1360 and m.x < 1420)
+            or (m.x >= 1620 and m.x < 1680)
+            or (m.x >= 1880 and m.x < 1940)
+            or (m.x >= 1970 and m.x < 2020)
+          )
+        then
+          early_enemy_direct_jump = (m.x >= 1620 and m.x < 1680)
+            or (m.x >= 1970 and m.x < 2020)
+          early_enemy_backup_frames = early_enemy_direct_jump and 4 or 32
+          early_enemy_last_x = m.x
+          early_enemy_maneuvers = early_enemy_maneuvers + 1
+          early_convoy_release_frames = 0
+          early_convoy_hop_frames = 0
+          reactive_cannon_jump_frames = 0
+          log_state(
+            "post_probe_world_8_big_tanks_early_enemy_backup",
+            "maneuver=" .. tostring(early_enemy_maneuvers)
+          )
+        end
+        if math.abs(m.x - last_x) <= 1 and m.air == 0 and m.y >= 320 and m.y < 400 then
+          stuck_frames = stuck_frames + 1
+        else
+          stuck_frames = 0
+          last_x = m.x
+        end
+        if stuck_frames > 120 and obstacle_backup_frames == 0 and obstacle_jump_frames == 0 then
+          obstacle_recoveries = obstacle_recoveries + 1
+          if obstacle_recoveries > 6 then
+            log_state(
+              "post_probe_world_8_big_tanks_stall",
+              "failure_classification=gameplay_stall max_x=" .. tostring(max_x)
+            )
+            return
+          end
+          obstacle_backup_frames = 28
+          stuck_frames = 0
+          log_state("post_probe_world_8_big_tanks_obstacle_backup")
+        end
+        if not first_cannon_jump_done
+          and first_cannon_jump_frames == 0
+          and m.x >= 380
+          and enemy ~= nil
+          and enemy.id == 80
+          and enemy.dx >= 0
+          and enemy.dx <= 48
+          and m.air == 0
+          and m.y >= 315
+        then
+          first_cannon_jump_frames = 110
+          first_cannon_release_frames = 4
+          first_cannon_jump_done = true
+          log_state("post_probe_world_8_big_tanks_first_cannon_jump")
+        end
+        if not second_cannon_jump_done
+          and second_cannon_jump_frames == 0
+          and m.x >= 760
+          and enemy ~= nil
+          and enemy.id == -84
+          and enemy.dx >= 0
+          and enemy.dx <= 32
+          and m.air == 0
+          and m.y >= 315
+        then
+          second_cannon_jump_frames = 110
+          second_cannon_release_frames = 4
+          second_cannon_jump_done = true
+          log_state("post_probe_world_8_big_tanks_second_cannon_jump")
+        end
+        if not third_cannon_jump_done
+          and third_cannon_jump_frames == 0
+          and m.x >= 1000
+          and enemy ~= nil
+          and enemy.id == -83
+          and enemy.dx >= 0
+          and enemy.dx <= 36
+          and m.air == 0
+          and m.y >= 280
+          and not held.A
+        then
+          third_cannon_jump_frames = 110
+          third_cannon_release_frames = 4
+          third_cannon_jump_done = true
+          log_state("post_probe_world_8_big_tanks_third_cannon_jump")
+        end
+        if m.x >= 1200
+          and reactive_cannon_jump_frames == 0
+          and reactive_cannon_jump_cooldown == 0
+          and enemy ~= nil
+          and (enemy.id == 80 or enemy.id == -84 or enemy.id == -83)
+          and enemy.dx >= 0
+          and enemy.dx <= (m.x >= 1600 and 55 or 36)
+          and (m.air == 0 or m.x >= 1600)
+          and m.y >= (m.x >= 2000 and 240 or 280)
+          and (not held.A or m.x >= 1600)
+          and final_wall_backup_frames == 0
+          and final_wall_run_frames == 0
+          and final_wall_release_frames == 0
+          and final_wall_jump_frames == 0
+          and early_enemy_backup_frames == 0
+          and early_enemy_run_frames == 0
+          and early_enemy_jump_frames == 0
+        then
+          reactive_cannon_jump_cooldown = 220
+          if m.x >= 2000 then
+            reactive_cannon_jump_frames = 360
+            reactive_cannon_jump_total_frames = 360
+            reactive_screen_target = 205
+            reactive_screen_max = 215
+            reactive_track_convoy = true
+          elseif m.x >= 1600 then
+            reactive_cannon_jump_frames = 240
+            reactive_cannon_jump_total_frames = 240
+            reactive_screen_target = 180
+            reactive_screen_max = 200
+            reactive_track_convoy = false
+          else
+            reactive_cannon_jump_frames = 240
+            reactive_cannon_jump_total_frames = 240
+            reactive_screen_target = 210
+            reactive_screen_max = 218
+            reactive_track_convoy = false
+          end
+          log_state("post_probe_world_8_big_tanks_reactive_cannon_jump")
+        end
+        if not final_wall_done
+          and m.x >= 2070
+          and m.x < 2140
+          and m.air == 0
+          and m.y >= 300
+        then
+          final_wall_backup_frames = 32
+          final_wall_done = true
+          reactive_cannon_jump_frames = 0
+          log_state("post_probe_world_8_big_tanks_final_wall_backup")
+        end
+        if not final_tank_observe_done
+          and m.x >= 2230
+          and m.air == 0
+          and m.y >= 300
+          and m.y <= 320
+        then
+          final_tank_observe_frames = 362
+          final_tank_observe_done = true
+          reactive_cannon_jump_frames = 0
+          log_state("post_probe_world_8_big_tanks_final_tank_observe")
+        end
+        if not pipe_tank_maneuver_started
+          and final_big_tank_ride_frames == 0
+          and m.x >= 3035
+          and m.air == 0
+          and m.y >= 350
+        then
+          pipe_tank_maneuver_started = true
+          pipe_tank_backup_frames = 32
+          log_state("post_probe_world_8_big_tanks_pipe_tank_backup")
+        end
+        if pipe_entry_frames == 0
+          and m.x >= 3090
+          and m.air == 0
+          and m.y >= 280
+          and m.y <= 300
+        then
+          pipe_entry_frames = 300
+          pipe_tank_seek_frames = 0
+          log_state("post_probe_world_8_big_tanks_pipe_entry")
+        end
+        if final_chamber_entered then
+          if final_chamber_enemy_defeated then
+            held.right = final_chamber_post_clear_frames > 300
+            held.left = final_chamber_post_clear_frames <= 300 and m.x > 24
+            held.B = true
+            held.A = final_chamber_post_clear_frames <= 300
+              and final_chamber_frames % 36 < 24
+          elseif final_chamber_release_frames > 0 then
+            held.right = false
+            held.left = false
+            held.B = false
+            held.A = false
+            final_chamber_release_frames = final_chamber_release_frames - 1
+          elseif final_chamber_frames < 60 then
+            held.right = m.x < 105
+            held.left = m.x > 112
+            held.B = false
+            held.A = false
+          elseif final_chamber_frames < 112 then
+            held.right = m.x < 128
+            held.left = m.x > 134
+            held.B = false
+            held.A = true
+          elseif final_chamber_frames < 132 then
+            held.right = m.x < 128
+            held.left = m.x > 134
+            held.B = false
+            held.A = false
+          else
+            if chamber_enemy ~= nil then
+              local player_x_speed = memory.readbytesigned(0xBD)
+              held.right = chamber_enemy.dx > 8
+                or (chamber_enemy.dx >= -8 and player_x_speed < 0)
+              held.left = chamber_enemy.dx < -8
+                or (chamber_enemy.dx <= 8 and player_x_speed > 0)
+            else
+              held.right = true
+              held.left = false
+            end
+            held.B = false
+            if final_chamber_jump_frames > 0 then
+              held.A = true
+              final_chamber_jump_frames = final_chamber_jump_frames - 1
+              if final_chamber_jump_frames == 0 then
+                final_chamber_release_frames = 12
+              end
+            elseif m.air == 0 then
+              held.A = true
+              final_chamber_jump_frames = 60
+            else
+              held.A = false
+            end
+          end
+        elseif final_tank_observe_frames > 0 then
+          held.right = false
+          held.left = false
+          held.B = false
+          held.A = false
+          final_tank_observe_frames = final_tank_observe_frames - 1
+          if final_tank_observe_frames == 0 then
+            final_tank_transfer_frames = 100
+            log_state("post_probe_world_8_big_tanks_final_tank_transfer")
+          end
+        elseif final_tank_transfer_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          final_tank_transfer_frames = final_tank_transfer_frames - 1
+          if final_tank_transfer_frames == 0 then
+            final_second_tank_observe_frames = 600
+            log_state("post_probe_world_8_big_tanks_second_tank_observe")
+          end
+        elseif final_second_tank_observe_frames > 0 then
+          local second_tank_elapsed = 600 - final_second_tank_observe_frames
+          held.right = false
+          held.left = second_tank_elapsed < 4 and m.air ~= 0
+          held.B = false
+          held.A = false
+          final_second_tank_observe_frames = final_second_tank_observe_frames - 1
+          if (m.air == 0 and m.y <= 320 and m.sx <= 95)
+            or final_second_tank_observe_frames == 0
+          then
+            final_second_tank_observe_frames = 0
+            final_second_tank_transfer_frames = 220
+            log_state("post_probe_world_8_big_tanks_second_tank_transfer")
+          end
+        elseif final_second_tank_transfer_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = final_second_tank_transfer_frames % 36 < 24
+          final_second_tank_transfer_frames = final_second_tank_transfer_frames - 1
+          if (m.x >= 2550 and m.air == 0 and m.y >= 350)
+            or final_second_tank_transfer_frames == 0
+          then
+            final_second_tank_transfer_frames = 0
+            final_third_tank_observe_frames = 600
+            final_third_tank_release_frames = 0
+            held.A = false
+            log_state("post_probe_world_8_big_tanks_third_tank_observe")
+          end
+        elseif final_third_tank_observe_frames > 0 then
+          local third_tank_elapsed = 600 - final_third_tank_observe_frames
+          local third_tank_target = third_tank_elapsed < 110 and 90 or 220
+          held.right = m.sx < third_tank_target
+          held.left = m.sx > third_tank_target + 25
+          held.B = true
+          if final_third_tank_release_frames > 0 then
+            held.A = false
+            final_third_tank_release_frames = final_third_tank_release_frames - 1
+          elseif final_third_tank_hop_frames > 0 then
+            held.A = true
+            final_third_tank_hop_frames = final_third_tank_hop_frames - 1
+            if final_third_tank_hop_frames == 0 then
+              final_third_tank_release_frames = 16
+            end
+          elseif m.air == 0 then
+            held.A = true
+            final_third_tank_hop_frames = 44
+          else
+            held.A = false
+          end
+          final_third_tank_observe_frames = final_third_tank_observe_frames - 1
+          if third_tank_elapsed >= 180
+            and m.sx >= 140
+            and m.air == 0
+            and m.y >= 300
+            and m.y < 400
+          then
+            final_third_tank_observe_frames = 0
+            final_big_tank_ride_frames = 600
+            final_big_tank_release_frames = 2
+            log_state("post_probe_world_8_big_tanks_final_big_tank_landed")
+          end
+        elseif final_big_tank_ride_frames > 0 then
+          held.right = m.sx < 248
+          held.left = m.sx > 252
+          held.B = true
+          if final_big_tank_release_frames > 0 then
+            held.A = false
+            final_big_tank_release_frames = final_big_tank_release_frames - 1
+          else
+            if (m.air == 0 or (m.y >= 350 and m.y < 390))
+              and final_big_tank_hop_frames == 0
+            then
+              final_big_tank_hop_frames = 60
+            end
+            held.A = final_big_tank_hop_frames > 0
+            final_big_tank_hop_frames = math.max(0, final_big_tank_hop_frames - 1)
+            if final_big_tank_hop_frames == 0 and held.A then
+              final_big_tank_release_frames = 12
+            end
+          end
+          final_big_tank_ride_frames = final_big_tank_ride_frames - 1
+        elseif pipe_entry_frames > 0 then
+          local pipe_entry_elapsed = 300 - pipe_entry_frames
+          local pipe_entry_jump = pipe_entry_elapsed >= 4
+            and pipe_entry_elapsed < 60
+          held.right = pipe_entry_jump and m.x < 3120
+          held.left = pipe_entry_jump and m.x > 3128
+          held.B = false
+          held.A = pipe_entry_elapsed >= 4 and pipe_entry_elapsed < 48
+          held.down = pipe_entry_elapsed >= 80
+          pipe_entry_frames = pipe_entry_frames - 1
+        elseif pipe_tank_backup_frames > 0 then
+          held.right = false
+          held.left = true
+          held.B = true
+          held.A = false
+          pipe_tank_backup_frames = pipe_tank_backup_frames - 1
+          if pipe_tank_backup_frames == 0 then
+            pipe_tank_run_frames = 40
+            log_state("post_probe_world_8_big_tanks_pipe_tank_run")
+          end
+        elseif pipe_tank_run_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          pipe_tank_run_frames = pipe_tank_run_frames - 1
+          if pipe_tank_run_frames == 0 then
+            pipe_tank_jump_frames = 120
+            log_state("post_probe_world_8_big_tanks_pipe_tank_jump")
+          end
+        elseif pipe_tank_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          pipe_tank_jump_frames = pipe_tank_jump_frames - 1
+          if pipe_tank_jump_frames == 0 then
+            pipe_tank_seek_frames = 600
+            log_state("post_probe_world_8_big_tanks_pipe_tank_seek")
+          end
+        elseif pipe_tank_seek_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = false
+          held.A = false
+          held.down = true
+          pipe_tank_seek_frames = pipe_tank_seek_frames - 1
+        elseif final_wall_backup_frames > 0 then
+          held.right = false
+          held.left = true
+          held.B = true
+          held.A = false
+          final_wall_backup_frames = final_wall_backup_frames - 1
+          if final_wall_backup_frames == 0 then
+            final_wall_run_frames = 90
+            log_state("post_probe_world_8_big_tanks_final_wall_run")
+          end
+        elseif final_wall_run_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          final_wall_run_frames = final_wall_run_frames - 1
+          if final_wall_run_frames == 0
+            or (m.x >= 2085 and memory.readbytesigned(0xBD) >= 20)
+          then
+            final_wall_run_frames = 0
+            final_wall_jump_frames = 180
+            log_state("post_probe_world_8_big_tanks_final_wall_jump")
+          end
+        elseif final_wall_release_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          final_wall_release_frames = final_wall_release_frames - 1
+        elseif final_wall_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          final_wall_jump_frames = final_wall_jump_frames - 1
+        elseif early_enemy_backup_frames > 0 then
+          held.right = false
+          held.left = true
+          held.B = true
+          held.A = false
+          early_enemy_backup_frames = early_enemy_backup_frames - 1
+          if early_enemy_backup_frames == 0 then
+            if early_enemy_direct_jump then
+              early_enemy_jump_frames = 96
+              early_enemy_direct_jump = false
+              log_state(
+                "post_probe_world_8_big_tanks_early_enemy_jump"
+              )
+            else
+              early_enemy_run_frames = 24
+              log_state(
+                "post_probe_world_8_big_tanks_early_enemy_run"
+              )
+            end
+          end
+        elseif early_enemy_run_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          early_enemy_run_frames = early_enemy_run_frames - 1
+          if early_enemy_run_frames == 0 then
+            early_enemy_jump_frames = 96
+            log_state(
+              "post_probe_world_8_big_tanks_early_enemy_jump"
+            )
+          end
+        elseif early_enemy_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          early_enemy_jump_frames = early_enemy_jump_frames - 1
+        elseif m.x >= 550 and m.x < 1200 then
+          held.right = m.sx < 240
+          held.left = m.sx > 250
+          held.B = true
+          if early_convoy_release_frames > 0 then
+            held.A = false
+            early_convoy_release_frames = early_convoy_release_frames - 1
+          elseif early_convoy_hop_frames > 0 then
+            held.A = true
+            early_convoy_hop_frames = early_convoy_hop_frames - 1
+          elseif m.air == 0 and m.y >= 280 and m.y < 400 then
+            early_convoy_release_frames = 4
+            early_convoy_hop_frames = 48
+            early_convoy_hops = early_convoy_hops + 1
+            held.A = false
+            log_state(
+              "post_probe_world_8_big_tanks_early_convoy_hop",
+              "hop=" .. tostring(early_convoy_hops)
+            )
+          else
+            held.A = false
+          end
+        elseif first_cannon_release_frames > 0 then
+          held.right = false
+          held.left = false
+          held.B = false
+          held.A = false
+          first_cannon_release_frames = first_cannon_release_frames - 1
+        elseif first_cannon_jump_frames > 0 then
+          held.right = m.sx < 180
+          held.left = m.sx > 200
+          held.B = true
+          held.A = first_cannon_jump_frames % 36 < 24
+          first_cannon_jump_frames = first_cannon_jump_frames - 1
+        elseif second_cannon_release_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          second_cannon_release_frames = second_cannon_release_frames - 1
+        elseif second_cannon_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          second_cannon_jump_frames = second_cannon_jump_frames - 1
+        elseif third_cannon_release_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = false
+          third_cannon_release_frames = third_cannon_release_frames - 1
+        elseif third_cannon_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          third_cannon_jump_frames = third_cannon_jump_frames - 1
+        elseif reactive_cannon_jump_frames > 0 then
+          if reactive_track_convoy then
+            local convoy_elapsed = reactive_cannon_jump_total_frames
+              - reactive_cannon_jump_frames
+            if convoy_elapsed < 140 then
+              held.right = true
+              held.left = false
+            else
+              local convoy_target = 180
+              if convoy_elapsed >= 260 then
+                convoy_target = math.max(
+                  145,
+                  180 - math.floor((convoy_elapsed - 260) / 4)
+                )
+              end
+              held.right = m.sx < convoy_target
+              held.left = m.sx > convoy_target + 20
+            end
+          else
+            held.right = m.sx < reactive_screen_target
+            held.left = m.sx > reactive_screen_max
+          end
+          held.B = true
+          held.A = reactive_cannon_jump_frames % 36 < 24
+          reactive_cannon_jump_frames = reactive_cannon_jump_frames - 1
+        elseif obstacle_backup_frames > 0 then
+          held.right = false
+          held.left = true
+          held.B = true
+          held.A = false
+          obstacle_backup_frames = obstacle_backup_frames - 1
+          if obstacle_backup_frames == 0 then
+            obstacle_jump_frames = 64
+            log_state("post_probe_world_8_big_tanks_obstacle_jump")
+          end
+        elseif obstacle_jump_frames > 0 then
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+          obstacle_jump_frames = obstacle_jump_frames - 1
+        else
+          local screen_target = world_8_big_tanks_screen_target
+          local screen_max = world_8_big_tanks_screen_max
+          if max_x < 600 then
+            screen_target = 220
+            screen_max = 245
+          end
+          held.right = m.sx < screen_target
+          held.left = m.sx > screen_max
+          held.B = stage_frames % 12 ~= 0
+          held.A = (stage_frames + world_8_big_tanks_jump_offset)
+            % world_8_big_tanks_jump_period < world_8_big_tanks_jump_on_frames
+        end
+        if pipe_tank_seek_frames == 0 and pipe_entry_frames == 0 then
+          held.down = false
+        end
+        held.up = false
+      else
+        held.A = false
+        held.B = false
+        held.right = false
+        held.left = false
+        held.down = false
+        held.up = false
+      end
+      apply()
+      if world_number == 7 and object_set == 0 and stage_frames > 0 then
+        returned_to_map = true
+        return_cursor_x = memory.readbyte(0x79)
+        return_cursor_y = memory.readbyte(0x75)
+        break
+      end
+      advance_frame()
+    end
+    held.A = false
+    held.B = false
+    held.right = false
+    held.left = false
+    held.down = false
+    held.up = false
+    apply()
+    if not returned_to_map then
+      local failure_event = final_chamber_clear_observed
+        and "post_probe_world_8_big_tanks_missing_post_clear"
+        or "post_probe_world_8_big_tanks_timeout"
+      log_state(
+        failure_event,
+        "failure_classification=controller_timeout entered_stage="
+          .. tostring(entered_stage and 1 or 0)
+          .. " max_x=" .. tostring(max_x)
+          .. " stage_frames=" .. tostring(stage_frames)
+      )
+      return
+    end
+    if not final_chamber_clear_observed then
+      log_state(
+        "post_probe_world_8_big_tanks_false_clear",
+        "evidence=map_return_without_observed_treasure_chest_clear"
+      )
+      return
+    end
+    if return_cursor_x ~= 64 or return_cursor_y ~= 112 then
+      log_state(
+        "post_probe_world_8_big_tanks_wrong_post_clear_map",
+        "expected_cursor_x=64 expected_cursor_y=112"
+      )
+      return
+    end
+    for _ = 1, 180 do
+      advance_frame()
+      if memory.readbyte(0x727) ~= 7 then
+        log_state("post_probe_world_8_big_tanks_ambiguous_post_clear")
+        return
+      end
+      if memory.readbyte(0x70A) ~= 0 then
+        log_state("post_probe_world_8_big_tanks_unexpected_next_stage")
+        return
+      end
+      if memory.readbyte(0x79) ~= 64 or memory.readbyte(0x75) ~= 112 then
+        log_state("post_probe_world_8_big_tanks_unstable_post_clear")
+        return
+      end
+    end
+    log_state(
+      "post_probe_world_8_big_tanks_post_clear",
+      "evidence=stable_world_8_map_after_game_clear cursor_x=64 cursor_y=112 max_x="
+        .. tostring(max_x)
+        .. " stage_frames=" .. tostring(stage_frames)
+    )
+  end
 end
 
 

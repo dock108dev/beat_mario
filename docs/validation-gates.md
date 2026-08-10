@@ -203,7 +203,94 @@ and byte-identical SHA-256 logs. The watchable report records a successful
 review-only route, 1,398 converted review images, a 621-line tick trace, and a
 contact sheet; it is excluded from reliability evidence.
 
-## Gate 10: Legacy king diagnostic
+## Gate 10: Rank 28 goal and extension contract
+
+```bash
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_big_tanks.yaml
+.venv/bin/python -m smb3_agent goal status world_8_big_tanks
+```
+
+Pass condition:
+
+- the goal is an executable `product_goal` using
+  `fceux_world_8_big_tanks`;
+- `world_8_double_whistle` is the declared prefix and remains unchanged at 15
+  segments;
+- the resolved goal contains that prefix plus exactly
+  `world_8_big_tanks_clear`, for 16 ordered events and zero bridges;
+- map arrival, stage entry, stage gameplay, boss defeat, chest/clear, and
+  stable post-clear state are distinct observer-derived boundaries;
+- no later World 8 segment is selected.
+
+## Gate 11: Rank 28 authoritative reliability
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition:
+
+- three requested runs create three isolated directories and three new FCEUX
+  processes, each with one power-on attempt;
+- all 16 ordered events pass without savestate, retry, bridge, mutation,
+  discovery search, or diagnostic fallback;
+- each run contains the five authoritative focused PNGs for map arrival,
+  entry, gameplay, clear, and post-clear;
+- boss disappearance during Mario death is rejected; the boss must enter its
+  defeated state while Mario remains alive and lives are unchanged;
+- clear requires the chest reward plus the return-map flag, not a self-declared
+  event;
+- the final stable observation is World 8 map state at cursor `(64,112)`, and
+  no next-stage entry appears;
+- all three runs pass, success rate is `1.0`, and `overall_pass=true`.
+
+Accepted evidence:
+
+```text
+artifacts/reliability/world_8_big_tanks/20260810T190157.201466Z_reliability/
+```
+
+## Gate 12: Rank 28 watchable review
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_big_tanks \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.0001
+```
+
+Pass condition: one fresh route passes; the contact sheet contains exactly the
+five focused review frames; the state/tick trace is retained; and the report
+says `review_only`, `promotable=false`, and
+`counts_toward_reliability=false`. The accepted review is under:
+
+```text
+artifacts/review/world_8_big_tanks/20260810T212112.984218Z_watchable/
+```
+
+The Rank 28 watchable path is validated at a `0.0001`-second throttle. A slower
+`0.0035`-second review run diverged during the accepted prefix and remains
+review-only failure evidence; it did not affect the unthrottled 3/3 result.
+
+## Gate 13: Default-goal regression after Rank 28
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition: omitting `--goal` still selects `world_8_double_whistle`, runs
+five fresh processes, completes only its 15 events, and stops at
+`post_probe_world_8_map_arrival`. The post-change gate passed 5/5 under:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T212451.471392Z_reliability/
+```
+
+## Gate 14: Legacy king diagnostic
 
 ```bash
 .venv/bin/python -m smb3_agent goal validate data/goals/world_1_king.yaml
@@ -217,7 +304,7 @@ Pass condition:
 - no default product command or Route Lab route selects it;
 - a diagnostic pass is never reported as World 8 progress.
 
-## Gate 11: Tracked-surface hygiene
+## Gate 15: Tracked-surface hygiene
 
 ```bash
 git diff --check

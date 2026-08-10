@@ -206,3 +206,35 @@ segments:
     acceptance_event: post_probe_world_8_map_arrival
     evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: This alone satisfies the product goal; it is not equivalent to beating World 8.
+
+  - id: world_8_big_tanks_clear
+    name: Clear World 8 Big Tanks and stop on its stable post-clear map
+    status: solved
+    start_condition:
+      type: conjunction
+      conditions:
+        - {type: map_state, world: 8}
+        - {type: map_cursor, x: 32, y: 80}
+        - {type: post_probe_event, value: post_probe_world_8_map_arrival}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, object_set: 10, x: 24, y: 368}
+        - {type: post_probe_event, value: post_probe_world_8_big_tanks_clear}
+        - {type: stable_map_state, world: 8, cursor_x: 64, cursor_y: 112}
+        - {type: post_probe_event, value: post_probe_world_8_big_tanks_post_clear}
+    failure_conditions:
+      - {type: wrong_map}
+      - {type: wrong_stage}
+      - {type: wrong_entry_state}
+      - {type: death}
+      - {type: gameplay_stall}
+      - {type: timeout, seconds: 300}
+      - {type: false_clear}
+      - {type: missing_post_clear}
+      - {type: unexpected_next_stage}
+      - {type: ambiguous_state}
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_big_tanks_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_normal_entry_and_clear]
+    notes: Uses normal map input, autoscrolling tank traversal, normal pipe entry, and a normal Boomerang Brother defeat; stops after a 180-frame stable map observation before another segment.

@@ -196,3 +196,56 @@ def test_active_goal_only_passes_on_world_8_map_arrival() -> None:
 
     assert evaluate_success_metrics(contract, king_summary) is False
     assert evaluate_success_metrics(contract, world_8_summary) is True
+
+
+def test_world_8_big_tanks_is_a_separate_one_segment_extension() -> None:
+    prefix = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+    extension = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+
+    assert len(prefix.segments) == 15
+    assert prefix.segments[-1] == "world_8_map_arrival"
+    assert extension.prefix_goal == prefix.id
+    assert extension.segments[:15] == prefix.segments
+    assert extension.segments[15:] == ("world_8_big_tanks_clear",)
+    assert extension.preset == "fceux_world_8_big_tanks"
+    assert extension.execution_status == "executable"
+
+
+def test_goal_contract_rejects_prefix_cycles(tmp_path: Path) -> None:
+    cycle = tmp_path / "cycle.yaml"
+    cycle.write_text(Path("data/goals/world_8_big_tanks.yaml").read_text())
+
+    with pytest.raises(GoalValidationError, match="prefix cycle"):
+        load_goal_contract(cycle, _seen=frozenset({cycle.resolve()}))
+
+
+def test_big_tanks_goal_cannot_pass_on_prefix_or_entry_alone() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    attempts = (
+        AttemptSummary(
+            attempt=1,
+            success=True,
+            bad_state=False,
+            reached_end=True,
+            goal_area=True,
+            max_x=3136,
+        ),
+    )
+    prefix_only = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_map_arrival",
+        post_probe_clear=True,
+        post_probe_events=("post_probe_world_8_map_arrival",),
+    )
+    entry_only = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_big_tanks_entered",
+        post_probe_clear=False,
+        post_probe_events=(
+            "post_probe_world_8_map_arrival",
+            "post_probe_world_8_big_tanks_entered",
+        ),
+    )
+
+    assert evaluate_success_metrics(contract, prefix_only) is False
+    assert evaluate_success_metrics(contract, entry_only) is False

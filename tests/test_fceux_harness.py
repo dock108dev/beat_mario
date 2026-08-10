@@ -173,6 +173,130 @@ def test_parse_fceux_log_accepts_observed_world_8_arrival(tmp_path: Path) -> Non
     assert summary.post_probe_clear is True
 
 
+def _world_8_big_tanks_lines() -> list[str]:
+    return [
+        "frame=10 event=post_probe_world_2_first_whistle_started "
+        "world_number=1 object_set=0 item_0=12 item_1=12",
+        "frame=20 event=post_probe_world_2_first_whistle_used "
+        "world_number=1 object_set=0 item_0=12 item_1=9 "
+        "evidence=two_to_one_whistle_after_A_input source_world=2",
+        "frame=25 event=post_probe_warp_zone_5_6_7_tier "
+        "world_number=8 object_set=0 map_cursor_x=64 map_cursor_y=112 "
+        "item_0=12 item_1=9 evidence=warp_cursor_64_112_after_world_2_whistle",
+        "frame=30 event=post_probe_warp_zone_second_whistle_started "
+        "world_number=8 object_set=0 item_0=12 item_1=9",
+        "frame=40 event=post_probe_warp_zone_second_whistle_used "
+        "world_number=8 object_set=0 item_0=9 item_1=8 "
+        "evidence=one_to_zero_whistles_after_A_input_from_5_6_7_tier",
+        "frame=42 event=post_probe_warp_zone_world_8_tier "
+        "world_number=8 object_set=0 map_cursor_x=128 map_cursor_y=144 "
+        "item_0=9 item_1=8 evidence=warp_cursor_128_144_after_second_whistle",
+        "frame=45 event=post_probe_world_8_pipe_entered "
+        "world_number=8 object_set=0 map_cursor_x=160 map_cursor_y=144 "
+        "item_0=9 item_1=8 evidence=A_input_from_warp_cursor_160_144",
+        "frame=50 event=post_probe_world_8_map_arrival "
+        "world_number=7 object_set=0 map_cursor_x=32 map_cursor_y=80 "
+        "item_0=9 item_1=8 evidence=world_number_7_object_set_0_after_warp_pipe",
+        "frame=55 event=post_probe_world_8_big_tanks_started",
+        "frame=60 event=post_probe_world_8_big_tanks_entered x=24 y=368 "
+        "world_number=7 object_set=10 stage_identity=world_8_big_tanks "
+        "evidence=normal_down_right_A_from_32_80",
+        "frame=70 event=post_probe_world_8_big_tanks_gameplay x=600 y=300 "
+        "world_number=7 object_set=10 evidence=normal_autoscroll_gameplay",
+        "frame=80 event=post_probe_world_8_big_tanks_boss_defeated "
+        "world_number=7 object_set=10 "
+        "evidence=enemy_minus_126_object_state_6_game_enforced_stomp",
+        "frame=90 event=post_probe_world_8_big_tanks_clear "
+        "world_number=7 object_set=10 "
+        "evidence=treasure_chest_super_star_collected_with_game_return_flag",
+        "frame=100 event=post_probe_world_8_big_tanks_post_clear "
+        "world_number=7 object_set=0 map_cursor_x=64 map_cursor_y=112 "
+        "evidence=stable_world_8_map_after_game_clear",
+    ]
+
+
+def test_parse_fceux_log_accepts_exact_big_tanks_completion_sequence(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(_world_8_big_tanks_lines()))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is True
+    assert summary.post_probe_last_event == "post_probe_world_8_big_tanks_post_clear"
+
+
+def test_parse_fceux_log_rejects_big_tanks_death_after_boss_disappearance(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_big_tanks_lines()[:-2]
+    lines.append(
+        "frame=90 event=post_probe_world_8_big_tanks_death "
+        "world_number=7 object_set=10 failure_classification=death"
+    )
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+    assert summary.post_probe_last_event == "post_probe_world_8_big_tanks_death"
+
+
+def test_parse_fceux_log_rejects_big_tanks_false_clear_without_chest_proof(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_big_tanks_lines()
+    lines[-2] = (
+        "frame=90 event=post_probe_world_8_big_tanks_clear "
+        "world_number=7 object_set=10 evidence=enemy_disappeared"
+    )
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_requires_big_tanks_milestones_in_order(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_big_tanks_lines()
+    lines[-5], lines[-4] = lines[-4], lines[-5]
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+@pytest.mark.parametrize(
+    "failure_event",
+    (
+        "post_probe_world_8_big_tanks_wrong_stage",
+        "post_probe_world_8_big_tanks_missing_post_clear",
+    ),
+)
+def test_parse_fceux_log_rejects_big_tanks_stage_and_post_clear_failures(
+    tmp_path: Path,
+    failure_event: str,
+) -> None:
+    lines = _world_8_big_tanks_lines()[:-1]
+    lines.append(
+        f"frame=100 event={failure_event} world_number=7 object_set=10"
+    )
+    log_path = tmp_path / "route.log"
+    log_path.write_text("\n".join(lines))
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+    assert summary.post_probe_last_event == failure_event
+
+
 def test_parse_fceux_log_resets_clear_when_1_6_level_entry_starts(tmp_path: Path) -> None:
     log_path = tmp_path / "route.log"
     log_path.write_text(

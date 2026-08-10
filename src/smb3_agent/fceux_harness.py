@@ -96,6 +96,10 @@ def parse_fceux_log(
     valid_warp_zone_second_whistle = False
     valid_warp_zone_world_8_tier = False
     valid_world_8_pipe_entry = False
+    valid_world_8_map_arrival = False
+    valid_world_8_big_tanks_entry = False
+    valid_world_8_big_tanks_gameplay = False
+    valid_world_8_big_tanks_clear = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -265,7 +269,7 @@ def parse_fceux_log(
                     and "map_cursor_y=144" in line
                 )
             if event == "post_probe_world_8_map_arrival":
-                post_probe_clear = (
+                valid_world_8_map_arrival = (
                     valid_world_2_first_whistle
                     and valid_warp_zone_second_whistle
                     and valid_warp_zone_world_8_tier
@@ -276,6 +280,68 @@ def parse_fceux_log(
                     and all(f"item_{index}=12" not in line for index in range(10))
                     and not playback_contaminated
                 )
+                post_probe_clear = valid_world_8_map_arrival
+            if event == "post_probe_world_8_big_tanks_started":
+                valid_world_8_big_tanks_entry = False
+                valid_world_8_big_tanks_gameplay = False
+                valid_world_8_big_tanks_clear = False
+                post_probe_clear = False
+            if event == "post_probe_world_8_big_tanks_entered":
+                valid_world_8_big_tanks_entry = (
+                    valid_world_8_map_arrival
+                    and "evidence=normal_down_right_A_from_32_80" in line
+                    and "stage_identity=world_8_big_tanks" in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and "x=24" in line
+                    and "y=368" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_big_tanks_gameplay":
+                valid_world_8_big_tanks_gameplay = (
+                    valid_world_8_big_tanks_entry
+                    and "evidence=normal_autoscroll_gameplay" in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_big_tanks_clear":
+                valid_world_8_big_tanks_clear = (
+                    valid_world_8_big_tanks_gameplay
+                    and "evidence=treasure_chest_super_star_collected_with_game_return_flag"
+                    in line
+                    and "world_number=7" in line
+                    and "object_set=10" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_big_tanks_post_clear":
+                post_probe_clear = (
+                    valid_world_8_big_tanks_clear
+                    and "evidence=stable_world_8_map_after_game_clear" in line
+                    and "world_number=7" in line
+                    and "object_set=0" in line
+                    and "map_cursor_x=64" in line
+                    and "map_cursor_y=112" in line
+                    and not playback_contaminated
+                )
+            if event.startswith("post_probe_world_8_big_tanks_") and any(
+                token in event
+                for token in (
+                    "_wrong_",
+                    "_death",
+                    "_stall",
+                    "_timeout",
+                    "_false_clear",
+                    "_missing_post_clear",
+                    "_unexpected_next_stage",
+                    "_ambiguous_",
+                    "_unstable_",
+                )
+            ):
+                post_probe_clear = False
             if x_match is not None:
                 x = int(x_match.group("x"))
                 if 0 <= x < 8192:

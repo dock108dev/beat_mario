@@ -1,21 +1,25 @@
 # SMB3 Route Agent
 
-Local proof-of-concept for a user-steered game agent. The active product goal is
-`world_8_double_whistle`:
+Local proof-of-concept for a user-steered game agent. The default product goal
+remains `world_8_double_whistle`:
 
 > From a fresh game, collect both World 1 Warp Whistles, clear the required
 > World 1 path, arrive safely on the World 2 map with both whistles, use the
 > first whistle from World 2, use the second while still in the Warp Zone, and
 > arrive on the genuine World 8 map.
 
-World 8 arrival is the boundary. Playing or beating World 8 is outside the
-current goal.
+World 8 arrival remains that goal's boundary. Rank 28 adds a separate
+`world_8_big_tanks` product goal: it reuses the accepted 15-segment prefix,
+clears the first reachable World 8 stage (Big Tanks), observes the normal map
+return, and stops before another stage.
 
 ## Current truth
 
-- The active contract and catalog are
-  `data/goals/world_8_double_whistle.yaml` and
-  `data/segments/world_8_double_whistle.yaml`.
+- The default contract remains `data/goals/world_8_double_whistle.yaml`; it is
+  still 15 segments and still stops at the World 8 map.
+- `data/goals/world_8_big_tanks.yaml` is a distinct product contract. It
+  composes the accepted default prefix with one catalog-owned segment,
+  `world_8_big_tanks_clear`, for 16 ordered acceptance events.
 - World 1-4 is not in the active route.
 - World 1-5 and World 1-6 are retained as the route to the final World 1
   castle after the owner corrected the boundary to require World 2 before
@@ -27,11 +31,16 @@ current goal.
   World 8 map.
 - The first whistle must be used from the World 2 map. The second must be used
   from the Warp Zone before a numbered-world pipe is entered.
-- Only `post_probe_world_8_map_arrival` can satisfy the active goal. The legacy
-  king marker cannot.
-- The active product runner is executable. Rank 27 passed the structural
+- Only `post_probe_world_8_map_arrival` can satisfy the default goal. The Big
+  Tanks goal instead requires ordered entry, gameplay, boss defeat,
+  chest/clear, and stable post-clear map evidence. Neither a king marker, map
+  arrival alone, nor enemy disappearance can satisfy it.
+- The default product runner is executable. Rank 27 passed the structural
   reliability gate with five fresh, byte-identical, no-bridge processes plus a
   separate successful review-only watchable playback and contact sheet.
+- The Rank 28 runner is also executable. It passed three fresh, byte-identical,
+  no-bridge processes with five authoritative screenshots per run and a
+  separate watchable review.
 - `world_1_king` remains available only as a legacy diagnostic route. It uses
   explicit bridges and is not product progress.
 
@@ -70,7 +79,7 @@ savestates, screenshots, and live route evidence remain separate local-only
 proof. The hosted Route Lab smoke check writes HTML to a temporary directory,
 asserts its semantic content, and removes it without tracking or uploading it.
 
-## Active-goal commands
+## Goal commands
 
 ```bash
 python -m pytest -q
@@ -79,12 +88,15 @@ python -m smb3_agent segment validate \
   data/segments/world_8_double_whistle.yaml \
   --goal world_8_double_whistle
 python -m smb3_agent goal status world_8_double_whistle
+python -m smb3_agent goal validate data/goals/world_8_big_tanks.yaml
+python -m smb3_agent goal status world_8_big_tanks
 python -m smb3_agent command parse \
   "run world 8 double whistle arrival 3 times"
 ```
 
-The active goal runs the product route directly and never falls back to the
-king diagnostic.
+Both goals run product routes directly and never fall back to the king
+diagnostic. Omitting `--goal` from reliability commands preserves the Rank 27
+default.
 
 ## Rank 27 reliability and watchable review
 
@@ -115,6 +127,37 @@ review images and ticks, and creates a contact sheet. It is always labeled
 five-run reliability result. Reliability evidence writes under
 `artifacts/reliability/`. See [Reliability gate](docs/reliability-gate.md) for
 the artifact layout, failure classifications, and exact pass rules.
+
+## Rank 28 Big Tanks proof
+
+Run the separate three-run gate:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Every run must complete the accepted 15-step prefix, enter Big Tanks by normal
+map input, show genuine stage gameplay, defeat the chamber boss while Mario is
+alive, collect the chest reward that triggers the course clear, and remain on
+the returned World 8 map. Five focused PNGs are required in each run: map,
+entry, gameplay, clear, and post-clear. The accepted aggregate is under
+`artifacts/reliability/world_8_big_tanks/20260810T190157.201466Z_reliability/`.
+
+The review-only command is:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_big_tanks \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.0001
+```
+
+Its accepted contact sheet and tick trace are under
+`artifacts/review/world_8_big_tanks/20260810T212112.984218Z_watchable/`. The
+0.0001-second throttle is the validated Rank 28 review setting; the
+authoritative gate remains unthrottled.
 
 ## Legacy diagnostic
 
@@ -149,6 +192,8 @@ python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 
 The Route list is ordered from the active goal contract. It shows World 2-first
 double-whistle milestones and does not show World 1-4 as required.
+Use the goal switcher to review the separate Big Tanks extension without
+changing the default route.
 
 ## Project docs
 

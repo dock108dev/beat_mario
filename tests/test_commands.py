@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from smb3_agent.commands import CommandParseError, parse_command, run_command
+from smb3_agent.cli import build_parser
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult
 
@@ -14,6 +15,17 @@ def test_parse_world_8_double_whistle_goal_command() -> None:
     assert command.goal == "world_8_double_whistle"
     assert command.attempts == 3
     assert command.validation_policy == "require_goal_metrics"
+
+
+def test_reliability_cli_selects_big_tanks_as_an_explicit_separate_goal() -> None:
+    args = build_parser().parse_args(
+        ["reliability", "run", "--goal", "world_8_big_tanks"]
+    )
+
+    assert args.command == "reliability"
+    assert args.reliability_command == "run"
+    assert args.goal == "world_8_big_tanks"
+    assert args.runs is None
 
 
 def test_parse_world_1_king_gate_command() -> None:

@@ -190,3 +190,14 @@ locations:
     guide_terms:
       - Dark Land
       - World 8 map
+  - id: world_8_big_tanks
+    segment_id: world_8_big_tanks_clear
+    label: World 8 Big Tanks
+    type: level
+    default_status: works
+    objective: Enter the first World 8 tank stage, clear its Boomerang Brother and treasure chest, then stop on the stable map.
+    guide_terms:
+      - Dark Land
+      - Big Tanks
+      - Boomerang Brother
+      - Super Star chest

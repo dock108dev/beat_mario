@@ -2,19 +2,73 @@
 
 Last updated: 2026-08-10.
 
-## Active goal
+## Default goal
 
 `world_8_double_whistle` is the product source of truth. It ends only on a
 genuine World 8 map observation. The owner corrected the route boundary during
 live investigation: Mario must clear the final World 1 castle/airship, arrive
 safely in World 2 with both whistles, and use the first whistle from World 2.
 
-The active goal is `executable`. Rank 27 launched five independent fresh FCEUX
+The default goal is `executable`. Rank 27 launched five independent fresh FCEUX
 processes; all five completed all 15 route steps, reported
 `metrics_passed=true`, and ended at `post_probe_world_8_map_arrival`. Their
 structured logs are byte-identical. A separate throttled playback also passed
 and produced review images, ticks, and a contact sheet, but is explicitly
 non-promotable. The legacy `world_1_king` gate remains a separate diagnostic.
+
+## Rank 28 separate goal
+
+`world_8_big_tanks` is an executable product goal separate from the default.
+It declares `world_8_double_whistle` as its prefix, reuses all 15 accepted
+arrival segments without copying them, and adds exactly one segment:
+`world_8_big_tanks_clear`.
+
+From the accepted World 8 map at cursor `(32,80)`, normal down/right/A input
+reached Big Tanks. The promoted controller traverses the autoscrolling tanks,
+enters the end pipe, defeats the Boomerang Brother, avoids the remaining
+projectile, and collects the chest. Success requires the additional Super Star
+inventory item and the game's return-to-map flag, followed by a stable World 8
+map observation at cursor `(64,112)`. The goal stops there, before another
+World 8 stage.
+
+The authoritative command passed 3/3:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks \
+  --game-file roms/smb3.nes
+```
+
+Accepted aggregate:
+
+```text
+artifacts/reliability/world_8_big_tanks/20260810T190157.201466Z_reliability/
+```
+
+All three fresh processes completed the 16 ordered events, reported
+`metrics_passed=true`, retained all five focused screenshots, and produced the
+same structured-log SHA-256:
+
+```text
+38ee2fb807d67fabfc4be08a2eef447d3631510ba2ab8e3386a32068a538ffa2
+```
+
+The separate review-only run passed with a `0.0001`-second throttle:
+
+```text
+artifacts/review/world_8_big_tanks/20260810T212112.984218Z_watchable/
+```
+
+Its five-frame contact sheet covers map arrival, stage entry, real tank
+gameplay, chest/clear, and the post-clear map. Its 633-line state/tick trace and
+contact sheet are non-promotable and do not count toward the 3/3 gate.
+
+After Rank 28 changes, the unchanged default reliability profile passed 5/5
+again at:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260810T212451.471392Z_reliability/
+```
 
 ## Rank 27 reliability evidence
 
@@ -84,9 +138,11 @@ observed in the accepted batch.
 | 13 | Warp Zone World 8 tier | objective milestone | normal gameplay | solved and independently observed |
 | 14 | World 8 pipe | objective milestone | normal gameplay | solved via right then A from the World 8 tier |
 | 15 | World 8 map arrival | objective milestone | normal gameplay | solved; `world_number=7`, `object_set=0` |
+| 16 | World 8 Big Tanks clear | objective milestone in separate goal | normal gameplay | solved 3/3; stable post-clear map return |
 
-World 1-4 is absent. World 7 is not entered; it is only one of the labels on
-the expected first Warp Zone tier.
+Row 16 belongs only to `world_8_big_tanks`; the default contract still ends at
+row 15. World 1-4 is absent. World 7 is not entered; it is only one of the
+labels on the expected first Warp Zone tier.
 
 ## Fresh live investigation
 
@@ -186,11 +242,11 @@ The explicit command remains:
 It may be used to repair World 1, but `post_probe_1_airship_success_king` is not
 a World 8 success marker and is rejected by the active goal metrics.
 
-## Next bounded task
+## Current boundary
 
-Rank 27 is complete at the genuine World 8 map boundary. Rank 28 remains
-unstarted. World 8 gameplay is a separate future goal and was not started by
-this route.
+Rank 28 is complete at the normal Big Tanks post-clear map return. The default
+Rank 27 goal remains unchanged at the genuine World 8 map arrival. Later World
+8 stages and Rank 33 are unstarted and were not entered by this work.
 
 ## Roaming placement note
 

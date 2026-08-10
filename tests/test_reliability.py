@@ -8,6 +8,7 @@ import subprocess
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.reliability import (
+    BIG_TANKS_FINAL_EVENT,
     FINAL_EVENT,
     run_reliability_gate,
     run_watchable_playback,
@@ -18,8 +19,8 @@ from smb3_agent.segments import load_segment_catalog
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _milestone_events() -> list[str]:
-    contract = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+def _milestone_events(goal_id: str = "world_8_double_whistle") -> list[str]:
+    contract = load_goal_contract(Path(f"data/goals/{goal_id}.yaml"))
     catalog = load_segment_catalog(contract.catalog_path)
     return [catalog.by_id[segment_id].acceptance_event for segment_id in contract.segments]
 
@@ -61,6 +62,27 @@ def _write_log(
             suffix = (
                 " world_number=7 object_set=0 item_0=9 item_1=8 form=0 "
                 "evidence=world_number_7_object_set_0_after_warp_pipe"
+            )
+        elif event == "post_probe_world_8_big_tanks_entered":
+            suffix = (
+                " x=24 y=368 world_number=7 object_set=10 "
+                "stage_identity=world_8_big_tanks "
+                "evidence=normal_down_right_A_from_32_80"
+            )
+        elif event == "post_probe_world_8_big_tanks_gameplay":
+            suffix = (
+                " x=600 y=300 world_number=7 object_set=10 "
+                "evidence=normal_autoscroll_gameplay"
+            )
+        elif event == "post_probe_world_8_big_tanks_clear":
+            suffix = (
+                " world_number=7 object_set=10 "
+                "evidence=treasure_chest_super_star_collected_with_game_return_flag"
+            )
+        elif event == BIG_TANKS_FINAL_EVENT:
+            suffix = (
+                " world_number=7 object_set=0 map_cursor_x=64 map_cursor_y=112 "
+                "evidence=stable_world_8_map_after_game_clear"
             )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
@@ -104,8 +126,9 @@ def _fake_runner_factory(
     extra_line: str | None = None,
     include_tick: bool = False,
     write_image: bool = False,
+    goal_id: str = "world_8_double_whistle",
 ):
-    milestones = _milestone_events()
+    milestones = _milestone_events(goal_id)
 
     def fake_runner(contract, **kwargs):
         calls.append(kwargs)
@@ -132,9 +155,22 @@ def _fake_runner_factory(
             image_dir = artifacts_dir / "images"
             image_dir.mkdir(parents=True, exist_ok=True)
             pixel = bytes([0, 10, 20, 30])
-            image_dir.joinpath("000001_review.gd").write_bytes(
-                b"FCEUXGD0000"[:11] + pixel * (256 * 224)
+            focused_events = (
+                [
+                    "post_probe_world_8_map_arrival",
+                    "post_probe_world_8_big_tanks_entered",
+                    "post_probe_world_8_big_tanks_gameplay",
+                    "post_probe_world_8_big_tanks_clear",
+                    BIG_TANKS_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_big_tanks"
+                else []
             )
+            image_events = focused_events or ["review"]
+            for index, event in enumerate(image_events, start=1):
+                image_dir.joinpath(f"{index:06d}_{event}.gd").write_bytes(
+                    b"FCEUXGD0000"[:11] + pixel * (256 * 224)
+                )
         return _goal_result(contract, artifacts_dir, events, not is_failure)
 
     return fake_runner
@@ -210,6 +246,94 @@ def test_fewer_than_five_successes_are_not_an_authoritative_pass(tmp_path: Path)
     assert result.report["successful_runs"] == 4
     assert result.report["success_rate"] == 1.0
     assert result.passed is False
+
+
+def test_big_tanks_requires_three_isolated_fresh_successes(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_big_tanks",
+        artifacts_root=tmp_path / "big-tanks",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_big_tanks", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["minimum_authoritative_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["required_final_event"] == BIG_TANKS_FINAL_EVENT
+    assert result.report["route_segment_count"] == 16
+    assert len(calls) == 3
+    assert all(call["attempts"] == 1 for call in calls)
+    for run in result.report["runs"]:
+        invocation = json.loads(
+            Path(run["artifacts_dir"]).joinpath("invocation.json").read_text()
+        )
+        assert invocation["runner_preset"] == "fceux_world_8_big_tanks"
+        assert invocation["new_fceux_process"] is True
+        assert invocation["reuse_savestate"] is False
+        assert len(run["focused_screenshots"]) == 5
+        assert all(Path(path).is_file() for path in run["focused_screenshots"])
+
+
+def test_two_big_tanks_successes_are_not_authoritative(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_big_tanks",
+        requested_runs=2,
+        artifacts_root=tmp_path / "big-tanks",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_big_tanks", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.report["successful_runs"] == 2
+    assert result.passed is False
+
+
+def test_big_tanks_failure_retains_prefix_boundary_and_missing_segment(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_big_tanks",
+        requested_runs=1,
+        artifacts_root=tmp_path / "big-tanks-failure",
+        goal_runner=_fake_runner_factory(
+            calls,
+            goal_id="world_8_big_tanks",
+            failing_run=1,
+            partial_count=15,
+            extra_line="frame=99 event=post_probe_world_8_big_tanks_wrong_stage",
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["failure_classification"] == "wrong-stage"
+    assert run["last_accepted_segment"] == "world_8_map_arrival"
+    assert run["first_missing_milestone"] == {
+        "segment_id": "world_8_big_tanks_clear",
+        "event": BIG_TANKS_FINAL_EVENT,
+    }
+    assert Path(run["route_log"]).is_file()
+    assert Path(run["fceux_stdout"]).is_file()
+    assert Path(run["fceux_stderr"]).is_file()
 
 
 def test_timeout_is_classified_with_partial_artifacts(tmp_path: Path) -> None:

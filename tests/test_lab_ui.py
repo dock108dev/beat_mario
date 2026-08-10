@@ -168,6 +168,21 @@ def test_route_lab_uses_active_goal_contract_order() -> None:
     assert "World 8 Map" in labels
 
 
+def test_route_lab_surfaces_big_tanks_without_changing_the_default_goal() -> None:
+    default = build_control_panel_summary()
+    big_tanks = build_control_panel_summary("world_8_big_tanks")
+    html = render_lab_ui(goal_id="world_8_big_tanks")
+
+    assert default["goal_id"] == "world_8_double_whistle"
+    assert len(default["locations"]) == 15
+    assert big_tanks["goal_id"] == "world_8_big_tanks"
+    assert len(big_tanks["locations"]) == 16
+    assert big_tanks["locations"][-1]["label"] == "World 8 Big Tanks"
+    assert "World 8 Big Tanks" in html
+    assert 'href="/?goal=world_8_big_tanks&amp;location=world_8_big_tanks"' in html
+    assert "World 2-first double-whistle route through World 8 Big Tanks" in html
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

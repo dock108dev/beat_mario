@@ -12,7 +12,11 @@ import subprocess
 from typing import Any, Callable
 
 from smb3_agent.fceux_harness import BatchSummary, parse_fceux_log
-from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
+from smb3_agent.fceux_images import (
+    convert_gd_directory,
+    load_gd_screenshot,
+    write_contact_sheet,
+)
 from smb3_agent.goals import (
     ACTIVE_PRODUCT_GOAL_ID,
     GoalContract,
@@ -29,6 +33,7 @@ from smb3_agent.segments import (
 
 
 FINAL_EVENT = "post_probe_world_8_map_arrival"
+BIG_TANKS_FINAL_EVENT = "post_probe_world_8_big_tanks_post_clear"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -41,6 +46,13 @@ FAILURE_EVENT_TOKENS = (
     "_mismatch",
     "_no_entry",
     "_unstable",
+    "_wrong_",
+    "_death",
+    "_stall",
+    "_timeout",
+    "_false_clear",
+    "_unexpected_next_stage",
+    "_ambiguous_",
 )
 PROHIBITED_SEARCH_TOKENS = (
     "_search_candidate",
@@ -65,6 +77,46 @@ PROHIBITED_ARTIFACT_SUFFIXES = (
     ".fm2",
     ".nes",
 )
+
+
+@dataclass(frozen=True)
+class ReliabilityProfile:
+    goal_id: str
+    preset: str
+    final_event: str
+    minimum_authoritative_runs: int
+    accepted_boundary: dict[str, int]
+    focused_events: tuple[str, ...] = ()
+
+
+RELIABILITY_PROFILES = {
+    ACTIVE_PRODUCT_GOAL_ID: ReliabilityProfile(
+        goal_id=ACTIVE_PRODUCT_GOAL_ID,
+        preset="fceux_world_8_double_whistle",
+        final_event=FINAL_EVENT,
+        minimum_authoritative_runs=5,
+        accepted_boundary={"world_number": 7, "object_set": 0},
+    ),
+    "world_8_big_tanks": ReliabilityProfile(
+        goal_id="world_8_big_tanks",
+        preset="fceux_world_8_big_tanks",
+        final_event=BIG_TANKS_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={
+            "world_number": 7,
+            "object_set": 0,
+            "map_cursor_x": 32,
+            "map_cursor_y": 80,
+        },
+        focused_events=(
+            "post_probe_world_8_map_arrival",
+            "post_probe_world_8_big_tanks_entered",
+            "post_probe_world_8_big_tanks_gameplay",
+            "post_probe_world_8_big_tanks_clear",
+            "post_probe_world_8_big_tanks_post_clear",
+        ),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -137,13 +189,20 @@ class WatchableResult:
 def run_reliability_gate(
     *,
     game_path: Path,
-    requested_runs: int = 5,
-    artifacts_root: Path = RELIABILITY_ARTIFACTS_ROOT,
+    requested_runs: int | None = None,
+    artifacts_root: Path | None = None,
     timeout_seconds: int = 180,
+    goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
     goal_runner: Callable[..., GoalRunResult] = run_goal_contract,
     emulator_resolver: Callable[[str], str | None] = shutil.which,
     progress: Callable[[str], None] | None = None,
 ) -> ReliabilityResult:
+    profile = _reliability_profile(goal_id)
+    capture_images = bool(profile.focused_events)
+    if requested_runs is None:
+        requested_runs = profile.minimum_authoritative_runs
+    if artifacts_root is None:
+        artifacts_root = Path("artifacts/reliability") / goal_id
     started_at = datetime.now(timezone.utc)
     artifacts_dir = _new_artifacts_dir(artifacts_root, "reliability")
     report_path = artifacts_dir / "reliability_report.json"
@@ -154,18 +213,19 @@ def run_reliability_gate(
         validation_policy="authoritative_all_runs_required",
         artifacts_dir=artifacts_dir,
         started_at=started_at,
+        goal_id=goal_id,
     )
     base_report.update(
         {
             "requested_runs": requested_runs,
-            "minimum_authoritative_runs": 5,
+            "minimum_authoritative_runs": profile.minimum_authoritative_runs,
             "completed_runs": 0,
             "successful_runs": 0,
             "success_rate": 0.0,
             "overall_pass": False,
             "runs": [],
             "capture_settings": {
-                "capture_images": False,
+                "capture_images": capture_images,
                 "capture_ticks": False,
                 "frame_sleep_seconds": 0.0,
                 "throttle": "unthrottled",
@@ -178,6 +238,7 @@ def run_reliability_gate(
             game_path=game_path,
             emulator_resolver=emulator_resolver,
             requested_runs=requested_runs,
+            profile=profile,
         )
     except Exception as exc:
         base_report["preflight"] = {
@@ -190,7 +251,7 @@ def run_reliability_gate(
         _write_json(report_path, base_report)
         return ReliabilityResult(report=base_report, report_path=report_path)
 
-    base_report.update(_contract_identity(contract, catalog))
+    base_report.update(_contract_identity(contract, catalog, profile))
     base_report["preflight"] = {"passed": True}
     runs: list[dict[str, Any]] = []
     for run_index in range(1, requested_runs + 1):
@@ -201,9 +262,10 @@ def run_reliability_gate(
             mode="reliability",
             run_dir=run_dir,
             timeout_seconds=timeout_seconds,
-            capture_images=False,
+            capture_images=capture_images,
             capture_ticks=False,
             frame_sleep_seconds=0.0,
+            contract=contract,
         )
         _write_json(run_dir / "invocation.json", invocation)
         if progress is not None:
@@ -218,7 +280,7 @@ def run_reliability_gate(
                 game_path=game_path,
                 attempts=1,
                 artifacts_dir=run_dir,
-                capture_images=False,
+                capture_images=capture_images,
                 capture_ticks=False,
                 clean_product_env=True,
                 frame_sleep_seconds=0.0,
@@ -236,9 +298,11 @@ def run_reliability_gate(
             goal_result=goal_result,
             run_exception=run_exception,
             started_at=run_started_at,
-            capture_images=False,
+            capture_images=capture_images,
             capture_ticks=False,
             frame_sleep_seconds=0.0,
+            required_final_event=profile.final_event,
+            required_image_events=profile.focused_events,
         )
         _write_json(run_dir / "run_report.json", run_report)
         runs.append(run_report)
@@ -256,7 +320,7 @@ def run_reliability_gate(
             "completed_runs": len(runs),
             "successful_runs": successes,
             "success_rate": round(successes / requested_runs, 6),
-            "overall_pass": requested_runs >= 5
+            "overall_pass": requested_runs >= profile.minimum_authoritative_runs
             and len(runs) == requested_runs
             and successes == requested_runs,
             "structured_log_sha256s": log_hashes,
@@ -279,14 +343,18 @@ def run_reliability_gate(
 def run_watchable_playback(
     *,
     game_path: Path,
-    artifacts_root: Path = WATCHABLE_ARTIFACTS_ROOT,
+    artifacts_root: Path | None = None,
     frame_sleep_seconds: float = 0.0035,
     timeout_seconds: int = 600,
     contact_sheet_columns: int = 4,
+    goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
     goal_runner: Callable[..., GoalRunResult] = run_goal_contract,
     emulator_resolver: Callable[[str], str | None] = shutil.which,
     progress: Callable[[str], None] | None = None,
 ) -> WatchableResult:
+    profile = _reliability_profile(goal_id)
+    if artifacts_root is None:
+        artifacts_root = Path("artifacts/review") / goal_id
     started_at = datetime.now(timezone.utc)
     artifacts_dir = _new_artifacts_dir(artifacts_root, "watchable")
     report_path = artifacts_dir / "watchable_report.json"
@@ -296,6 +364,7 @@ def run_watchable_playback(
         validation_policy="review_only",
         artifacts_dir=artifacts_dir,
         started_at=started_at,
+        goal_id=goal_id,
     )
     report.update(
         {
@@ -319,6 +388,7 @@ def run_watchable_playback(
             game_path=game_path,
             emulator_resolver=emulator_resolver,
             requested_runs=1,
+            profile=profile,
         )
     except Exception as exc:
         report["preflight"] = {
@@ -331,7 +401,7 @@ def run_watchable_playback(
         _write_json(report_path, report)
         return WatchableResult(report=report, report_path=report_path)
 
-    report.update(_contract_identity(contract, catalog))
+    report.update(_contract_identity(contract, catalog, profile))
     report["preflight"] = {"passed": True}
     invocation = _invocation_record(
         run_index=1,
@@ -341,6 +411,7 @@ def run_watchable_playback(
         capture_images=True,
         capture_ticks=True,
         frame_sleep_seconds=frame_sleep_seconds,
+        contract=contract,
     )
     invocation.update(
         {
@@ -382,6 +453,8 @@ def run_watchable_playback(
         capture_images=True,
         capture_ticks=True,
         frame_sleep_seconds=frame_sleep_seconds,
+        required_final_event=profile.final_event,
+        required_image_events=(),
     )
     tick_trace_path = artifacts_dir / "state_tick_trace.log"
     _write_tick_trace(artifacts_dir / "fceux_1_1.log", tick_trace_path)
@@ -394,9 +467,8 @@ def run_watchable_playback(
             artifacts_dir / "images", artifacts_dir / "review" / "png"
         )
         converted_count = len(converted)
-        write_contact_sheet(
-            converted, contact_sheet_path, columns=contact_sheet_columns
-        )
+        focused = _focused_images(converted, profile.focused_events)
+        write_contact_sheet(focused, contact_sheet_path, columns=contact_sheet_columns)
     except Exception as exc:
         contact_sheet_error = f"{type(exc).__name__}: {exc}"
 
@@ -411,6 +483,7 @@ def run_watchable_playback(
             "route_passed": run_report["passed"],
             "review_pass": review_pass,
             "converted_review_images": converted_count,
+            "focused_review_images": len(focused) if contact_sheet_error is None else 0,
             "contact_sheet": str(contact_sheet_path)
             if contact_sheet_path.is_file()
             else None,
@@ -439,6 +512,7 @@ def _load_product_contract(
     game_path: Path,
     emulator_resolver: Callable[[str], str | None],
     requested_runs: int,
+    profile: ReliabilityProfile,
 ) -> tuple[GoalContract, SegmentCatalog, tuple[dict[str, str], ...]]:
     if requested_runs < 1:
         raise ValueError("requested run count must be at least one")
@@ -447,15 +521,15 @@ def _load_product_contract(
     if emulator_resolver("fceux") is None:
         raise FileNotFoundError("fceux executable was not found on PATH")
 
-    contract = load_goal_contract(resolve_goal_path(ACTIVE_PRODUCT_GOAL_ID))
+    contract = load_goal_contract(resolve_goal_path(profile.goal_id))
     catalog = load_segment_catalog(contract.catalog_path)
     validate_goal_segments(contract, catalog)
-    if contract.id != ACTIVE_PRODUCT_GOAL_ID:
-        raise ValueError("active reliability gate cannot fall back to another goal")
+    if contract.id != profile.goal_id:
+        raise ValueError("reliability gate cannot fall back to another goal")
     if contract.goal_type != "product_goal":
         raise ValueError("active reliability gate requires a product_goal contract")
-    if contract.preset != "fceux_world_8_double_whistle":
-        raise ValueError("active reliability gate cannot use a diagnostic preset")
+    if contract.preset != profile.preset:
+        raise ValueError("reliability gate cannot use a diagnostic preset")
     if not contract.executable:
         raise ValueError("active product contract is not executable")
     if contract.bridged_segments:
@@ -482,8 +556,8 @@ def _load_product_contract(
         milestones.append(
             {"segment_id": segment.id, "event": segment.acceptance_event}
         )
-    if milestones[-1]["event"] != FINAL_EVENT:
-        raise ValueError("final product segment does not own the World 8 map event")
+    if milestones[-1]["event"] != profile.final_event:
+        raise ValueError("final product segment does not own the required final event")
     return contract, catalog, tuple(milestones)
 
 
@@ -500,6 +574,8 @@ def _inspect_run(
     capture_images: bool,
     capture_ticks: bool,
     frame_sleep_seconds: float,
+    required_final_event: str,
+    required_image_events: tuple[str, ...],
 ) -> dict[str, Any]:
     log_path = run_dir / "fceux_1_1.log"
     execution_path = run_dir / "fceux_execution.json"
@@ -544,6 +620,12 @@ def _inspect_run(
     returncode = execution.get("returncode") if execution else None
     launch_error = execution.get("launch_error") if execution else None
     complete_contract = first_missing is None and len(last_good) == len(milestones)
+    success_candidate = (
+        complete_contract and metrics_passed and final_event == required_final_event
+    )
+    focused_screenshots, screenshot_evidence_error = _focused_screenshot_evidence(
+        run_dir, required_image_events if success_candidate else ()
+    )
     passed = (
         run_exception is None
         and execution_error is None
@@ -552,15 +634,16 @@ def _inspect_run(
         and not launch_error
         and returncode == 0
         and log_error is None
+        and screenshot_evidence_error is None
         and not prohibited
         and complete_contract
         and metrics_passed
-        and final_event == FINAL_EVENT
+        and final_event == required_final_event
     )
     classification = None if passed else _classify_failure(
         execution=execution,
         execution_error=execution_error,
-        log_error=log_error,
+        log_error=log_error or screenshot_evidence_error,
         prohibited=prohibited,
         failure_event=failure_event,
         run_exception=run_exception,
@@ -593,7 +676,7 @@ def _inspect_run(
         "structured_log_sha256": log_sha256,
         "metrics_passed": metrics_passed,
         "final_event": final_event,
-        "required_final_event": FINAL_EVENT,
+        "required_final_event": required_final_event,
         "contract_milestones_completed": len(last_good),
         "contract_milestones_required": len(milestones),
         "complete_ordered_contract": complete_contract,
@@ -611,6 +694,8 @@ def _inspect_run(
         "execution": execution,
         "execution_metadata_error": execution_error,
         "log_integrity_error": log_error,
+        "focused_screenshots": focused_screenshots,
+        "screenshot_evidence_error": screenshot_evidence_error,
         "prohibited_evidence": prohibited,
         "exception": f"{type(run_exception).__name__}: {run_exception}"
         if run_exception is not None
@@ -621,6 +706,28 @@ def _inspect_run(
         else None,
     }
     return report
+
+
+def _focused_screenshot_evidence(
+    run_dir: Path, required_events: tuple[str, ...]
+) -> tuple[list[str], str | None]:
+    if not required_events:
+        return [], None
+    image_dir = run_dir / "images"
+    output_dir = run_dir / "evidence" / "png"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    screenshots: list[str] = []
+    try:
+        for index, event in enumerate(required_events, start=1):
+            candidates = sorted(image_dir.glob(f"*_{event}.gd"))
+            if not candidates:
+                raise FileNotFoundError(f"missing screenshot for {event}")
+            output_path = output_dir / f"{index:02d}_{event}.png"
+            load_gd_screenshot(candidates[-1]).save(output_path)
+            screenshots.append(str(output_path))
+    except Exception as exc:
+        return screenshots, f"{type(exc).__name__}: {exc}"
+    return screenshots, None
 
 
 def _milestone_progress(
@@ -678,6 +785,22 @@ def _classify_failure(
     if prohibited:
         return "prohibited-tactic"
     if failure_event is not None:
+        classifications = {
+            "wrong_map": "wrong-map",
+            "wrong_stage": "wrong-stage",
+            "wrong_entry_state": "wrong-entry-state",
+            "death": "death",
+            "stall": "gameplay-stall",
+            "timeout": "timeout",
+            "false_clear": "false-clear",
+            "missing_post_clear": "missing-post-clear",
+            "unexpected_next_stage": "unexpected-next-stage",
+            "ambiguous": "ambiguous-state",
+            "unstable_post_clear": "ambiguous-state",
+        }
+        for token, classification in classifications.items():
+            if token in failure_event:
+                return classification
         return "gameplay"
     if run_exception is not None and isinstance(run_exception, OSError):
         return "emulator-launch"
@@ -752,19 +875,45 @@ def _write_tick_trace(log_path: Path, trace_path: Path) -> None:
     trace_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _focused_images(
+    converted: list[Path], focused_events: tuple[str, ...]
+) -> list[Path]:
+    if not focused_events:
+        return converted
+    focused = [
+        path for event in focused_events for path in converted if event in path.name
+    ]
+    missing = [
+        event for event in focused_events if not any(event in path.name for path in converted)
+    ]
+    if missing:
+        raise ValueError(
+            "missing focused review image(s): " + ", ".join(missing)
+        )
+    return focused
+
+
+def _reliability_profile(goal_id: str) -> ReliabilityProfile:
+    try:
+        return RELIABILITY_PROFILES[goal_id]
+    except KeyError as exc:
+        raise ValueError(f"unsupported reliability goal: {goal_id}") from exc
+
+
 def _base_report(
     *,
     mode: str,
     validation_policy: str,
     artifacts_dir: Path,
     started_at: datetime,
+    goal_id: str,
 ) -> dict[str, Any]:
     commit, dirty = _source_state()
     return {
         "schema_version": 1,
         "mode": mode,
         "validation_policy": validation_policy,
-        "goal_id": ACTIVE_PRODUCT_GOAL_ID,
+        "goal_id": goal_id,
         "source_commit": commit,
         "source_dirty": dirty,
         "started_at": started_at.isoformat(),
@@ -773,7 +922,9 @@ def _base_report(
 
 
 def _contract_identity(
-    contract: GoalContract, catalog: SegmentCatalog
+    contract: GoalContract,
+    catalog: SegmentCatalog,
+    profile: ReliabilityProfile,
 ) -> dict[str, Any]:
     return {
         "goal_id": contract.id,
@@ -786,8 +937,8 @@ def _contract_identity(
         "route_catalog_sha256": _sha256_file(catalog.path),
         "route_segment_count": len(contract.segments),
         "bridged_segment_count": len(contract.bridged_segments),
-        "accepted_boundary": {"world_number": 7, "object_set": 0},
-        "required_final_event": FINAL_EVENT,
+        "accepted_boundary": profile.accepted_boundary,
+        "required_final_event": profile.final_event,
     }
 
 
@@ -800,12 +951,13 @@ def _invocation_record(
     capture_images: bool,
     capture_ticks: bool,
     frame_sleep_seconds: float,
+    contract: GoalContract,
 ) -> dict[str, Any]:
     return {
         "run_index": run_index,
         "mode": mode,
-        "goal_id": ACTIVE_PRODUCT_GOAL_ID,
-        "runner_preset": "fceux_world_8_double_whistle",
+        "goal_id": contract.id,
+        "runner_preset": contract.preset,
         "artifacts_dir": str(run_dir),
         "attempts": 1,
         "new_fceux_process": True,

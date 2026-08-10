@@ -84,3 +84,13 @@ def test_active_goal_status_renders_contract_order_and_roles() -> None:
     assert "6. id=world_1_5_water_path classification=game_prerequisite" in rendered
     assert "world_1_4_clear" not in rendered
     assert "15. id=world_8_map_arrival classification=objective_milestone" in rendered
+
+
+def test_world_8_big_tanks_catalog_adds_exactly_one_solved_segment() -> None:
+    prefix = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+    extension = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    catalog = load_segment_catalog(extension.catalog_path)
+
+    validate_goal_segments(extension, catalog)
+    assert len(extension.segments) == len(prefix.segments) + 1
+    assert catalog.by_id["world_8_big_tanks_clear"].status == "solved"
