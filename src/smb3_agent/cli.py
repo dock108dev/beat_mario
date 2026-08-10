@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys
 
 from smb3_agent.commands import CommandParseError, parse_command, run_command
 from smb3_agent.detection.state_detector import detect_state
@@ -32,7 +33,6 @@ from smb3_agent.lab import (
 from smb3_agent.lab_ui import LabUiError, render_lab_ui, run_lab_ui_server
 from smb3_agent.observe import ObserveError, run_observed_segment
 from smb3_agent.presets import WORLD_1_KING_ENV
-from smb3_agent.probes.mednafen_probe import run_mednafen_probe
 from smb3_agent.recovery import RecoveryError, simulate_recovery
 from smb3_agent.review import compare_logs, review_log
 from smb3_agent.segments import (
@@ -41,11 +41,6 @@ from smb3_agent.segments import (
     render_goal_status,
     validate_goal_segments,
 )
-from smb3_agent.tasks.checkpoint_1_1 import run_checkpoint_1_1_task
-from smb3_agent.tasks.enter_1_1 import run_enter_1_1_task
-from smb3_agent.tasks.load_checkpoint_1_1 import run_load_checkpoint_1_1_task
-from smb3_agent.tasks.run_1_1_script import run_1_1_script_task
-from smb3_agent.tasks.start_game import run_start_game_task
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -459,6 +454,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "probe" and args.backend == "mednafen":
+        _require_macos_mednafen(parser, "probe mednafen")
+        from smb3_agent.probes.mednafen_probe import run_mednafen_probe
+
         run_mednafen_probe(
             game_path=Path(args.game_file),
             artifacts_dir=Path(args.artifacts_dir),
@@ -473,6 +471,9 @@ def main() -> None:
         return
 
     if args.command == "task" and args.task_name == "start-game":
+        _require_macos_mednafen(parser, "task start-game")
+        from smb3_agent.tasks.start_game import run_start_game_task
+
         run_start_game_task(
             game_path=Path(args.game_file),
             artifacts_dir=Path(args.artifacts_dir),
@@ -482,6 +483,9 @@ def main() -> None:
         return
 
     if args.command == "task" and args.task_name == "enter-1-1":
+        _require_macos_mednafen(parser, "task enter-1-1")
+        from smb3_agent.tasks.enter_1_1 import run_enter_1_1_task
+
         run_enter_1_1_task(
             game_path=Path(args.game_file),
             artifacts_dir=Path(args.artifacts_dir),
@@ -491,6 +495,9 @@ def main() -> None:
         return
 
     if args.command == "task" and args.task_name == "checkpoint-1-1":
+        _require_macos_mednafen(parser, "task checkpoint-1-1")
+        from smb3_agent.tasks.checkpoint_1_1 import run_checkpoint_1_1_task
+
         run_checkpoint_1_1_task(
             game_path=Path(args.game_file),
             artifacts_dir=Path(args.artifacts_dir),
@@ -501,6 +508,9 @@ def main() -> None:
         return
 
     if args.command == "task" and args.task_name == "load-checkpoint-1-1":
+        _require_macos_mednafen(parser, "task load-checkpoint-1-1")
+        from smb3_agent.tasks.load_checkpoint_1_1 import run_load_checkpoint_1_1_task
+
         run_load_checkpoint_1_1_task(
             game_path=Path(args.game_file),
             artifacts_dir=Path(args.artifacts_dir),
@@ -511,6 +521,9 @@ def main() -> None:
         return
 
     if args.command == "task" and args.task_name == "run-1-1-script":
+        _require_macos_mednafen(parser, "task run-1-1-script")
+        from smb3_agent.tasks.run_1_1_script import run_1_1_script_task
+
         run_1_1_script_task(
             game_path=Path(args.game_file),
             script_path=Path(args.script),
@@ -850,3 +863,8 @@ def _resolve_review_log(path: Path) -> Path:
     if path.is_dir():
         return path / "fceux_1_1.log"
     return path
+
+
+def _require_macos_mednafen(parser: argparse.ArgumentParser, command: str) -> None:
+    if sys.platform != "darwin":
+        parser.error(f"{command} is supported only on macOS; Linux CI validates ROM-free commands only")

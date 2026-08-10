@@ -47,6 +47,28 @@ python -m pip install -e '.[dev]'
 FCEUX must be available on `PATH` for live diagnostics. ROM-free validation
 does not require it.
 
+## ROM-free validation and hosted CI
+
+Run the same canonical gate used by GitHub Actions from the repository root:
+
+```bash
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
+```
+
+The `.github/workflows/rom-free-ci.yml` workflow runs this gate on the Unix
+hosted runner `ubuntu-latest` for pull requests, pushes to `main`, and manual
+dispatches. It installs Python 3.11 development dependencies and proves tracked
+file hygiene, Bash syntax, Ruff linting, the complete ROM-free pytest suite,
+the active goal contract, the active segment catalog, deterministic goal
+status, and the Mario Route Lab render contract.
+
+Hosted CI does not prove live gameplay. The Quartz/ApplicationServices Mednafen
+adapter and its input/capture dependencies are macOS-only and are imported only
+when a matching Mednafen command runs. FCEUX execution, the local game file,
+savestates, screenshots, and live route evidence remain separate local-only
+proof. The hosted Route Lab smoke check writes HTML to a temporary directory,
+asserts its semantic content, and removes it without tracking or uploading it.
+
 ## Active-goal commands
 
 ```bash

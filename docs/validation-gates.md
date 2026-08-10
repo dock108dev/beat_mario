@@ -4,6 +4,31 @@ Validation keeps contract proof, live topology proof, assisted diagnostics, and
 repeatable route proof separate. Passing a lower level never implies a higher
 one.
 
+## Canonical ROM-free gate
+
+```bash
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
+```
+
+This is the single local and hosted entrypoint for the complete ROM-free
+surface. On GitHub Actions it runs with Python 3.11 on `ubuntu-latest`, with
+read-only repository contents permission and no secrets. The gate fails fast
+across tracked and changed-file whitespace, Bash syntax, Ruff linting, forbidden
+tracked files, pytest, the active goal contract, the active segment catalog,
+deterministic goal status, and the Mario Route Lab HTML contract.
+
+The hosted gate proves that those contracts install and execute on a headless
+Unix runner without a game file, FCEUX, Mednafen, savestate, display server, or
+generated evidence. It does not prove that Mario can execute the route. Live
+FCEUX route proof remains a local macOS gate with explicit game-file authority.
+The legacy Quartz/ApplicationServices Mednafen modules are also macOS-only:
+ROM-free CLI commands do not import them, and Linux reports an explicit
+unsupported-platform error if one of those commands is intentionally selected.
+
+Mario Route Lab HTML is rendered into a securely created temporary directory
+during the canonical gate, checked for non-empty semantic content, and removed
+automatically. It is neither tracked nor uploaded by hosted CI.
+
 ## Gate 1: ROM-free suite
 
 ```bash
@@ -116,6 +141,10 @@ Pass condition:
 - solved steps say `Learned`, not planned;
 - exactly one strong primary button remains;
 - stable semantic class hooks remain present.
+
+This explicit `artifacts/` command is for local inspection only and its output
+is ignored. The canonical local/hosted gate instead renders to a temporary
+directory and deletes the HTML after the assertions pass.
 
 ## Gate 8: Live product boundary
 

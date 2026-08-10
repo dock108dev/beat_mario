@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from smb3_agent.commands import AgentCommand, CommandParseError, parse_command
+from smb3_agent.commands import AgentCommand, parse_command
 from smb3_agent.fceux_harness import BatchSummary
 from smb3_agent.goals import GoalRunResult, load_goal_contract, resolve_goal_path, run_goal_contract
 from smb3_agent.review import LogEvent, parse_log_events, review_log

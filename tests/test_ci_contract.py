@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+import tomllib
+
+import pytest
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/rom-free-ci.yml"
+GATE_PATH = REPOSITORY_ROOT / "scripts/validate_phase0.sh"
+PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
+CHECKOUT_PIN = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+SETUP_PYTHON_PIN = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"
+MACOS_MODULES = (
+    "smb3_agent.backends.mednafen",
+    "smb3_agent.probes.mednafen_probe",
+    "smb3_agent.tasks.checkpoint_1_1",
+    "smb3_agent.tasks.enter_1_1",
+    "smb3_agent.tasks.load_checkpoint_1_1",
+    "smb3_agent.tasks.run_1_1_script",
+    "smb3_agent.tasks.start_game",
+)
+
+
+def test_workflow_uses_required_unix_runner_triggers_and_canonical_gate() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "pull_request:" in workflow
+    assert re.search(r"push:\s+branches:\s+- main", workflow)
+    assert "workflow_dispatch:" in workflow
+    assert "runs-on: ubuntu-latest" in workflow
+    assert "macos-latest" not in workflow
+    assert "self-hosted" not in workflow
+    assert "PYTHON=python scripts/validate_phase0.sh" in workflow
+
+
+def test_workflow_is_read_only_bounded_and_uses_immutable_house_pins() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    action_refs = re.findall(r"^\s*uses:\s*([^\s#]+)", workflow, flags=re.MULTILINE)
+
+    assert re.search(r"permissions:\s+contents: read", workflow)
+    assert "persist-credentials: false" in workflow
+    assert "timeout-minutes: 20" in workflow
+    assert 'CI: "true"' in workflow
+    assert "python-version: \"3.11\"" in workflow
+    assert "cache: pip" in workflow
+    assert "cache-dependency-path: pyproject.toml" in workflow
+    assert CHECKOUT_PIN in action_refs
+    assert SETUP_PYTHON_PIN in action_refs
+    assert action_refs
+    assert all(re.search(r"@[0-9a-f]{40}$", action_ref) for action_ref in action_refs)
+
+
+def test_workflow_has_no_live_gameplay_or_artifact_steps() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8").lower()
+
+    forbidden = (
+        ".nes",
+        "fceux",
+        "game-file",
+        "smb3_game_file",
+        "savestate",
+        "goal run",
+        "command run",
+        "upload-artifact",
+    )
+    assert all(token not in workflow for token in forbidden)
+
+
+def test_canonical_gate_covers_complete_rom_free_surface() -> None:
+    gate = GATE_PATH.read_text(encoding="utf-8")
+    required = (
+        "git grep -nI -E '[[:blank:]]+$'",
+        "git diff --check",
+        "git diff --cached --check",
+        "bash -n scripts/validate_phase0.sh",
+        '"${python_bin}" -m ruff check src tests',
+        '"${python_bin}" -m pytest -q',
+        "goal validate data/goals/world_8_double_whistle.yaml",
+        "segment validate",
+        "data/segments/world_8_double_whistle.yaml",
+        "--goal world_8_double_whistle",
+        "goal status world_8_double_whistle",
+        "lab ui-render --output",
+        "mktemp -d",
+        "trap cleanup_route_lab EXIT",
+    )
+
+    assert all(token in gate for token in required)
+    assert gate.index("ruff check") < gate.index("pytest")
+    assert gate.index("pytest") < gate.index("goal validate")
+    assert gate.index("goal validate") < gate.index("segment validate")
+    assert gate.index("segment validate") < gate.index("goal status")
+    assert gate.index("goal status") < gate.index("lab ui-render")
+
+
+def test_gate_forbids_generated_evidence_game_assets_caches_and_metadata() -> None:
+    gate = GATE_PATH.read_text(encoding="utf-8")
+
+    for token in (
+        "artifacts/*",
+        "data/attempts/*",
+        "data/screenshots/*",
+        "data/variants/*.yaml",
+        "public/assets/local/*",
+        "*.nes",
+        "*.fds",
+        "*.sav",
+        "*.state",
+        "*.fc?",
+        "*.fm2",
+        "*.pyc",
+        "__pycache__/*",
+        ".pytest_cache/*",
+        "*.egg-info/*",
+    ):
+        assert token in gate
+
+
+def test_linux_dependency_surface_excludes_darwin_only_packages() -> None:
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    dependencies = pyproject["project"]["dependencies"]
+    normalized = {dependency.split(";", 1)[0].split(">=", 1)[0].lower(): dependency for dependency in dependencies}
+
+    assert "numpy" in normalized
+    assert "opencv-python" not in normalized
+    assert "pynput" not in normalized
+    for package in ("mss", "pyautogui", "pyobjc"):
+        assert package in normalized
+        assert "sys_platform == 'darwin'" in normalized[package]
+
+
+def _run_cli_in_fresh_process(arguments: list[str]) -> subprocess.CompletedProcess[str]:
+    code = f"""
+import sys
+sys.argv = {['smb3_agent', *arguments]!r}
+from smb3_agent.cli import main
+main()
+macos_modules = {MACOS_MODULES!r}
+loaded = any(name in sys.modules for name in macos_modules)
+print(f"macos_modules_loaded={{str(loaded).lower()}}")
+"""
+    return subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_importing_cli_does_not_load_macos_backend() -> None:
+    code = f"""
+import sys
+import smb3_agent.cli
+macos_modules = {MACOS_MODULES!r}
+loaded = any(name in sys.modules for name in macos_modules)
+print(f"macos_modules_loaded={{str(loaded).lower()}}")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "macos_modules_loaded=false" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["goal", "validate", "data/goals/world_8_double_whistle.yaml"],
+        [
+            "segment",
+            "validate",
+            "data/segments/world_8_double_whistle.yaml",
+            "--goal",
+            "world_8_double_whistle",
+        ],
+        ["goal", "status", "world_8_double_whistle"],
+        ["lab", "ui-render", "--output", "{output}"],
+    ),
+)
+def test_rom_free_cli_commands_do_not_load_macos_backend(
+    arguments: list[str], tmp_path: Path
+) -> None:
+    resolved_arguments = [
+        str(tmp_path / "route-lab.html") if argument == "{output}" else argument
+        for argument in arguments
+    ]
+    result = _run_cli_in_fresh_process(resolved_arguments)
+
+    assert result.returncode == 0, result.stderr
+    assert "macos_modules_loaded=false" in result.stdout
+
+
+def test_mednafen_command_fails_explicitly_before_import_on_linux() -> None:
+    code = f"""
+import sys
+sys.platform = "linux"
+sys.argv = ["smb3_agent", "probe", "mednafen", "--game-file", "unused.nes"]
+from smb3_agent.cli import main
+try:
+    main()
+except SystemExit as exc:
+    print(f"exit_code={{exc.code}}")
+macos_modules = {MACOS_MODULES!r}
+loaded = any(name in sys.modules for name in macos_modules)
+print(f"macos_modules_loaded={{str(loaded).lower()}}")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "exit_code=2" in result.stdout
+    assert "macos_modules_loaded=false" in result.stdout
+    assert "supported only on macOS" in result.stderr
