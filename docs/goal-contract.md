@@ -15,10 +15,9 @@ The active product contract is `data/goals/world_8_double_whistle.yaml`.
   evidence that the game requires a segment. Bridge use must be declared and
   cannot satisfy a goal that disallows it.
 
-Route need and execution status are separate. For example, World 1-6 is a
-`game_prerequisite` in the owner-corrected route, while its current executable
-capability is only `bridged`; the active contract therefore leaves that step
-`planned` rather than treating the diagnostic bridge as product proof.
+Route need and execution status are separate. All 15 active product steps are
+now `normal_gameplay`; the legacy diagnostic's bridges remain isolated and are
+not product proof.
 
 ## Active contract shape
 
@@ -26,7 +25,7 @@ capability is only `bridged`; the active contract therefore leaves that step
 id: world_8_double_whistle
 game: smb3
 goal_type: product_goal
-execution_status: planned
+execution_status: executable
 user_directive: >-
   Collect both World 1 Warp Whistles, safely reach World 2, use both
   whistles, and arrive on the World 8 map.
@@ -42,22 +41,30 @@ route:
       classification: objective_milestone
       execution_mode: normal_gameplay
       evidence: [live_fceux_2026-08-09_first_whistle_inventory]
+    - id: world_1_6_clear
+      classification: game_prerequisite
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_1_6_fresh_playback]
+    - id: world_1_airship_to_king
+      classification: game_prerequisite
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     - id: world_2_map_arrival_with_two_whistles
       classification: objective_milestone
-      execution_mode: planned
-      evidence: [owner_corrected_world_2_boundary]
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     - id: world_2_first_whistle_use
       classification: objective_milestone
-      execution_mode: planned
-      evidence: [owner_corrected_world_2_boundary]
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     - id: world_8_map_arrival
       classification: objective_milestone
-      execution_mode: planned
-      evidence: [owner_corrected_world_2_boundary]
+      execution_mode: normal_gameplay
+      evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
 
 runner:
-  preset: unavailable
-  executable: false
+  preset: fceux_world_8_double_whistle
+  executable: true
 ```
 
 The real contract contains every ordered step. Each step has non-empty evidence
@@ -99,5 +106,5 @@ explicitly selected, and its king marker remains local to that diagnostic.
 .venv/bin/python -m smb3_agent goal status world_8_double_whistle
 ```
 
-`goal run world_8_double_whistle` currently fails with a planned/not-executable
-message and never routes to `world_1_king`.
+`goal run world_8_double_whistle` executes the product preset directly and
+never routes to `world_1_king`.

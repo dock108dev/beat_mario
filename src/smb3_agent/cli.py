@@ -552,6 +552,7 @@ def main() -> None:
             capture_ticks=args.capture_ticks,
             post_1_1_probe="run_1_castle_after_1_6",
             env_overrides=WORLD_1_KING_ENV + tuple(args.set_env),
+            allow_bridges=True,
         )
         print(summary.to_text())
         if args.require_perfect and (summary.success_count != summary.total or not summary.post_probe_clear):

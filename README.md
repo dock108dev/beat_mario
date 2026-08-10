@@ -21,13 +21,16 @@ current goal.
   castle after the owner corrected the boundary to require World 2 before
   whistle use.
 - The Airship/King transition is a required intermediate boundary, not success.
+- Fresh accepted playback now clears the real Airship/King route, waits for
+  Mario to settle in World 2 with both whistles, uses the first whistle there,
+  uses the second from the 5/6/7 Warp Zone tier, and arrives on the genuine
+  World 8 map.
 - The first whistle must be used from the World 2 map. The second must be used
   from the Warp Zone before a numbered-world pipe is entered.
 - Only `post_probe_world_8_map_arrival` can satisfy the active goal. The legacy
   king marker cannot.
-- The active runner is intentionally `planned`: safe World 2 arrival with both
-  whistles and the later Warp Zone transitions are not yet executable as a
-  validated end-to-end route.
+- The active product runner is executable and passed three fresh, byte-identical,
+  no-bridge playbacks plus an independent `goal run` validation.
 - `world_1_king` remains available only as a legacy diagnostic route. It uses
   explicit bridges and is not product progress.
 
@@ -57,8 +60,8 @@ python -m smb3_agent command parse \
   "run world 8 double whistle arrival 3 times"
 ```
 
-Attempting to run the active goal fails clearly as not yet executable; it never
-falls back to the king diagnostic.
+The active goal runs the product route directly and never falls back to the
+king diagnostic.
 
 ## Legacy diagnostic
 

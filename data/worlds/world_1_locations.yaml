@@ -90,8 +90,8 @@ locations:
   - id: world_1_hammer_bro
     label: Hammer Brother
     type: map_enemy
-    default_status: needs review
-    objective: Handle the map enemy without corrupting the planned path.
+    default_status: works
+    objective: Observe whether the roaming enemy is present, then handle it without corrupting the planned path.
     guide_terms:
       - Hammer Brother
       - map enemy
@@ -107,7 +107,7 @@ locations:
     segment_id: world_1_6_clear
     label: 1-6
     type: level
-    default_status: needs review
+    default_status: works
     objective: Clear or bypass according to the active World 1 route.
     guide_terms:
       - Grass Land 6
@@ -115,7 +115,7 @@ locations:
     segment_id: world_1_airship_to_king
     label: Airship / King
     type: airship
-    default_status: needs review
+    default_status: works
     objective: Complete the moving stage and boss transition.
     guide_terms:
       - airship
@@ -124,7 +124,7 @@ locations:
   - id: world_1_king
     label: King
     type: world_clear
-    default_status: needs review
+    default_status: works
     objective: Confirm the World 1 clear transition after the airship.
     guide_terms:
       - king
@@ -133,7 +133,7 @@ locations:
     segment_id: world_2_map_arrival_with_two_whistles
     label: World 2 Map
     type: map
-    default_status: blocked
+    default_status: works
     objective: Confirm a genuine World 2 map arrival with both Warp Whistles still in inventory.
     guide_terms:
       - Desert Land
@@ -142,7 +142,7 @@ locations:
     segment_id: world_2_first_whistle_use
     label: First Whistle (World 2)
     type: inventory
-    default_status: unknown
+    default_status: works
     objective: Open inventory on the World 2 map and consume exactly one Warp Whistle.
     guide_terms:
       - World 2 map
@@ -151,7 +151,7 @@ locations:
     segment_id: warp_zone_5_6_7_tier
     label: Warp Zone 5 / 6 / 7
     type: warp_zone
-    default_status: unknown
+    default_status: works
     objective: Observe the 5/6/7 tier without entering a numbered-world pipe.
     guide_terms:
       - Warp Zone
@@ -160,7 +160,7 @@ locations:
     segment_id: warp_zone_second_whistle_use
     label: Second Whistle (Warp Zone)
     type: inventory
-    default_status: unknown
+    default_status: works
     objective: Use the remaining whistle while Mario is still in the Warp Zone.
     guide_terms:
       - second Warp Whistle
@@ -169,7 +169,7 @@ locations:
     segment_id: warp_zone_world_8_tier
     label: Warp Zone World 8
     type: warp_zone
-    default_status: unknown
+    default_status: works
     objective: Observe the World 8 tier created by the second whistle.
     guide_terms:
       - World 8 tier
@@ -177,7 +177,7 @@ locations:
     segment_id: world_8_pipe_entry
     label: World 8 Pipe
     type: pipe
-    default_status: unknown
+    default_status: works
     objective: Enter the pipe labeled 8 and observe its transition.
     guide_terms:
       - pipe 8
@@ -185,7 +185,7 @@ locations:
     segment_id: world_8_map_arrival
     label: World 8 Map
     type: map
-    default_status: unknown
+    default_status: works
     objective: Confirm a genuine World 8 map state; do not begin World 8 gameplay.
     guide_terms:
       - Dark Land

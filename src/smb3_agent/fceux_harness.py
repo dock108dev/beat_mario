@@ -10,7 +10,6 @@ from pathlib import Path
 STATE_RE = re.compile(r"\battempt_(?P<attempt>\d+)_(?P<event>[A-Za-z0-9_]+)\b")
 X_RE = re.compile(r"\bx=(?P<x>-?\d+)\b")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
-FORM_RE = re.compile(r"\bform=(?P<form>-?\d+)\b")
 
 
 @dataclass(frozen=True)
@@ -68,7 +67,12 @@ class BatchSummary:
         return "\n".join(lines)
 
 
-def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> BatchSummary:
+def parse_fceux_log(
+    log_path: Path,
+    expected_attempts: int | None = None,
+    *,
+    allow_bridges: bool = False,
+) -> BatchSummary:
     text = log_path.read_text(errors="replace")
     seen_attempts: set[int] = set()
     success: set[int] = set()
@@ -83,6 +87,13 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
     post_probe_events: list[str] = []
     playback_contaminated = False
     valid_1_6_goal_card_seen = False
+    valid_1_6_course_transition = False
+    valid_world_1_roamer_defeat = False
+    valid_world_2_first_whistle = False
+    valid_warp_zone_5_6_7_tier = False
+    valid_warp_zone_second_whistle = False
+    valid_warp_zone_world_8_tier = False
+    valid_world_8_pipe_entry = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -96,15 +107,74 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
             ):
                 playback_contaminated = True
                 post_probe_clear = False
+            if event.startswith("post_probe_world_1_roamer_search"):
+                playback_contaminated = True
+                post_probe_clear = False
+            if "_bridge" in event and not allow_bridges:
+                playback_contaminated = True
+                post_probe_clear = False
+            if "_discovery_" in event:
+                playback_contaminated = True
+                post_probe_clear = False
+            if event == "post_probe_world_1_roamer_detected":
+                valid_world_1_roamer_defeat = False
+                post_probe_clear = False
+            if event in {
+                "post_probe_world_1_roamer_life_lost",
+                "post_probe_world_1_roamer_failed",
+                "post_probe_world_1_roamer_fixed_attack_failed",
+            }:
+                valid_world_1_roamer_defeat = False
+                post_probe_clear = False
             if event == "post_probe_1_6_goal_card":
-                form_match = FORM_RE.search(line)
                 valid_1_6_goal_card_seen = (
-                    form_match is not None
-                    and int(form_match.group("form")) == 3
-                    and "evidence=object_65_disappeared" in line
+                    "evidence=card_internal_state_nonzero" in line
+                    and "form_before_clear=3" in line
                 )
             if event == "post_probe_1_6_success_course_clear":
-                post_probe_clear = valid_1_6_goal_card_seen and not playback_contaminated
+                valid_1_6_course_transition = (
+                    valid_1_6_goal_card_seen
+                    and "evidence=card_internal_state_then_course_transition" in line
+                )
+            if event == "post_probe_1_6_map_returned":
+                post_probe_clear = (
+                    valid_1_6_course_transition
+                    and "evidence=object_set_0_after_course_transition" in line
+                    and "object_set=0" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_1_roamer_defeated_in_battle":
+                valid_world_1_roamer_defeat = (
+                    "evidence=enemy_id_-127_removed" in line
+                    and "form_after=3" in line
+                    and "return_map=0" in line
+                    and "item_0=12" in line
+                    and "item_1=12" in line
+                )
+            if event == "post_probe_world_1_roamer_map_returned":
+                post_probe_clear = (
+                    valid_world_1_roamer_defeat
+                    and "evidence=object_set_0_after_roamer_defeat" in line
+                    and "object_set=0" in line
+                    and "item_0=12" in line
+                    and "item_1=12" in line
+                    and not playback_contaminated
+                )
+            if event in {
+                "post_probe_1_castle_no_entry",
+                "post_probe_1_castle_bad_state",
+                "post_probe_1_airship_boss_room_missing",
+                "post_probe_world_2_whistle_inventory_mismatch",
+                "post_probe_world_2_map_missing",
+                "post_probe_world_2_first_whistle_missing",
+                "post_probe_warp_zone_5_6_7_missing",
+                "post_probe_warp_zone_second_whistle_missing",
+                "post_probe_warp_zone_world_8_tier_missing",
+                "post_probe_world_8_pipe_position_missing",
+                "post_probe_world_8_map_missing",
+                "post_probe_world_8_map_unstable",
+            }:
+                post_probe_clear = False
             elif event in {
                 "post_probe_1_2_enter",
                 "post_probe_1_3_enter",
@@ -123,6 +193,8 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 "post_probe_1_6_level_enter"
             ) or event.startswith(
                 "post_probe_1_castle_enter"
+            ) or event.startswith(
+                "post_probe_1_airship_enter_after_roamer"
             ):
                 post_probe_clear = False
                 post_probe_max_x = -1
@@ -133,10 +205,75 @@ def parse_fceux_log(log_path: Path, expected_attempts: int | None = None) -> Bat
                 "post_probe_1_4_success_course_clear",
                 "post_probe_1_5_success_course_clear",
                 "post_probe_1_5_water_success_course_clear",
-                "post_probe_1_airship_success_king",
                 "post_probe_world_8_map_arrival",
             }:
                 post_probe_clear = not playback_contaminated
+            if event == "post_probe_1_airship_success_king" and allow_bridges:
+                post_probe_clear = True
+            if event == "post_probe_world_2_map_two_whistles":
+                post_probe_clear = (
+                    "evidence=world_number_1_object_set_0" in line
+                    and "world_number=1" in line
+                    and "object_set=0" in line
+                    and "item_0=12" in line
+                    and "item_1=12" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_2_first_whistle_started":
+                valid_world_2_first_whistle = False
+                post_probe_clear = False
+            if event == "post_probe_world_2_first_whistle_used":
+                valid_world_2_first_whistle = (
+                    "evidence=two_to_one_whistle_after_A_input" in line
+                    and "source_world=2" in line
+                    and "world_number=1" in line
+                )
+            if event == "post_probe_warp_zone_5_6_7_tier":
+                valid_warp_zone_5_6_7_tier = (
+                    valid_world_2_first_whistle
+                    and "evidence=warp_cursor_64_112_after_world_2_whistle" in line
+                    and "world_number=8" in line
+                    and "map_cursor_x=64" in line
+                    and "map_cursor_y=112" in line
+                )
+            if event == "post_probe_warp_zone_second_whistle_started":
+                valid_warp_zone_second_whistle = False
+                post_probe_clear = False
+            if event == "post_probe_warp_zone_second_whistle_used":
+                valid_warp_zone_second_whistle = (
+                    valid_world_2_first_whistle
+                    and valid_warp_zone_5_6_7_tier
+                    and "evidence=one_to_zero_whistles_after_A_input_from_5_6_7_tier"
+                    in line
+                )
+            if event == "post_probe_warp_zone_world_8_tier":
+                valid_warp_zone_world_8_tier = (
+                    valid_warp_zone_second_whistle
+                    and "evidence=warp_cursor_128_144_after_second_whistle" in line
+                    and "world_number=8" in line
+                    and "map_cursor_x=128" in line
+                    and "map_cursor_y=144" in line
+                )
+            if event == "post_probe_world_8_pipe_entered":
+                valid_world_8_pipe_entry = (
+                    valid_warp_zone_world_8_tier
+                    and "evidence=A_input_from_warp_cursor_160_144" in line
+                    and "world_number=8" in line
+                    and "map_cursor_x=160" in line
+                    and "map_cursor_y=144" in line
+                )
+            if event == "post_probe_world_8_map_arrival":
+                post_probe_clear = (
+                    valid_world_2_first_whistle
+                    and valid_warp_zone_second_whistle
+                    and valid_warp_zone_world_8_tier
+                    and valid_world_8_pipe_entry
+                    and "evidence=world_number_7_object_set_0_after_warp_pipe" in line
+                    and "world_number=7" in line
+                    and "object_set=0" in line
+                    and all(f"item_{index}=12" not in line for index in range(10))
+                    and not playback_contaminated
+                )
             if x_match is not None:
                 x = int(x_match.group("x"))
                 if 0 <= x < 8192:
@@ -196,6 +333,7 @@ def run_fceux_1_1(
     after_attempt_frames: int | None = None,
     post_1_1_probe: str | None = None,
     env_overrides: tuple[str, ...] = (),
+    allow_bridges: bool = False,
 ) -> BatchSummary:
     if not game_path.is_file():
         raise FileNotFoundError(f"Local game file not found: {game_path}")
@@ -247,4 +385,6 @@ def run_fceux_1_1(
             )
     except subprocess.TimeoutExpired:
         pass
-    return parse_fceux_log(log_path, expected_attempts=attempts)
+    return parse_fceux_log(
+        log_path, expected_attempts=attempts, allow_bridges=allow_bridges
+    )

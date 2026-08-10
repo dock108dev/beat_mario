@@ -3,23 +3,43 @@ from pathlib import Path
 from smb3_agent.review import compare_logs, review_log
 
 
+def accepted_world_8_lines() -> list[str]:
+    return [
+        "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
+        "frame=20 event=post_probe_world_2_first_whistle_started "
+        "world_number=1 object_set=0 item_0=12 item_1=12",
+        "frame=30 event=post_probe_world_2_first_whistle_used "
+        "world_number=1 object_set=0 item_0=12 item_1=9 "
+        "evidence=two_to_one_whistle_after_A_input source_world=2",
+        "frame=40 event=post_probe_warp_zone_5_6_7_tier "
+        "world_number=8 object_set=0 map_cursor_x=64 map_cursor_y=112 "
+        "item_0=12 item_1=9 evidence=warp_cursor_64_112_after_world_2_whistle",
+        "frame=50 event=post_probe_warp_zone_second_whistle_started "
+        "world_number=8 object_set=0 item_0=12 item_1=9",
+        "frame=60 event=post_probe_warp_zone_second_whistle_used "
+        "world_number=8 object_set=0 item_0=9 item_1=8 "
+        "evidence=one_to_zero_whistles_after_A_input_from_5_6_7_tier",
+        "frame=70 event=post_probe_warp_zone_world_8_tier "
+        "world_number=8 object_set=0 map_cursor_x=128 map_cursor_y=144 "
+        "item_0=9 item_1=8 evidence=warp_cursor_128_144_after_second_whistle",
+        "frame=80 event=post_probe_world_8_pipe_entered "
+        "world_number=8 object_set=0 map_cursor_x=160 map_cursor_y=144 "
+        "item_0=9 item_1=8 evidence=A_input_from_warp_cursor_160_144",
+        "frame=90 event=post_probe_world_8_map_arrival "
+        "world_number=7 object_set=0 item_0=9 item_1=8 "
+        "evidence=world_number_7_object_set_0_after_warp_pipe",
+    ]
+
+
 def test_review_log_reports_successful_gate(tmp_path: Path) -> None:
     log_path = tmp_path / "pass.log"
-    log_path.write_text(
-        "\n".join(
-            [
-                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
-                "frame=20 event=post_probe_1_airship_stage_bridge x=219 y=192",
-                "frame=30 event=post_probe_1_airship_success_king x=432 y=4192 form=0",
-            ]
-        )
-    )
+    log_path.write_text("\n".join(accepted_world_8_lines()))
 
     report = review_log(log_path, expected_attempts=1)
 
     assert report.failure_class == "none"
     assert report.failed_segment == "none"
-    assert report.last_event == "post_probe_1_airship_success_king"
+    assert report.last_event == "post_probe_world_8_map_arrival"
     assert "No repair needed" in report.next_experiment
     assert "final_snapshot=" in report.to_text()
 
@@ -80,14 +100,7 @@ def test_review_log_classifies_bridge_failure(tmp_path: Path) -> None:
 
 def test_compare_logs_calls_out_watch_or_capture_timing_risk(tmp_path: Path) -> None:
     passing = tmp_path / "pass.log"
-    passing.write_text(
-        "\n".join(
-            [
-                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
-                "frame=30 event=post_probe_1_airship_success_king x=432 y=4192",
-            ]
-        )
-    )
+    passing.write_text("\n".join(accepted_world_8_lines()))
     failing = tmp_path / "fail.log"
     failing.write_text(
         "\n".join(
@@ -124,14 +137,7 @@ def test_review_maps_world_2_first_whistle_failure_to_active_segment(tmp_path: P
 
 def test_review_accepts_only_world_8_map_arrival_as_active_final_state(tmp_path: Path) -> None:
     log_path = tmp_path / "world_8_arrival.log"
-    log_path.write_text(
-        "\n".join(
-            [
-                "frame=10 event=attempt_1_success_course_clear x=8192 y=0",
-                "frame=30 event=post_probe_world_8_map_arrival map_world=8",
-            ]
-        )
-    )
+    log_path.write_text("\n".join(accepted_world_8_lines()))
 
     report = review_log(log_path, expected_attempts=1)
 

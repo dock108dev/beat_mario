@@ -4,7 +4,7 @@ import pytest
 
 from smb3_agent.commands import CommandParseError, parse_command, run_command
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
-from smb3_agent.goals import GoalRunResult, GoalValidationError
+from smb3_agent.goals import GoalRunResult
 
 
 def test_parse_world_8_double_whistle_goal_command() -> None:
@@ -110,13 +110,30 @@ def test_run_command_writes_trace(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert "trace_path=" in result.to_text()
 
 
-def test_active_goal_run_fails_closed_without_legacy_fallback(tmp_path: Path) -> None:
+def test_active_goal_run_uses_product_runner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fake_run_goal_contract(
+        contract, *, game_path, attempts, artifacts_dir, capture_images=False, capture_ticks=False
+    ):
+        assert contract.preset == "fceux_world_8_double_whistle"
+        return GoalRunResult(
+            contract=contract,
+            summary=BatchSummary(
+                attempts=(), post_probe_last_event="post_probe_world_8_map_arrival"
+            ),
+            artifacts_dir=artifacts_dir,
+            metrics_passed=True,
+        )
+
+    monkeypatch.setattr("smb3_agent.commands.run_goal_contract", fake_run_goal_contract)
     game_file = tmp_path / "local-game-file"
     game_file.write_text("placeholder")
 
-    with pytest.raises(GoalValidationError, match="planned and not yet executable"):
-        run_command(
-            "run world 8 double whistle arrival",
-            game_path=game_file,
-            artifacts_dir=tmp_path / "command",
-        )
+    result = run_command(
+        "run world 8 double whistle arrival",
+        game_path=game_file,
+        artifacts_dir=tmp_path / "command",
+    )
+
+    assert result.goal_result.metrics_passed is True

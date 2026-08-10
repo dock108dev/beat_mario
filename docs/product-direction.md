@@ -47,9 +47,8 @@ separate:
 4. Executable route proof: the selected goal completes repeatably with only
    tactics its contract allows.
 
-The current active goal is `planned` because safe World 2 arrival with both
-whistles and the later World 2-first Warp Zone sequence are not yet a validated
-end-to-end runner.
+The active goal is executable. Three fresh no-bridge playbacks and one promoted
+goal-run validation reached the genuine World 8 map boundary.
 
 ## Goal contract
 

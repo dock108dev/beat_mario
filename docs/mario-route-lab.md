@@ -57,8 +57,8 @@ structure.
 ## Primary action
 
 `Run World 8 Route` is the only strong primary button. The active goal is
-currently planned, so attempting to run it returns an honest not-yet-executable
-error. It does not run the World 1 king diagnostic.
+executable and selects the product preset. It does not run the World 1 king
+diagnostic.
 
 Unit tests, phase gate, HTML render check, refresh, note, lifecycle, and Codex
 task actions remain secondary or quiet controls.
@@ -70,8 +70,8 @@ come from a screenshot, contact sheet, log, state trace, note, issue, or
 proposal. Assisted evidence must remain labeled; a bridge screenshot cannot be
 presented as normal gameplay proof.
 
-The current live boundary is the post-Fortress World 1 route. World 2 and later
-rows remain Planned until independent live observations exist.
+The accepted live boundary is the genuine World 8 map. All 15 rows have
+normal-gameplay evidence from three fresh byte-identical playbacks.
 
 ## Route roles and observations
 

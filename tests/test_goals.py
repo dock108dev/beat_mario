@@ -119,8 +119,9 @@ def test_active_product_goal_is_world_2_first_double_whistle_world_8_arrival() -
 
     assert contract.goal_type == "product_goal"
     assert contract.objective["target"] == "world_8_map_arrival"
-    assert contract.execution_status == "planned"
-    assert contract.executable is False
+    assert contract.execution_status == "executable"
+    assert contract.executable is True
+    assert contract.preset == "fceux_world_8_double_whistle"
     assert "world_1_3_whistle" in contract.segments
     assert "world_1_fortress_whistle" in contract.segments
     assert roles["world_1_3_whistle"] == "objective_milestone"

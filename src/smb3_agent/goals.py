@@ -22,7 +22,11 @@ SUPPORTED_ROUTE_CLASSIFICATIONS = {
     "diagnostic_route",
 }
 SUPPORTED_EXECUTION_MODES = {"normal_gameplay", "bridge", "planned"}
-SUPPORTED_PRESETS = {"fceux_world_1_king", "unavailable"}
+SUPPORTED_PRESETS = {
+    "fceux_world_1_king",
+    "fceux_world_8_double_whistle",
+    "unavailable",
+}
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
 SUPPORTED_SUMMARY_FIELDS = {
     "success_count",
@@ -241,8 +245,10 @@ def run_goal_contract(
             f"Goal {contract.id} is planned and not yet executable; "
             "no diagnostic runner fallback is permitted"
         )
-    if contract.preset != "fceux_world_1_king":
+    if contract.preset not in {"fceux_world_1_king", "fceux_world_8_double_whistle"}:
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
+
+    preset_env = WORLD_1_KING_ENV if contract.preset == "fceux_world_1_king" else ()
 
     run_dir = artifacts_dir or _default_artifacts_dir(contract)
     summary = run_fceux_1_1(
@@ -253,7 +259,8 @@ def run_goal_contract(
         capture_images=capture_images,
         capture_ticks=capture_ticks,
         post_1_1_probe="run_1_castle_after_1_6",
-        env_overrides=WORLD_1_KING_ENV + tuple(contract.runner.get("env", ())) + env_overrides,
+        env_overrides=preset_env + tuple(contract.runner.get("env", ())) + env_overrides,
+        allow_bridges=contract.preset == "fceux_world_1_king",
     )
     return GoalRunResult(
         contract=contract,

@@ -19,12 +19,15 @@ phase may use `world_1_king`, its bridges, or
 Current ranked work:
 
 1. Correct contract/catalog/UI/CLI semantics. [implemented]
-2. Replace the post-Fortress diagnostic path with safe real 1-5, 1-6, and
-   Airship gameplay; independently observe World 2 with both whistles.
-3. Implement observable first-whistle use from World 2, the 5/6/7 tier, and
-   second-whistle use while still in the Warp Zone.
-4. Implement World 8 tier, correct pipe entry, and genuine World 8 map arrival.
-5. Only after arrival is reliable, plan World 8 gameplay as a separate goal.
+2. Prove real 1-5, 1-6, and the conditional roaming Hammer Bro boundary while
+   preserving both whistles. [accepted in three fresh no-savestate replays]
+3. Clear the real Airship/King route from the accepted post-Hammer-Bro map
+   state; independently observe World 2 with both whistles. [accepted]
+4. Implement observable first-whistle use from World 2, the 5/6/7 tier, and
+   second-whistle use while still in the Warp Zone. [accepted]
+5. Implement World 8 tier, correct pipe entry, and genuine World 8 map arrival.
+   [accepted]
+6. Only after arrival is reliable, plan World 8 gameplay as a separate goal.
 
 ## Phase 0: Repo Readiness
 
@@ -717,9 +720,9 @@ product proof.
 
 ### Step 8.1: Safe World 2 boundary
 
-- Implement real 1-6 and Airship gameplay after the two-whistle state.
-- Observe World 2 map state and exactly two whistles.
-- Stop at World 2; do not implement Warp Zone actions in this rank.
+- Accepted: the real World 1 prefix, Airship/King transition, and World 2 map
+  state with exactly two whistles passed three fresh no-bridge replays.
+- Mario's map spawn is allowed to settle before the first whistle input.
 
 ### Step 8.2: Warp Zone transitions
 
@@ -727,6 +730,9 @@ product proof.
 - Use the second whistle before entering a numbered pipe.
 - Observe the World 8 tier, enter pipe 8, and observe the World 8 map.
 - Keep World 8 gameplay outside this goal.
+
+Accepted in three fresh byte-identical replays and one promoted product-goal
+run. Rank 10 ends at the World 8 map; no World 8 level was entered.
 
 Validation gate:
 

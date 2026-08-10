@@ -23,12 +23,10 @@ Pass condition:
 
 - `goal_id=world_8_double_whistle`
 - `goal_type=product_goal`
-- `execution_status=planned`
-- `executable=false`
+- `execution_status=executable`
+- `executable=true`
+- `preset=fceux_world_8_double_whistle`
 - fifteen ordered segments and zero active bridges
-
-The planned status is correct until safe World 2 arrival and all later
-transitions are implemented and live-validated.
 
 ## Gate 3: Active segment catalog
 
@@ -45,7 +43,7 @@ Pass condition:
 - 1-5, 1-6, and Airship/King are present as the path to World 2;
 - World 2 arrival, both whistle uses, both Warp Zone tiers, pipe entry, and
   World 8 map arrival are distinct;
-- unimplemented segments remain `planned`.
+- all 15 promoted segments are `solved` after accepted live proof.
 
 ## Gate 4: Deterministic status
 
@@ -62,17 +60,19 @@ Pass condition:
 - second-whistle use follows the 5/6/7 tier and precedes the World 8 tier;
 - only the final row is World 8 map arrival.
 
-## Gate 5: Fail-closed execution
+## Gate 5: Product execution
 
 ```bash
-.venv/bin/python -m smb3_agent goal run world_8_double_whistle
+.venv/bin/python -m smb3_agent goal run world_8_double_whistle \
+  --game-file "$SMB3_GAME_FILE"
 .venv/bin/python -m smb3_agent command run \
-  "run world 8 double whistle arrival"
+  "run world 8 double whistle arrival" \
+  --game-file "$SMB3_GAME_FILE"
 ```
 
-Current pass condition: both commands exit non-zero with
-`planned and not yet executable` and say that no diagnostic fallback is
-permitted. They must never invoke the World 1 king preset.
+Pass condition: both commands select `fceux_world_8_double_whistle`, reach the
+final map marker, and report `metrics_passed=true`. They must never invoke the
+World 1 king preset.
 
 ## Gate 6: Success-marker isolation
 
@@ -113,34 +113,36 @@ Pass condition:
 - route rows exactly match the selected contract order;
 - 1-4 is absent;
 - 1-5, 1-6, and Airship/King are shown as required path;
-- planned steps say `Planned`, not solved;
+- solved steps say `Learned`, not planned;
 - exactly one strong primary button remains;
 - stable semantic class hooks remain present.
 
-## Gate 8: Live safe-World-2 boundary
+## Gate 8: Live product boundary
 
-This gate is not yet passing.
+This gate passes. Three fresh no-bridge replays reached World 8 with
+byte-identical logs, followed by an independent promoted goal-run pass.
 
-Required future command shape:
+Accepted command shape:
 
 ```bash
 export SMB3_GAME_FILE=/path/to/local-game-file
 .venv/bin/python -m smb3_agent goal run world_8_double_whistle \
   --game-file "$SMB3_GAME_FILE" \
-  --attempts 5 \
+  --attempts 1 \
   --capture-images
 ```
 
-First promotion boundary:
+Accepted boundary:
 
-- real 1-5, 1-6, and Airship gameplay after both whistles;
+- retain the accepted real 1-5, 1-6, and observer-gated Hammer Bro prefix;
+- real Airship/King gameplay after both whistles;
 - genuine World 2 map observation;
 - two whistle items still observable;
+- first whistle use after Mario settles in World 2;
+- second whistle use from the observed 5/6/7 tier;
+- World 8 tier, pipe entry, and genuine World 8 map observation;
 - no completion-flag, map-position, airship-stage, or inventory bridge;
 - structured logs and minimal screenshots in ignored artifacts.
-
-Do not implement or promote later Warp Zone segments until this boundary is
-repeatable.
 
 ## Gate 9: Legacy king diagnostic
 

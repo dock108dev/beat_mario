@@ -7,6 +7,43 @@ from smb3_agent.fceux_images import convert_gd_directory, write_contact_sheet
 from smb3_agent.fceux_harness import parse_fceux_log, run_fceux_1_1
 
 
+LUA_AGENT_PATH = Path("scripts/fceux_1_1_agent.lua")
+
+
+def lua_function_slice(source: str, name: str, next_name: str) -> str:
+    start = source.index(f"local function {name}(")
+    end = source.index(f"local function {next_name}(", start)
+    return source[start:end]
+
+
+def test_goal_card_observation_requires_course_transition() -> None:
+    source = LUA_AGENT_PATH.read_text()
+    fortress_candidate = lua_function_slice(
+        source,
+        "continue_1_fortress_after_mid_candidate",
+        "run_1_fortress_mid_search",
+    )
+    one_six_probe = lua_function_slice(source, "run_1_6_probe", "run_1_castle_probe")
+
+    assert "reached_goal_card" not in fortress_candidate
+    assert "evidence=object_65_disappeared" not in one_six_probe
+    assert "evidence=card_internal_state_nonzero" in one_six_probe
+    assert "evidence=card_internal_state_then_course_transition" in one_six_probe
+
+
+def test_single_attempt_playback_skips_retry_checkpoint() -> None:
+    source = LUA_AGENT_PATH.read_text()
+    playback = source[source.rindex("\nbootstrap_to_level()\n") :]
+
+    assert playback.index("if attempts == 1 then") < playback.index(
+        "local checkpoint = savestate.create()"
+    )
+    single_start = playback.index("if attempts == 1 then")
+    single_attempt = playback[single_start : playback.index("else", single_start)]
+    assert "savestate." not in single_attempt
+    assert 'advance(10, "attempt_1_fresh_start")' in single_attempt
+
+
 def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     log_path = tmp_path / "route.log"
     log_path.write_text(
@@ -41,7 +78,9 @@ def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     assert summary.post_probe_clear is True
 
 
-def test_parse_fceux_log_counts_world_1_king_success(tmp_path: Path) -> None:
+def test_parse_fceux_log_rejects_bridge_assisted_world_1_king_marker(
+    tmp_path: Path,
+) -> None:
     log_path = tmp_path / "route.log"
     log_path.write_text(
         "\n".join(
@@ -59,6 +98,71 @@ def test_parse_fceux_log_counts_world_1_king_success(tmp_path: Path) -> None:
     assert summary.success_count == 1
     assert summary.post_probe_max_x == 432
     assert summary.post_probe_last_event == "post_probe_1_airship_success_king"
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_accepts_world_2_with_two_whistles(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "frame=40 event=post_probe_world_2_map_two_whistles x=32768 y=0 "
+        "world_number=1 object_set=0 item_0=12 item_1=12 item_2=9 "
+        "evidence=world_number_1_object_set_0"
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is True
+
+
+def test_parse_fceux_log_rejects_world_2_with_missing_whistle(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "frame=40 event=post_probe_world_2_map_two_whistles x=32768 y=0 "
+        "world_number=1 object_set=0 item_0=12 item_1=0 item_2=9 "
+        "evidence=world_number_1_object_set_0"
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_accepts_observed_world_8_arrival(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_world_2_first_whistle_started "
+                "world_number=1 object_set=0 item_0=12 item_1=12",
+                "frame=20 event=post_probe_world_2_first_whistle_used "
+                "world_number=1 object_set=0 item_0=12 item_1=9 "
+                "evidence=two_to_one_whistle_after_A_input source_world=2",
+                "frame=25 event=post_probe_warp_zone_5_6_7_tier "
+                "world_number=8 object_set=0 map_cursor_x=64 map_cursor_y=112 "
+                "item_0=12 item_1=9 "
+                "evidence=warp_cursor_64_112_after_world_2_whistle",
+                "frame=30 event=post_probe_warp_zone_second_whistle_started "
+                "world_number=8 object_set=0 item_0=12 item_1=9",
+                "frame=40 event=post_probe_warp_zone_second_whistle_used "
+                "world_number=8 object_set=0 item_0=9 item_1=8 "
+                "evidence=one_to_zero_whistles_after_A_input_from_5_6_7_tier",
+                "frame=42 event=post_probe_warp_zone_world_8_tier "
+                "world_number=8 object_set=0 map_cursor_x=128 map_cursor_y=144 "
+                "item_0=9 item_1=8 "
+                "evidence=warp_cursor_128_144_after_second_whistle",
+                "frame=45 event=post_probe_world_8_pipe_entered "
+                "world_number=8 object_set=0 map_cursor_x=160 map_cursor_y=144 "
+                "item_0=9 item_1=8 "
+                "evidence=A_input_from_warp_cursor_160_144",
+                "frame=50 event=post_probe_world_8_map_arrival "
+                "world_number=7 object_set=0 item_0=9 item_1=8 "
+                "evidence=world_number_7_object_set_0_after_warp_pipe",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
     assert summary.post_probe_clear is True
 
 
@@ -87,8 +191,12 @@ def test_parse_fceux_log_rejects_1_6_discovery_as_playback(tmp_path: Path) -> No
         "\n".join(
             [
                 "frame=10 event=post_probe_1_6_opening_search_success x=350 y=248 form=3",
-                "frame=20 event=post_probe_1_6_goal_card x=2440 y=384 form=3 evidence=object_65_disappeared",
-                "frame=30 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0",
+                "frame=20 event=post_probe_1_6_goal_card x=2440 y=384 form=3 "
+                "evidence=card_internal_state_nonzero card_state=1 form_before_clear=3",
+                "frame=30 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0 "
+                "evidence=card_internal_state_then_course_transition",
+                "frame=35 event=post_probe_1_6_map_returned x=40960 y=0 form=0 "
+                "object_set=0 evidence=object_set_0_after_course_transition",
                 "frame=40 event=post_probe_1_airship_success_king x=432 y=4192 form=0",
             ]
         )
@@ -104,8 +212,12 @@ def test_parse_fceux_log_requires_raccoon_goal_evidence_for_1_6(tmp_path: Path) 
     log_path.write_text(
         "\n".join(
             [
-                "frame=10 event=post_probe_1_6_goal_card x=2440 y=384 form=3 evidence=object_65_disappeared",
-                "frame=20 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0",
+                "frame=10 event=post_probe_1_6_goal_card x=2440 y=384 form=3 "
+                "evidence=card_internal_state_nonzero card_state=1 form_before_clear=3",
+                "frame=20 event=post_probe_1_6_success_course_clear x=40960 y=0 form=0 "
+                "evidence=card_internal_state_then_course_transition",
+                "frame=25 event=post_probe_1_6_map_returned x=40960 y=0 form=0 "
+                "object_set=0 evidence=object_set_0_after_course_transition",
             ]
         )
     )
@@ -113,6 +225,108 @@ def test_parse_fceux_log_requires_raccoon_goal_evidence_for_1_6(tmp_path: Path) 
     summary = parse_fceux_log(log_path, expected_attempts=0)
 
     assert summary.post_probe_clear is True
+
+
+def test_parse_fceux_log_accepts_observed_roamer_defeat_and_map_return(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_world_1_roamer_defeated_in_battle "
+                "x=160 y=300 object_set=3 return_map=0 item_0=12 item_1=12 "
+                "evidence=enemy_id_-127_removed form_after=3",
+                "frame=20 event=post_probe_world_1_roamer_map_returned "
+                "x=32768 y=0 object_set=0 item_0=12 item_1=12 "
+                "evidence=object_set_0_after_roamer_defeat",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is True
+
+
+def test_parse_fceux_log_rejects_roamer_search_as_product_proof(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=5 event=post_probe_world_1_roamer_search_success x=160 y=300",
+                "frame=10 event=post_probe_world_1_roamer_defeated_in_battle "
+                "x=160 y=300 object_set=3 return_map=0 item_0=12 item_1=12 "
+                "evidence=enemy_id_-127_removed form_after=3",
+                "frame=20 event=post_probe_world_1_roamer_map_returned "
+                "x=32768 y=0 object_set=0 item_0=12 item_1=12 "
+                "evidence=object_set_0_after_roamer_defeat",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_roamer_disappearance_during_death(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_world_1_roamer_defeated_in_battle "
+                "x=232 y=418 object_set=3 return_map=1 item_0=12 item_1=12 "
+                "evidence=enemy_id_-127_removed form_after=0",
+                "frame=20 event=post_probe_world_1_roamer_map_returned "
+                "x=32768 y=0 object_set=0 item_0=12 item_1=12 "
+                "evidence=object_set_0_after_roamer_defeat",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_roamer_life_loss_overrides_prior_level_clear(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=5 event=post_probe_1_6_success_course_clear x=2848",
+                "frame=10 event=post_probe_world_1_roamer_detected x=24",
+                "frame=20 event=post_probe_1_5_bad_state x=32768",
+                "frame=30 event=post_probe_world_1_roamer_life_lost x=40960",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
+
+
+def test_parse_fceux_log_airship_failure_overrides_roamer_clear(tmp_path: Path) -> None:
+    log_path = tmp_path / "route.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "frame=10 event=post_probe_world_1_roamer_defeated_in_battle "
+                "x=214 y=384 object_set=3 return_map=0 item_0=12 item_1=12 "
+                "evidence=enemy_id_-127_removed form_after=3",
+                "frame=20 event=post_probe_world_1_roamer_map_returned "
+                "x=32768 y=0 object_set=0 item_0=12 item_1=12 "
+                "evidence=object_set_0_after_roamer_defeat",
+                "frame=30 event=post_probe_1_airship_enter_after_roamer_wait x=32768 y=0",
+                "frame=40 event=post_probe_1_castle_no_entry x=32768 y=0",
+                "frame=50 event=post_probe_1_castle_bad_state x=32768 y=0 max_x=0",
+            ]
+        )
+    )
+
+    summary = parse_fceux_log(log_path)
+
+    assert summary.post_probe_clear is False
 
 
 def test_convert_gd_directory_and_contact_sheet(tmp_path: Path) -> None:

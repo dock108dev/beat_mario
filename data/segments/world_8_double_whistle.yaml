@@ -43,12 +43,12 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 1}
     failure_conditions: [{type: missed_white_block}, {type: timeout, seconds: 240}]
     current_method: {type: post_probe_script, probe: run_1_3_whistle_to_castle}
-    evidence: [live_fceux_2026-08-09_item_0_equals_12]
-    notes: Owner objective milestone; the assisted map-return step is not normal gameplay proof.
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
+    notes: Owner objective milestone; three accepted full-route replays collected the whistle and continued normally.
 
   - id: world_1_fortress_whistle
     name: Collect the World 1 Fortress Warp Whistle
-    status: flaky
+    status: solved
     start_condition: {type: map_entry, target: world_1_fortress}
     success_condition:
       type: conjunction
@@ -57,8 +57,8 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: flight_setup_failed}, {type: timeout, seconds: 300}]
     current_method: {type: post_probe_script, probe: run_1_fortress_whistle}
-    evidence: [live_fceux_2026-08-09_item_0_and_item_1_equal_12]
-    notes: Owner objective milestone; one fresh live probe collected both whistles without a whistle-inventory bridge.
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
+    notes: Owner objective milestone; three accepted full-route replays collected both whistles without an inventory bridge.
 
   - id: world_1_5_water_path
     name: World 1-5 clear
@@ -72,7 +72,7 @@ segments:
 
   - id: world_1_6_clear
     name: World 1-6 clear
-    status: bridged
+    status: solved
     start_condition: {type: map_entry, target: world_1_6}
     success_condition:
       type: conjunction
@@ -80,27 +80,27 @@ segments:
         - {type: course_clear}
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: wrong_map_node}, {type: timeout, seconds: 240}]
-    current_method: {type: diagnostic_bridge, env_prefix: SMB3_1_6_BRIDGE}
-    evidence: [live_fceux_2026-08-09_diagnostic_bridge_preserved_two_whistles]
-    notes: The game path is required, but safe normal gameplay remains planned; the diagnostic bridge cannot satisfy the product goal.
+    current_method: {type: memory_aware_route, source: scripts/fceux_1_1_agent.lua}
+    evidence: [live_fceux_2026-08-09_1_6_fresh_playback]
+    notes: Accepted fresh playback clears 1-6 as Raccoon, returns normally to the map, preserves both whistles, and uses no savestate, position, inventory, or completion bridge.
 
   - id: world_1_airship_to_king
     name: Clear the World 1 Airship and return to the King
-    status: bridged
+    status: solved
     start_condition:
       type: conjunction
       conditions:
         - {type: map_entry, target: world_1_final_castle}
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
-    success_condition: {type: post_probe_event, value: post_probe_1_airship_success_king}
+    success_condition: {type: post_probe_event, value: post_probe_1_airship_boss_defeated}
     failure_conditions: [{type: airship_marker_missing}, {type: timeout, seconds: 300}]
-    current_method: {type: diagnostic_bridge, env_prefix: SMB3_1_AIRSHIP}
-    evidence: [legacy_world_1_king_diagnostic]
-    notes: Required before World 2 by owner correction. The bridge-assisted legacy capability is diagnostic only and failed its fresh 2026-08-09 probe.
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
+    notes: Real Airship deck, pipe, boss, and King transition passed three fresh no-bridge playbacks.
 
   - id: world_2_map_arrival_with_two_whistles
     name: Arrive safely on the World 2 map with both whistles
-    status: planned
+    status: solved
     start_condition: {type: king_transition_complete, world: 1}
     success_condition:
       type: conjunction
@@ -108,13 +108,13 @@ segments:
         - {type: map_state, world: 2}
         - {type: inventory_item_count, item: warp_whistle, equals: 2}
     failure_conditions: [{type: wrong_world}, {type: whistle_inventory_mismatch}, {type: timeout, seconds: 180}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
-    notes: This is a required owner milestone and the first currently unproved boundary.
+    current_method: {type: observed_map_transition, marker: post_probe_world_2_map_two_whistles}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
+    notes: World number 1, object set 0, item_0=12, item_1=12, and earned item_2=9 were observed before whistle use.
 
   - id: world_2_first_whistle_use
     name: Use the first whistle from the World 2 map
-    status: planned
+    status: solved
     start_condition:
       type: conjunction
       conditions:
@@ -126,23 +126,23 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 1}
         - {type: warp_zone_transition_started, source_world: 2}
     failure_conditions: [{type: whistle_not_consumed}, {type: wrong_transition}, {type: timeout, seconds: 120}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observer_input_route, input: B_then_A_after_map_settle}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Must happen after World 2 arrival, never from World 1 in the active contract.
 
   - id: warp_zone_5_6_7_tier
     name: Reach the Warp Zone 5/6/7 tier
-    status: planned
+    status: solved
     start_condition: {type: warp_zone_transition_started, source_world: 2}
     success_condition: {type: visible_warp_zone_tier, worlds: [5, 6, 7]}
     failure_conditions: [{type: wrong_warp_zone_tier}, {type: numbered_world_pipe_entered}, {type: timeout, seconds: 120}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observed_warp_tier, cursor: [64, 112]}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: No numbered-world pipe is entered before the second whistle.
 
   - id: warp_zone_second_whistle_use
     name: Use the second whistle while still in the Warp Zone
-    status: planned
+    status: solved
     start_condition:
       type: conjunction
       conditions:
@@ -154,33 +154,33 @@ segments:
         - {type: inventory_item_count, item: warp_whistle, equals: 0}
         - {type: second_whistle_transition_started}
     failure_conditions: [{type: numbered_world_pipe_entered}, {type: whistle_not_consumed}, {type: timeout, seconds: 120}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observer_input_route, input: B_then_A_after_tier_settle}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Distinct from first-whistle use and performed from the Warp Zone.
 
   - id: warp_zone_world_8_tier
     name: Reach the Warp Zone World 8 tier
-    status: planned
+    status: solved
     start_condition: {type: second_whistle_transition_started}
     success_condition: {type: visible_warp_zone_tier, worlds: [8]}
     failure_conditions: [{type: wrong_warp_zone_tier}, {type: timeout, seconds: 120}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observed_warp_tier, cursor: [128, 144]}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: Warp Zone state is not yet World 8 map arrival.
 
   - id: world_8_pipe_entry
     name: Enter the World 8 pipe
-    status: planned
+    status: solved
     start_condition: {type: visible_warp_zone_tier, worlds: [8]}
     success_condition: {type: pipe_transition_started, destination_world: 8}
     failure_conditions: [{type: wrong_pipe}, {type: timeout, seconds: 120}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observer_input_route, input: right_then_A, cursor: [160, 144]}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: The pipe transition is distinct from both the tier and destination-map observations.
 
   - id: world_8_map_arrival
     name: Arrive on the genuine World 8 map
-    status: planned
+    status: solved
     start_condition: {type: pipe_transition_started, destination_world: 8}
     success_condition:
       type: conjunction
@@ -188,6 +188,6 @@ segments:
         - {type: map_state, world: 8}
         - {type: post_probe_event, value: post_probe_world_8_map_arrival}
     failure_conditions: [{type: wrong_world}, {type: level_entered_before_map_observation}, {type: timeout, seconds: 180}]
-    current_method: {type: planned_observable_segment}
-    evidence: [owner_corrected_world_2_boundary]
+    current_method: {type: observed_map_transition, marker: post_probe_world_8_map_arrival}
+    evidence: [live_fceux_2026-08-09_world_8_fresh_playback_x3]
     notes: This alone satisfies the product goal; it is not equivalent to beating World 8.

@@ -28,14 +28,14 @@ def test_world_1_goal_segments_are_all_cataloged() -> None:
     validate_goal_segments(contract, catalog)
 
 
-def test_active_world_8_goal_segments_are_all_cataloged_and_planned_truthfully() -> None:
+def test_active_world_8_goal_segments_are_all_cataloged_and_solved_truthfully() -> None:
     contract = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
     catalog = load_segment_catalog(Path("data/segments/world_8_double_whistle.yaml"))
 
     validate_goal_segments(contract, catalog)
-    assert catalog.by_id["world_2_map_arrival_with_two_whistles"].status == "planned"
-    assert catalog.by_id["world_2_first_whistle_use"].status == "planned"
-    assert catalog.by_id["world_8_map_arrival"].status == "planned"
+    assert catalog.by_id["world_2_map_arrival_with_two_whistles"].status == "solved"
+    assert catalog.by_id["world_2_first_whistle_use"].status == "solved"
+    assert catalog.by_id["world_8_map_arrival"].status == "solved"
 
 
 def test_segment_catalog_rejects_unsupported_status(tmp_path: Path) -> None:
@@ -79,7 +79,7 @@ def test_active_goal_status_renders_contract_order_and_roles() -> None:
     rendered = render_goal_status(contract, catalog)
 
     assert "goal_id=world_8_double_whistle" in rendered
-    assert "execution_status=planned" in rendered
+    assert "execution_status=executable" in rendered
     assert "4. id=world_1_3_whistle classification=objective_milestone" in rendered
     assert "6. id=world_1_5_water_path classification=game_prerequisite" in rendered
     assert "world_1_4_clear" not in rendered
