@@ -442,3 +442,97 @@ reports are:
 artifacts/reliability/world_8_double_whistle/20260810T230007.756761Z_reliability/
 artifacts/reliability/world_8_big_tanks/20260810T230122.959142Z_reliability/
 ```
+
+## Gate 23: Hand Traps and Jet goal and observer contract
+
+```bash
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_hand_traps_jet.yaml
+.venv/bin/python -m smb3_agent goal status world_8_hand_traps_jet
+```
+
+Pass condition:
+
+- the unchanged 17-segment Battleships goal is the declared prefix;
+- right, center, and left Hand Traps plus Jet extend it to exactly 21 ordered
+  segments and zero bridges;
+- every trap has its own entry, gameplay, reward, and stable-return sequence;
+- every Leaf is proved by reward object `82`, item id `3`, and inventory
+  transition `0 -> 1`;
+- Battleships preserves the P-Wing by using a Star and the underwater route;
+- Jet consumes that saved P-Wing and records hazard-aware wait/advance pacing;
+- the final accepted boundary is map page 2 cursor `(64,112)`, with World 8-1
+  accessible and unentered.
+
+## Gate 24: Hand Traps and Jet authoritative reliability
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_hand_traps_jet \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition: at least three isolated fresh-power-on processes make one
+attempt each; all 21 milestones and contract metrics pass; each run retains
+exactly 17 distinct focused screenshots; logs are byte-identical; all three
+runs finish alive at the exact accepted boundary; and no bridge, mutation,
+savestate, search, retry checkpoint, diagnostic fallback, or World 8-1 entry
+contributes evidence.
+
+Accepted evidence:
+
+```text
+artifacts/reliability/world_8_hand_traps_jet/20260811T062336.029178Z_reliability/
+```
+
+The aggregate passed 3/3 with `success_rate=1.0`, `overall_pass=true`, and
+structured-log SHA-256
+`6b6f66ca679ca63bba97a76e3da3326f5f643d881880b24203ccb97de67ca8fa`.
+
+## Gate 25: Hand Traps and Jet watchable review
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_hand_traps_jet \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.001
+```
+
+Pass condition: a fresh route passes; the review set contains exactly the 17
+focused states; a 795-line state/tick trace and contact sheet are retained; and
+the report says `review_only`, `promotable=false`, and
+`counts_toward_reliability=false`.
+
+Accepted evidence:
+
+```text
+artifacts/review/world_8_hand_traps_jet/20260811T060954.667404Z_watchable/
+```
+
+## Gate 26: Hand Traps and Jet regressions and hygiene
+
+```bash
+PYTHON=.venv/bin/python scripts/validate_phase0.sh
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_double_whistle --runs 5 --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_big_tanks --runs 3 --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_battleships --runs 3 --game-file "$SMB3_GAME_FILE"
+git diff --check
+```
+
+Pass condition: the canonical ROM-free gate passes 184 tests; Rank 27 remains
+5/5; Big Tanks and Battleships remain 3/3; each earlier goal stops at its own
+accepted boundary; and only intentional source, contract, test, and
+documentation changes remain uncommitted. No ROM, savestate, generated
+evidence, log, screenshot, report, trace, temporary worktree, or credential is
+tracked.
+
+Accepted regression reports:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260811T061710.427413Z_reliability/
+artifacts/reliability/world_8_big_tanks/20260811T061936.683562Z_reliability/
+artifacts/reliability/world_8_battleships/20260811T062230.086277Z_reliability/
+```

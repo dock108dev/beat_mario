@@ -1,6 +1,6 @@
 # Route Status
 
-Last updated: 2026-08-10.
+Last updated: 2026-08-11.
 
 ## Default goal
 
@@ -132,6 +132,70 @@ artifacts/reliability/world_8_double_whistle/20260810T230007.756761Z_reliability
 artifacts/reliability/world_8_big_tanks/20260810T230122.959142Z_reliability/
 ```
 
+## World 8 Hand Traps and Jet cumulative goal
+
+`world_8_hand_traps_jet` composes the unchanged 17-segment Battleships goal
+with four ordered normal-gameplay segments: right Hand Trap, center Hand Trap,
+left Hand Trap, and World 8-Jet. The result is exactly 21 segments and zero
+bridges; all earlier goal endpoints remain separate.
+
+The cumulative route preserves the P-Wing through Battleships, consumes a Star
+from two to one, crosses the exposed first ship, enters the reddish water at
+`x=900`, swims beneath the fleet, waits behind the final stern, and surfaces for
+the normal pipe. The saved P-Wing is then consumed immediately before Jet.
+
+The trap identities are distinct:
+
+- Right: map `(160,112)`, object set `11`, entry `(24,320)`, Brother ids
+  `-121,-127,-126,-122`; Sledge is defeated before Mario centers beneath the
+  orange ceiling tube and jumps while holding Up.
+- Center: map `(128,112)`, object set `11`, entry `(24,368)`, lava platforms
+  and Podoboos; Mario centers under the tube before the Up exit.
+- Left: map `(96,112)`, object set `11`, entry `(24,320)`, broken bridge and
+  jumping Cheep-Cheeps; the controller pauses on observed footing for safe
+  windows before centering under the exit tube.
+
+Each trap observes reward object `82`, item id `3`, a Super Leaf inventory
+transition from zero to one, a normal map return, 180 stable frames, unchanged
+lives, and no premature next stage.
+
+Jet enters automatically at node `(64,80)` with entry id `15`, object set `10`,
+and original state `(0,320,air=0)`. Its controller holds position or neutral
+input around Rocket Engine fire and newly exposed footing instead of moving
+continually forward. The normal final pipe leads to flying Boom Boom; success
+requires active object `76` to become defeated object `74` while Mario remains
+alive, followed by the game-owned map transition.
+
+The observed post-Jet path is left from `(64,80)` to the pipe at `(32,80)`, A
+into the dark tunnel (`object_set=14`), right through the tunnel and Down from
+the centered exit pipe, then right and down on map page 2. The accepted stop is
+`world_number=7`, `object_set=0`, `map_page=2`, cursor `(64,112)`, with World
+8-1 accessible and not entered.
+
+The final authoritative aggregate passed 3/3, all 21 milestones, exactly 17
+focused screenshots per run, `success_rate=1.0`, `overall_pass=true`, and
+byte-identical log SHA-256
+`6b6f66ca679ca63bba97a76e3da3326f5f643d881880b24203ccb97de67ca8fa`:
+
+```text
+artifacts/reliability/world_8_hand_traps_jet/20260811T062336.029178Z_reliability/
+```
+
+The separate `0.001`-second review passed with 17 focused frames, a 795-line
+tick trace, and a contact sheet. It is review-only and non-promotable:
+
+```text
+artifacts/review/world_8_hand_traps_jet/20260811T060954.667404Z_watchable/
+```
+
+Final regressions passed at:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260811T061710.427413Z_reliability/  # 5/5
+artifacts/reliability/world_8_big_tanks/20260811T061936.683562Z_reliability/      # 3/3
+artifacts/reliability/world_8_battleships/20260811T062230.086277Z_reliability/   # 3/3
+```
+
 ## Rank 27 reliability evidence
 
 The authoritative command passed 5/5:
@@ -202,9 +266,13 @@ observed in the accepted batch.
 | 15 | World 8 map arrival | objective milestone | normal gameplay | solved; `world_number=7`, `object_set=0` |
 | 16 | World 8 Big Tanks clear | objective milestone in separate goal | normal gameplay | solved 3/3; stable post-clear map return |
 | 17 | World 8-Battleships clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; stable map before Hand Trap |
+| 18 | World 8 right Hand Trap clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; Brothers defeated, Super Leaf awarded |
+| 19 | World 8 center Hand Trap clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; lava/Podoboo traversal, Super Leaf awarded |
+| 20 | World 8 left Hand Trap clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; paused broken-bridge traversal, Super Leaf awarded |
+| 21 | World 8-Jet clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; flying Boom Boom defeated, 8-1 accessible |
 
-Row 16 belongs to `world_8_big_tanks` and the Battleships prefix; row 17 belongs
-only to `world_8_battleships`. The default contract still ends at row 15. World
+Rows 18-21 belong only to `world_8_hand_traps_jet`; its first 17 rows are the
+unchanged Battleships prefix. The default contract still ends at row 15. World
 1-4 is absent. World 7 is not entered; it is only one of the labels on the
 expected first Warp Zone tier.
 
@@ -308,9 +376,10 @@ a World 8 success marker and is rejected by the active goal metrics.
 
 ## Current boundary
 
-Rank 28 is complete at the normal Big Tanks post-clear map return. The default
-Rank 27 goal remains unchanged at the genuine World 8 map arrival. Later World
-8 stages and Rank 33 are unstarted and were not entered by this work.
+The accepted cumulative boundary is World 8 map page 2 cursor `(64,112)` after
+Jet, with World 8-1 accessible and unentered. The default Rank 27, Rank 28, and
+Battleships goals remain unchanged at their earlier boundaries. World 8-1 and
+all later stages were not entered by this work.
 
 ## Roaming placement note
 

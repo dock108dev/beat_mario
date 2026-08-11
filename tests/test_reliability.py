@@ -5,12 +5,15 @@ import json
 from pathlib import Path
 import subprocess
 
+import pytest
+
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.reliability import (
     BATTLESHIPS_FINAL_EVENT,
     BIG_TANKS_FINAL_EVENT,
     FINAL_EVENT,
+    HAND_TRAPS_JET_FINAL_EVENT,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -109,6 +112,13 @@ def _write_log(
                 "hand_trap_region_accessible=1 hand_trap_entered=0 player_is_dying=0 "
                 "evidence=stable_world_8_map_after_boom_boom"
             )
+        elif event == HAND_TRAPS_JET_FINAL_EVENT:
+            suffix = (
+                " world_number=7 object_set=0 map_page=2 map_cursor_x=64 "
+                "map_cursor_y=112 dark_area_traversed=1 world_8_1_accessible=1 "
+                "world_8_1_entered=0 player_is_dying=0 "
+                "evidence=stable_world_8_map_with_world_8_1_accessible"
+            )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
         lines.append(extra_line)
@@ -197,6 +207,26 @@ def _fake_runner_factory(
                     BATTLESHIPS_FINAL_EVENT,
                 ]
                 if goal_id == "world_8_battleships"
+                else [
+                    "post_probe_world_8_battleships_post_clear",
+                    "post_probe_world_8_hand_trap_right_entered",
+                    "post_probe_world_8_hand_trap_right_gameplay",
+                    "post_probe_world_8_hand_trap_right_reward",
+                    "post_probe_world_8_hand_trap_right_post_clear",
+                    "post_probe_world_8_hand_trap_center_entered",
+                    "post_probe_world_8_hand_trap_center_gameplay",
+                    "post_probe_world_8_hand_trap_center_reward",
+                    "post_probe_world_8_hand_trap_center_post_clear",
+                    "post_probe_world_8_hand_trap_left_entered",
+                    "post_probe_world_8_hand_trap_left_gameplay",
+                    "post_probe_world_8_hand_trap_left_reward",
+                    "post_probe_world_8_hand_trap_left_post_clear",
+                    "post_probe_world_8_jet_entered",
+                    "post_probe_world_8_jet_gameplay",
+                    "post_probe_world_8_jet_boss_defeated",
+                    HAND_TRAPS_JET_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_hand_traps_jet"
                 else []
             )
             image_events = focused_events or ["review"]
@@ -378,6 +408,130 @@ def test_two_battleships_successes_are_not_authoritative(tmp_path: Path) -> None
     assert result.report["successful_runs"] == 2
     assert result.report["success_rate"] == 1.0
     assert result.passed is False
+
+
+def test_hand_traps_jet_requires_three_fresh_successes_and_17_images(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_hand_traps_jet",
+        artifacts_root=tmp_path / "hand-traps-jet",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_hand_traps_jet", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["minimum_authoritative_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["route_segment_count"] == 21
+    assert result.report["bridged_segment_count"] == 0
+    assert result.report["required_final_event"] == HAND_TRAPS_JET_FINAL_EVENT
+    assert result.report["byte_identical_logs"] is True
+    assert all(len(run["focused_screenshots"]) == 17 for run in result.report["runs"])
+    assert all(run["accepted_boundary_matches"] is True for run in result.report["runs"])
+    assert all(call["attempts"] == 1 for call in calls)
+    assert all(call["clean_product_env"] is True for call in calls)
+
+
+def test_two_hand_traps_jet_successes_are_not_authoritative(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_hand_traps_jet",
+        requested_runs=2,
+        artifacts_root=tmp_path / "hand-traps-jet",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_hand_traps_jet", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.report["successful_runs"] == 2
+    assert result.report["success_rate"] == 1.0
+    assert result.passed is False
+
+
+@pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])
+def test_hand_traps_jet_rejects_invalid_focused_screenshot_sets(
+    tmp_path: Path, mode: str
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_hand_traps_jet", write_image=True
+    )
+
+    def damaged_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        image_dir = kwargs["artifacts_dir"] / "images"
+        target = next(image_dir.glob("*_post_probe_world_8_jet_gameplay.gd"))
+        if mode == "missing":
+            target.unlink()
+        elif mode == "duplicate":
+            image_dir.joinpath(
+                "999999_post_probe_world_8_jet_gameplay.gd"
+            ).write_bytes(target.read_bytes())
+        else:
+            target.write_bytes(b"corrupt")
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_hand_traps_jet",
+        requested_runs=1,
+        artifacts_root=tmp_path / mode,
+        goal_runner=damaged_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["failure_classification"] == "artifact-integrity"
+    assert run["screenshot_evidence_error"] is not None
+
+
+def test_hand_traps_jet_rejects_wrong_final_map_boundary(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_hand_traps_jet", write_image=True
+    )
+
+    def wrong_boundary_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        log_path = kwargs["artifacts_dir"] / "fceux_1_1.log"
+        log_path.write_text(
+            log_path.read_text().replace(
+                "map_page=2 map_cursor_x=64 map_cursor_y=112",
+                "map_page=1 map_cursor_x=96 map_cursor_y=80",
+            )
+        )
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_hand_traps_jet",
+        requested_runs=1,
+        artifacts_root=tmp_path / "wrong-boundary",
+        goal_runner=wrong_boundary_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["accepted_boundary_matches"] is False
+    assert run["failure_classification"] == "wrong-boundary"
 
 
 def test_only_battleships_requires_byte_identical_logs(tmp_path: Path) -> None:

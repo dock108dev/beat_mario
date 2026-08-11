@@ -105,7 +105,19 @@ def parse_fceux_log(
     valid_world_8_battleships_gameplay = False
     valid_world_8_battleships_boss_defeated = False
     valid_world_8_battleships_clear = False
+    valid_world_8_battleships_p_wing_preserved = False
+    valid_world_8_battleships_star_used = False
+    valid_world_8_battleships_swim = False
+    valid_world_8_battleships_stern_wait = False
     battleships_sequence_failed = False
+    hand_trap_sequence_index = 0
+    hand_trap_sequence_failed = False
+    hand_trap_state = 0
+    valid_world_8_jet_entry = False
+    valid_world_8_jet_p_wing_used = False
+    valid_world_8_jet_gameplay = False
+    valid_world_8_jet_boss_defeated = False
+    valid_world_8_jet_clear = False
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -357,6 +369,34 @@ def parse_fceux_log(
                 valid_world_8_battleships_clear = False
                 battleships_sequence_failed = not valid_world_8_big_tanks_post_clear
                 post_probe_clear = False
+            if event == "post_probe_world_8_battleships_p_wing_preserved":
+                valid_world_8_battleships_p_wing_preserved = (
+                    not battleships_sequence_failed
+                    and "evidence=owner_directed_underwater_battleships_route" in line
+                    and "p_wing_count=1" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_8_battleships_star_used":
+                valid_world_8_battleships_star_used = (
+                    valid_world_8_battleships_p_wing_preserved
+                    and "evidence=normal_inventory_B_A_immediately_before_entry" in line
+                    and "star_before=2" in line
+                    and "star_after=1" in line
+                    and "p_wing_preserved=1" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_8_battleships_swim_started":
+                valid_world_8_battleships_swim = (
+                    valid_world_8_battleships_star_used
+                    and "evidence=normal_fall_into_reddish_water_after_exposed_first_ship" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_8_battleships_stern_wait":
+                valid_world_8_battleships_stern_wait = (
+                    valid_world_8_battleships_swim
+                    and "evidence=waited_for_end_of_autoscroll_behind_final_ship" in line
+                    and not playback_contaminated
+                )
             if event == "post_probe_world_8_battleships_entered":
                 valid_world_8_battleships_entry = (
                     valid_world_8_big_tanks_post_clear
@@ -450,6 +490,191 @@ def parse_fceux_log(
                 )
             ):
                 battleships_sequence_failed = True
+                post_probe_clear = False
+            hand_trap_order = ("right", "center", "left")
+            if event.startswith("post_probe_world_8_hand_trap_"):
+                matched_trap = next(
+                    (name for name in hand_trap_order if event.startswith(
+                        f"post_probe_world_8_hand_trap_{name}_"
+                    )),
+                    None,
+                )
+                if matched_trap is not None:
+                    expected_trap = (
+                        hand_trap_order[hand_trap_sequence_index]
+                        if hand_trap_sequence_index < len(hand_trap_order)
+                        else None
+                    )
+                    suffix = event.removeprefix(
+                        f"post_probe_world_8_hand_trap_{matched_trap}_"
+                    )
+                    entry_y = 368 if matched_trap == "center" else 320
+                    cursor_x = {"right": 160, "center": 128, "left": 96}[
+                        matched_trap
+                    ]
+                    gameplay_identity = {
+                        "right": "brother_enemy_ids=-121,-127,-126,-122",
+                        "center": "hazard_identity=lava_platforms_and_podoboos",
+                        "left": "hazard_identity=broken_bridge_and_jumping_cheep_cheeps",
+                    }[matched_trap]
+                    if suffix == "started":
+                        prefix_valid = (
+                            valid_world_8_battleships_clear
+                            if matched_trap == "right"
+                            else hand_trap_sequence_index == hand_trap_order.index(matched_trap)
+                        )
+                        hand_trap_sequence_failed = (
+                            hand_trap_sequence_failed
+                            or matched_trap != expected_trap
+                            or not prefix_valid
+                        )
+                        hand_trap_state = 0
+                    elif suffix == "entered":
+                        valid = (
+                            not hand_trap_sequence_failed
+                            and matched_trap == expected_trap
+                            and hand_trap_state == 0
+                            and "evidence=deliberate_A_input_from_observed_hand_tile" in line
+                            and f"target_cursor_x={cursor_x}" in line
+                            and "target_cursor_y=112" in line
+                            and f"entry_y={entry_y}" in line
+                            and "entry_x=24" in line
+                            and "entry_air=0" in line
+                            and "object_set=11" in line
+                            and f"stage_identity=world_8_hand_trap_{matched_trap}" in line
+                            and not playback_contaminated
+                        )
+                        hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
+                        hand_trap_state = 1 if valid else -1
+                    elif suffix == "gameplay":
+                        valid = hand_trap_state == 1 and gameplay_identity in line
+                        hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
+                        hand_trap_state = 2 if valid else -1
+                    elif suffix == "reward":
+                        valid = (
+                            hand_trap_state == 2
+                            and "evidence=game_owned_reward_object_82_and_inventory_transition" in line
+                            and "reward_item_id=3" in line
+                            and "leaf_before=0" in line
+                            and "leaf_after=1" in line
+                        )
+                        hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
+                        hand_trap_state = 3 if valid else -1
+                    elif suffix == "post_clear":
+                        valid = (
+                            hand_trap_state == 3
+                            and f"map_cursor_x={cursor_x}" in line
+                            and "map_cursor_y=112" in line
+                            and "world_number=7" in line
+                            and "object_set=0" in line
+                            and "player_is_dying=0" in line
+                            and "lives_unchanged=1" in line
+                            and "stable_frames=180" in line
+                        )
+                        hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
+                        if valid:
+                            hand_trap_sequence_index += 1
+                            hand_trap_state = 0
+                        post_probe_clear = False
+                    elif any(
+                        token in suffix
+                        for token in (
+                            "wrong", "death", "timeout", "missing", "duplicate",
+                            "automatic", "unexplained", "premature", "unstable",
+                        )
+                    ):
+                        hand_trap_sequence_failed = True
+                        post_probe_clear = False
+            if event == "post_probe_world_8_jet_started":
+                valid_world_8_jet_entry = False
+                valid_world_8_jet_p_wing_used = False
+                valid_world_8_jet_gameplay = False
+                valid_world_8_jet_boss_defeated = False
+                valid_world_8_jet_clear = False
+                if hand_trap_sequence_index != 3 or hand_trap_sequence_failed:
+                    hand_trap_sequence_failed = True
+                post_probe_clear = False
+            if event == "post_probe_world_8_jet_p_wing_used":
+                valid_world_8_jet_p_wing_used = (
+                    hand_trap_sequence_index == 3
+                    and not hand_trap_sequence_failed
+                    and valid_world_8_battleships_stern_wait
+                    and "evidence=owner_directed_normal_inventory_use" in line
+                    and "saved_from_battleships" in line
+                    and "p_wing_remaining=0" in line
+                    and not playback_contaminated
+                )
+            if event == "post_probe_world_8_jet_entered":
+                valid_world_8_jet_entry = (
+                    hand_trap_sequence_index == 3
+                    and not hand_trap_sequence_failed
+                    and valid_world_8_jet_p_wing_used
+                    and "evidence=normal_left_up_then_game_owned_automatic_entry" in line
+                    and "source_cursor_x=96" in line
+                    and "source_cursor_y=112" in line
+                    and "map_node_x=64" in line
+                    and "map_node_y=80" in line
+                    and "map_enter_via_id=15" in line
+                    and "entry_x=0" in line
+                    and "entry_y=320" in line
+                    and "entry_air=0" in line
+                    and "object_set=10" in line
+                    and "stage_identity=world_8_jet" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_jet_gameplay":
+                valid_world_8_jet_gameplay = (
+                    valid_world_8_jet_entry
+                    and "evidence=observed_pause_and_advance_autoscroller_controller" in line
+                    and "pacing=hazard_wait_opening_wait_controlled_advance" in line
+                    and "object_set=10" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_jet_boss_defeated":
+                valid_world_8_jet_boss_defeated = (
+                    valid_world_8_jet_gameplay
+                    and "evidence=game_owned_boss_object_76_to_defeated_transition_object_74" in line
+                    and "boss_object_id_76_active=0" in line
+                    and "defeated_transition_object_id_74_active=1" in line
+                    and "mario_alive=1" in line
+                    and "player_is_dying=0" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_jet_clear":
+                valid_world_8_jet_clear = (
+                    valid_world_8_jet_boss_defeated
+                    and "evidence=game_owned_return_map_transition_after_defeated_flying_boom_boom" in line
+                    and "return_map=1" in line
+                    and "mario_alive=1" in line
+                    and "player_is_dying=0" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
+            if event == "post_probe_world_8_jet_post_clear":
+                post_probe_clear = (
+                    valid_world_8_jet_clear
+                    and "evidence=stable_world_8_map_with_world_8_1_accessible" in line
+                    and "world_number=7" in line
+                    and "object_set=0" in line
+                    and "map_page=2" in line
+                    and "map_cursor_x=64" in line
+                    and "map_cursor_y=112" in line
+                    and "dark_area_traversed=1" in line
+                    and "world_8_1_accessible=1" in line
+                    and "world_8_1_entered=0" in line
+                    and "stable_frames=180" in line
+                    and not playback_contaminated
+                )
+            if event.startswith("post_probe_world_8_jet_") and any(
+                token in event
+                for token in (
+                    "_wrong_", "_death", "_fall", "_stall", "_timeout",
+                    "_false_", "_missing_", "_unexpected_", "_world_8_1_entered",
+                )
+            ):
                 post_probe_clear = False
             if x_match is not None:
                 x = int(x_match.group("x"))

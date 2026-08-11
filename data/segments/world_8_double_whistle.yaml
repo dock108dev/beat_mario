@@ -279,3 +279,68 @@ segments:
     acceptance_event: post_probe_world_8_battleships_post_clear
     evidence: [bounded_live_fceux_2026-08-10_normal_entry_boss_clear_and_map_return]
     notes: Consumes the normally acquired World 1 P-Wing through inventory input, moves right twice to the automatic Battleships node, traverses the autoscrolling fleet, enters the final pipe, defeats object 75 through observed game-owned lifecycle transitions, and stops after a 180-frame stable map observation at cursor (128,112) without entering a Hand Trap.
+
+  - id: world_8_hand_trap_right_clear
+    name: Clear the right World 8 Hand Trap
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, cursor_x: 128, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: deliberate_map_entry, cursor_x: 160, cursor_y: 112, object_set: 11, x: 24, y: 320}
+        - {type: inventory_transition, item: super_leaf, delta: 1}
+        - {type: stable_map_state, world: 8, cursor_x: 160, cursor_y: 112}
+    failure_conditions: [{type: wrong_trap}, {type: death}, {type: missing_reward}, {type: timeout, seconds: 300}]
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_hand_trap_right_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_right_hand_trap]
+    notes: Traverses the inter-map pipe, deliberately selects the right Hand Trap, clears its four Brother enemies, centers under the orange ceiling pipe, and observes one awarded Super Leaf.
+
+  - id: world_8_hand_trap_center_clear
+    name: Clear the center World 8 Hand Trap
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, cursor_x: 160, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: deliberate_map_entry, cursor_x: 128, cursor_y: 112, object_set: 11, x: 24, y: 368}
+        - {type: inventory_transition, item: super_leaf, delta: 1}
+        - {type: stable_map_state, world: 8, cursor_x: 128, cursor_y: 112}
+    failure_conditions: [{type: wrong_trap}, {type: death}, {type: missing_reward}, {type: timeout, seconds: 300}]
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_hand_trap_center_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_center_hand_trap]
+    notes: Deliberately enters the lava-platform trap, traverses its Podoboo timing, centers under its orange ceiling pipe, and observes one awarded Super Leaf.
+
+  - id: world_8_hand_trap_left_clear
+    name: Clear the left World 8 Hand Trap
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, cursor_x: 128, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: deliberate_map_entry, cursor_x: 96, cursor_y: 112, object_set: 11, x: 24, y: 320}
+        - {type: inventory_transition, item: super_leaf, delta: 1}
+        - {type: stable_map_state, world: 8, cursor_x: 96, cursor_y: 112}
+    failure_conditions: [{type: wrong_trap}, {type: death}, {type: missing_reward}, {type: timeout, seconds: 300}]
+    current_method: {type: observer_input_route, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_hand_trap_left_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_left_hand_trap]
+    notes: Deliberately enters the broken-bridge trap, crosses its jumping Cheep-Cheeps, centers at x=2012 under the orange ceiling pipe, and observes one awarded Super Leaf.
+
+  - id: world_8_jet_clear
+    name: Clear World 8-Jet and expose World 8-1
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, cursor_x: 96, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, object_set: 10, map_enter_via_id: 15, x: 0, y: 320, air: 0}
+        - {type: boss_defeat, object_id: 76, defeated_transition_object_id: 74, proof: game_owned_object_replacement}
+        - {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 112}
+        - {type: next_node_accessible, target: world_8_1, enter_gameplay: false}
+    failure_conditions: [{type: wrong_stage}, {type: death}, {type: gameplay_stall}, {type: false_clear}, {type: world_8_1_entered}, {type: timeout, seconds: 360}]
+    current_method: {type: observed_hazard_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_jet_post_clear
+    evidence: [bounded_live_fceux_2026-08-10_jet_flying_boom_boom_and_map_return]
+    notes: Alternates bounded advances with deliberate waits for Rocket Engine flames and newly exposed footing, enters the final pipe normally, observes object 76 become defeated object 74, traverses the post-Jet dark pipe tunnel, then stops on accessible World 8-1 at page 2 cursor (64,112) without pressing A.

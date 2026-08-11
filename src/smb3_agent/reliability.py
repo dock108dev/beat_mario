@@ -35,6 +35,7 @@ from smb3_agent.segments import (
 FINAL_EVENT = "post_probe_world_8_map_arrival"
 BIG_TANKS_FINAL_EVENT = "post_probe_world_8_big_tanks_post_clear"
 BATTLESHIPS_FINAL_EVENT = "post_probe_world_8_battleships_post_clear"
+HAND_TRAPS_JET_FINAL_EVENT = "post_probe_world_8_jet_post_clear"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -107,8 +108,8 @@ RELIABILITY_PROFILES = {
         accepted_boundary={
             "world_number": 7,
             "object_set": 0,
-            "map_cursor_x": 32,
-            "map_cursor_y": 80,
+            "map_cursor_x": 64,
+            "map_cursor_y": 112,
         },
         focused_events=(
             "post_probe_world_8_map_arrival",
@@ -135,6 +136,39 @@ RELIABILITY_PROFILES = {
             "post_probe_world_8_battleships_gameplay",
             "post_probe_world_8_battleships_clear",
             "post_probe_world_8_battleships_post_clear",
+        ),
+        require_byte_identical_logs=True,
+    ),
+    "world_8_hand_traps_jet": ReliabilityProfile(
+        goal_id="world_8_hand_traps_jet",
+        preset="fceux_world_8_hand_traps_jet",
+        final_event=HAND_TRAPS_JET_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={
+            "world_number": 7,
+            "object_set": 0,
+            "map_page": 2,
+            "map_cursor_x": 64,
+            "map_cursor_y": 112,
+        },
+        focused_events=(
+            "post_probe_world_8_battleships_post_clear",
+            "post_probe_world_8_hand_trap_right_entered",
+            "post_probe_world_8_hand_trap_right_gameplay",
+            "post_probe_world_8_hand_trap_right_reward",
+            "post_probe_world_8_hand_trap_right_post_clear",
+            "post_probe_world_8_hand_trap_center_entered",
+            "post_probe_world_8_hand_trap_center_gameplay",
+            "post_probe_world_8_hand_trap_center_reward",
+            "post_probe_world_8_hand_trap_center_post_clear",
+            "post_probe_world_8_hand_trap_left_entered",
+            "post_probe_world_8_hand_trap_left_gameplay",
+            "post_probe_world_8_hand_trap_left_reward",
+            "post_probe_world_8_hand_trap_left_post_clear",
+            "post_probe_world_8_jet_entered",
+            "post_probe_world_8_jet_gameplay",
+            "post_probe_world_8_jet_boss_defeated",
+            "post_probe_world_8_jet_post_clear",
         ),
         require_byte_identical_logs=True,
     ),
@@ -325,6 +359,7 @@ def run_reliability_gate(
             frame_sleep_seconds=0.0,
             required_final_event=profile.final_event,
             required_image_events=profile.focused_events,
+            accepted_boundary=profile.accepted_boundary,
         )
         _write_json(run_dir / "run_report.json", run_report)
         runs.append(run_report)
@@ -480,6 +515,7 @@ def run_watchable_playback(
         frame_sleep_seconds=frame_sleep_seconds,
         required_final_event=profile.final_event,
         required_image_events=(),
+        accepted_boundary=profile.accepted_boundary,
     )
     tick_trace_path = artifacts_dir / "state_tick_trace.log"
     _write_tick_trace(artifacts_dir / "fceux_1_1.log", tick_trace_path)
@@ -601,6 +637,7 @@ def _inspect_run(
     frame_sleep_seconds: float,
     required_final_event: str,
     required_image_events: tuple[str, ...],
+    accepted_boundary: dict[str, int],
 ) -> dict[str, Any]:
     log_path = run_dir / "fceux_1_1.log"
     execution_path = run_dir / "fceux_execution.json"
@@ -640,13 +677,21 @@ def _inspect_run(
             log_error = log_error or f"structured route log is unparseable: {exc}"
 
     final_event = summary.post_probe_last_event if summary is not None else None
+    final_observable = _final_observable(log_text or "", required_final_event)
+    boundary_matches = all(
+        final_observable.get(field) == expected
+        for field, expected in accepted_boundary.items()
+    )
     metrics_passed = bool(goal_result and goal_result.metrics_passed)
     timed_out = bool(execution and execution.get("timed_out"))
     returncode = execution.get("returncode") if execution else None
     launch_error = execution.get("launch_error") if execution else None
     complete_contract = first_missing is None and len(last_good) == len(milestones)
     success_candidate = (
-        complete_contract and metrics_passed and final_event == required_final_event
+        complete_contract
+        and metrics_passed
+        and final_event == required_final_event
+        and boundary_matches
     )
     focused_screenshots, screenshot_evidence_error = _focused_screenshot_evidence(
         run_dir, required_image_events if success_candidate else ()
@@ -664,6 +709,7 @@ def _inspect_run(
         and complete_contract
         and metrics_passed
         and final_event == required_final_event
+        and boundary_matches
     )
     classification = None if passed else _classify_failure(
         execution=execution,
@@ -672,9 +718,10 @@ def _inspect_run(
         prohibited=prohibited,
         failure_event=failure_event,
         run_exception=run_exception,
+        boundary_matches=boundary_matches,
+        complete_contract=complete_contract,
     )
     finished_at = datetime.now(timezone.utc)
-    final_observable = _final_observable(log_text or "")
     artifact_files = sorted(
         str(path.relative_to(run_dir)) for path in run_dir.rglob("*") if path.is_file()
     )
@@ -710,6 +757,8 @@ def _inspect_run(
         "first_missing_milestone": first_missing,
         "first_violated_event": prohibited[0] if prohibited else failure_event,
         "final_observable": final_observable,
+        "accepted_boundary": accepted_boundary,
+        "accepted_boundary_matches": boundary_matches,
         "capture_settings": {
             "capture_images": capture_images,
             "capture_ticks": capture_ticks,
@@ -747,8 +796,12 @@ def _focused_screenshot_evidence(
             candidates = sorted(image_dir.glob(f"*_{event}.gd"))
             if not candidates:
                 raise FileNotFoundError(f"missing screenshot for {event}")
+            if len(candidates) != 1:
+                raise ValueError(
+                    f"expected exactly one screenshot for {event}; found {len(candidates)}"
+                )
             output_path = output_dir / f"{index:02d}_{event}.png"
-            load_gd_screenshot(candidates[-1]).save(output_path)
+            load_gd_screenshot(candidates[0]).save(output_path)
             screenshots.append(str(output_path))
     except Exception as exc:
         return screenshots, f"{type(exc).__name__}: {exc}"
@@ -798,6 +851,8 @@ def _classify_failure(
     prohibited: list[str],
     failure_event: str | None,
     run_exception: Exception | None,
+    boundary_matches: bool,
+    complete_contract: bool,
 ) -> str:
     if execution and execution.get("timed_out"):
         return "timeout"
@@ -827,6 +882,10 @@ def _classify_failure(
             if token in failure_event:
                 return classification
         return "gameplay"
+    if not complete_contract:
+        return "observer/contract"
+    if not boundary_matches:
+        return "wrong-boundary"
     if run_exception is not None and isinstance(run_exception, OSError):
         return "emulator-launch"
     return "observer/contract"
@@ -843,15 +902,16 @@ def _recommendation(
         "artifact-integrity": "Inspect FCEUX stdout/stderr and logger creation; do not infer gameplay success from missing or corrupt evidence.",
         "prohibited-tactic": "Remove the prohibited route flag or artifact and rerun from a clean fresh process; this evidence is non-promotable.",
         "observer/contract": f"Compare the observer predicate at {missing} with the last accepted event and make only a bounded observer correction.",
+        "wrong-boundary": "Compare the final observable with the accepted map boundary and keep the run fail-closed.",
         "gameplay": f"Review the final ticks and images around {missing}, then test the smallest input-timing correction in one fresh run.",
     }
     return recommendations.get(classification, "Inspect the retained run artifacts.")
 
 
-def _final_observable(text: str) -> dict[str, Any]:
+def _final_observable(text: str, required_event: str) -> dict[str, Any]:
     fields: dict[str, str] = {}
     for line in reversed(text.splitlines()):
-        if "event=" in line:
+        if f"event={required_event} " in line or line.endswith(f"event={required_event}"):
             fields = {match.group("key"): match.group("value") for match in FIELD_RE.finditer(line)}
             break
     inventory = {
@@ -866,6 +926,7 @@ def _final_observable(text: str) -> dict[str, Any]:
         "object_set": _to_int(fields.get("object_set")),
         "map_cursor_x": _to_int(fields.get("map_cursor_x")),
         "map_cursor_y": _to_int(fields.get("map_cursor_y")),
+        "map_page": _to_int(fields.get("map_page")),
         "inventory": inventory,
         "lives": _to_int(
             fields.get("lives") or fields.get("life_count") or fields.get("m_count")

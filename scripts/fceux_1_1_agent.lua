@@ -23,6 +23,7 @@ local world_8_focused_capture_events = {
 }
 if world_8_extension_mode == "battleships"
   or world_8_extension_mode == "battleships_discovery"
+  or world_8_extension_mode == "hand_traps_jet"
 then
   world_8_focused_capture_events = {
     post_probe_world_8_big_tanks_post_clear = true,
@@ -30,6 +31,27 @@ then
     post_probe_world_8_battleships_gameplay = true,
     post_probe_world_8_battleships_clear = true,
     post_probe_world_8_battleships_post_clear = true,
+  }
+end
+if world_8_extension_mode == "hand_traps_jet" then
+  world_8_focused_capture_events = {
+    post_probe_world_8_battleships_post_clear = true,
+    post_probe_world_8_hand_trap_right_entered = true,
+    post_probe_world_8_hand_trap_right_gameplay = true,
+    post_probe_world_8_hand_trap_right_reward = true,
+    post_probe_world_8_hand_trap_right_post_clear = true,
+    post_probe_world_8_hand_trap_center_entered = true,
+    post_probe_world_8_hand_trap_center_gameplay = true,
+    post_probe_world_8_hand_trap_center_reward = true,
+    post_probe_world_8_hand_trap_center_post_clear = true,
+    post_probe_world_8_hand_trap_left_entered = true,
+    post_probe_world_8_hand_trap_left_gameplay = true,
+    post_probe_world_8_hand_trap_left_reward = true,
+    post_probe_world_8_hand_trap_left_post_clear = true,
+    post_probe_world_8_jet_entered = true,
+    post_probe_world_8_jet_gameplay = true,
+    post_probe_world_8_jet_boss_defeated = true,
+    post_probe_world_8_jet_post_clear = true,
   }
 end
 local world_8_discovery_sequence = os.getenv("SMB3_WORLD_8_DISCOVERY_SEQUENCE") or "right,A"
@@ -1006,6 +1028,25 @@ local function nearest_enemy_between(m, min_dx, max_dx)
       if dx >= min_dx and dx <= max_dx and math.abs(ey - m.y) < 120 then
         if best == nil or math.abs(dx) < math.abs(best.dx) then
           best = {slot = i, x = ex, y = ey, dx = dx, dy = ey - m.y, id = memory.readbytesigned(0x670 + i)}
+        end
+      end
+    end
+  end
+  return best
+end
+
+local function nearest_negative_id_enemy_between(m, min_dx, max_dx)
+  local best = nil
+  for i = 1, 9 do
+    local active = memory.readbytesigned(0x660 + i) ~= 0
+    local object_id = memory.readbytesigned(0x670 + i)
+    if active and object_id < 0 then
+      local ex = memory.readbyte(0x90 + i) + memory.readbyte(0x75 + i) * 256
+      local ey = memory.readbyte(0xA2 + i) + memory.readbyte(0x87 + i) * 256
+      local dx = ex - m.x
+      if dx >= min_dx and dx <= max_dx and math.abs(ey - m.y) < 160 then
+        if best == nil or math.abs(dx) < math.abs(best.dx) then
+          best = {slot = i, x = ex, y = ey, dx = dx, dy = ey - m.y, id = object_id}
         end
       end
     end
@@ -7195,6 +7236,1196 @@ local function run_1_6_probe()
   log_1_6("post_probe_1_6_done")
 end
 
+local function run_world_8_hand_traps_jet_extension()
+  local starting_lives = memory.readbyte(0x736)
+
+  local function neutral()
+    held.A = false
+    held.B = false
+    held.right = false
+    held.left = false
+    held.down = false
+    held.up = false
+    apply()
+  end
+
+  local function alive()
+    return memory.readbyte(0x736) == starting_lives
+  end
+
+  local function wait_for_stage(object_set, entry_x, entry_y, frames)
+    for _ = 1, frames do
+      local candidate = mario()
+      if memory.readbyte(0x70A) == object_set
+          and candidate.x == entry_x
+          and candidate.y == entry_y then
+        return candidate
+      end
+      advance_frame()
+    end
+    return nil
+  end
+
+  local function verify_stable_map(cursor_x, cursor_y, frames, failure_event)
+    neutral()
+    for _ = 1, frames do
+      if memory.readbyte(0x727) ~= 7
+          or memory.readbyte(0x70A) ~= 0
+          or memory.readbyte(0x79) ~= cursor_x
+          or memory.readbyte(0x75) ~= cursor_y
+          or not alive() then
+        log_state(failure_event, "failure_classification=unstable_post_clear")
+        return false
+      end
+      advance_frame()
+    end
+    return true
+  end
+
+  local function use_map_item(item_id, select_right, event_prefix)
+    local before = inventory_item_count(item_id)
+    if before < 1 then
+      log_state(
+        event_prefix .. "_missing_item",
+        "failure_classification=wrong_inventory item_id=" .. tostring(item_id)
+          .. " item_before=" .. tostring(before)
+      )
+      return false
+    end
+    press("B", 18, event_prefix .. "_inventory_open")
+    advance(300, event_prefix .. "_inventory_settle")
+    if select_right then
+      press("right", 18, event_prefix .. "_inventory_select")
+      advance(60, event_prefix .. "_inventory_selected")
+    end
+    press("A", 18, event_prefix .. "_inventory_use")
+    advance(60, event_prefix .. "_inventory_use_settle")
+    if inventory_item_count(item_id) ~= before - 1 then
+      log_state(
+        event_prefix .. "_unexplained_inventory",
+        "failure_classification=unexplained_inventory_transition item_id="
+          .. tostring(item_id)
+      )
+      return false
+    end
+    return true
+  end
+
+  local function collect_hand_reward(trap, leaf_before, max_frames)
+    local reward_seen = false
+    local reward_logged = false
+    for _ = 1, max_frames do
+      if memory.readbyte(0x70A) == 0 then break end
+      if not alive() then
+        log_state(
+          "post_probe_world_8_hand_trap_" .. trap .. "_death",
+          "failure_classification=death"
+        )
+        return false
+      end
+      local m = mario()
+      local reward = nearest_object_id_between(m, 82, -240, 240, 240)
+      if reward ~= nil then
+        reward_seen = true
+        local target_x = reward.y >= 320 and 200 or 208
+        held.right = m.x < target_x - 4
+        held.left = m.x > target_x + 4
+        held.B = false
+        held.A = m.x >= 120
+          and (m.air == 0 or memory.readbytesigned(0xCF) < 0)
+        held.up = false
+        held.down = false
+      else
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        held.up = false
+        held.down = false
+      end
+      if reward_seen
+          and not reward_logged
+          and inventory_item_count(3) == leaf_before + 1 then
+        reward_logged = true
+        log_state(
+          "post_probe_world_8_hand_trap_" .. trap .. "_reward",
+          "evidence=game_owned_reward_object_82_and_inventory_transition reward_object_id=82 reward_item_id=3 leaf_before="
+            .. tostring(leaf_before)
+            .. " leaf_after=" .. tostring(inventory_item_count(3))
+        )
+      end
+      apply()
+      advance_frame()
+    end
+    neutral()
+    if memory.readbyte(0x70A) ~= 0
+        or not reward_seen
+        or inventory_item_count(3) ~= leaf_before + 1 then
+      log_state(
+        "post_probe_world_8_hand_trap_" .. trap .. "_missing_reward",
+        "failure_classification=missing_reward reward_seen="
+          .. tostring(reward_seen and 1 or 0)
+          .. " leaf_before=" .. tostring(leaf_before)
+          .. " leaf_after=" .. tostring(inventory_item_count(3))
+      )
+      return false
+    end
+    if not reward_logged then
+      log_state(
+        "post_probe_world_8_hand_trap_" .. trap .. "_reward",
+        "evidence=game_owned_reward_object_82_and_inventory_transition reward_object_id=82 reward_item_id=3 leaf_before="
+          .. tostring(leaf_before)
+          .. " leaf_after=" .. tostring(inventory_item_count(3))
+      )
+    end
+    return true
+  end
+
+  if memory.readbyte(0x727) ~= 7
+      or memory.readbyte(0x70A) ~= 0
+      or memory.readbyte(0x79) ~= 128
+      or memory.readbyte(0x75) ~= 112 then
+    log_state(
+      "post_probe_world_8_hand_trap_right_wrong_map",
+      "failure_classification=wrong_map expected_cursor_x=128 expected_cursor_y=112"
+    )
+    return
+  end
+
+  -- Take the accepted post-Battleships transfer pipe to the Hand Trap map.
+  advance(1, "post_probe_world_8_hand_traps_transfer_rng_alignment")
+  press("up", 18, "post_probe_world_8_hand_traps_transfer_up_1")
+  advance(90, "post_probe_world_8_hand_traps_transfer_after_up_1")
+  press("up", 18, "post_probe_world_8_hand_traps_transfer_up_2")
+  advance(90, "post_probe_world_8_hand_traps_transfer_after_up_2")
+  if memory.readbyte(0x79) ~= 128 or memory.readbyte(0x75) ~= 48 then
+    log_state("post_probe_world_8_hand_trap_right_wrong_map")
+    return
+  end
+  press("A", 18, "post_probe_world_8_hand_traps_transfer_A")
+  local transfer_entry = wait_for_stage(14, 0, 240, 300)
+  if transfer_entry == nil then
+    log_state("post_probe_world_8_hand_trap_right_wrong_stage")
+    return
+  end
+  advance(90, "post_probe_world_8_hand_traps_transfer_entry_settle")
+  local transfer_jump_frames = 0
+  local transfer_jump_started = false
+  local transfer_pipe_top = false
+  for _ = 1, 3600 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() then
+      log_state("post_probe_world_8_hand_trap_right_death")
+      return
+    end
+    local m = mario()
+    if not transfer_jump_started and m.x >= 160 and m.air == 0 then
+      transfer_jump_started = true
+      transfer_jump_frames = 72
+    end
+    if transfer_jump_started and transfer_jump_frames == 0
+        and m.air == 0 and m.y <= 360 then
+      transfer_pipe_top = true
+    end
+    held.right = (not transfer_pipe_top) or m.x < 212
+    held.left = transfer_pipe_top and m.x > 220
+    held.B = not transfer_pipe_top
+    held.A = transfer_jump_frames > 0
+    held.down = transfer_pipe_top and m.x >= 212 and m.x <= 220
+    held.up = false
+    if transfer_jump_frames > 0 then transfer_jump_frames = transfer_jump_frames - 1 end
+    apply()
+    advance_frame()
+  end
+  if not verify_stable_map(192, 112, 180, "post_probe_world_8_hand_trap_right_unstable_map") then
+    return
+  end
+
+  -- Right Hand Trap: use the remaining Star, deliberately enter, clear the
+  -- four Brothers, then center under the orange ceiling pipe.
+  log_state(
+    "post_probe_world_8_hand_trap_right_started",
+    "cursor_x=192 cursor_y=112 input_trace=left_then_inventory_B_A_then_entry_A"
+  )
+  press("left", 18, "post_probe_world_8_hand_trap_right_map_left")
+  advance(60, "post_probe_world_8_hand_trap_right_map_left_settle")
+  if memory.readbyte(0x79) ~= 160 or memory.readbyte(0x75) ~= 112 then
+    log_state("post_probe_world_8_hand_trap_right_wrong_tile")
+    return
+  end
+  if not use_map_item(9, true, "post_probe_world_8_hand_trap_right_star") then return end
+  press("A", 18, "post_probe_world_8_hand_trap_right_deliberate_A")
+  local right_entry = wait_for_stage(11, 24, 320, 300)
+  if right_entry == nil then
+    log_state("post_probe_world_8_hand_trap_right_wrong_stage")
+    return
+  end
+  log_state(
+    "post_probe_world_8_hand_trap_right_entered",
+    "evidence=deliberate_A_input_from_observed_hand_tile input_trace=left,B,A,A target_cursor_x=160 target_cursor_y=112 entry_x=24 entry_y=320 entry_air=0 stage_identity=world_8_hand_trap_right"
+  )
+  local right_max_x = right_entry.x
+  local right_last_x = right_entry.x
+  local right_stuck = 0
+  local right_jump = 0
+  local right_cooldown = 0
+  local right_backup = 0
+  local right_brake = 0
+  local right_boomerang_fixed = false
+  local right_rhythm_frame = 0
+  local right_rhythm_logged = false
+  local right_sledge_approach_started = false
+  local right_sledge_approach_release = 0
+  local right_sledge_approach_jump = 0
+  local right_sledge_fixed = false
+  local right_sledge_descent_seen = false
+  local right_sledge_stomped = false
+  local right_pipe_transition = false
+  local right_pipe_frame = 0
+  for frame = 1, 2400 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() then
+      log_state("post_probe_world_8_hand_trap_right_death", "failure_classification=death")
+      return
+    end
+    local m = mario()
+    if right_pipe_transition and m.x < 100 then break end
+    if m.x < 8192 and m.y ~= 0 then right_max_x = math.max(right_max_x, m.x) end
+    if right_max_x >= 300 and not right_boomerang_fixed then
+      right_boomerang_fixed = true
+      log_state(
+        "post_probe_world_8_hand_trap_right_gameplay",
+        "evidence=normal_enemy_traversal brother_enemy_ids=-121,-127,-126,-122 max_x="
+          .. tostring(right_max_x)
+      )
+    end
+    if not right_sledge_fixed and m.x >= 800 then
+      right_sledge_fixed = true
+      log_state(
+        "post_probe_world_8_hand_trap_right_sledge_boundary",
+        "rhythm_frame=" .. tostring(right_rhythm_frame)
+          .. " " .. object_summary_between(m, -240, 320, 240)
+      )
+      for sledge_frame = 1, 360 do
+        if not alive() then
+          log_state("post_probe_world_8_hand_trap_right_death")
+          return
+        end
+        local stomp_mario = mario()
+        local sledge = nearest_object_id_between(stomp_mario, -122, -240, 240, 240)
+        if not has_active_enemy_id(-122) then break end
+        local y_speed = memory.readbytesigned(0xCF)
+        if y_speed >= 8 then right_sledge_descent_seen = true end
+        if right_sledge_descent_seen
+            and not right_sledge_stomped
+            and y_speed <= -48
+            and stomp_mario.air ~= 0 then
+          right_sledge_stomped = true
+          log_state(
+            "post_probe_world_8_hand_trap_right_sledge_stomp",
+            "evidence=observed_falling_to_upward_bounce_transition"
+          )
+        end
+        if sledge_frame % 10 == 0 then
+          log_state(
+            "post_probe_world_8_hand_trap_right_sledge_tick",
+            "sledge_frame=" .. tostring(sledge_frame)
+              .. " y_speed=" .. tostring(y_speed)
+              .. " sledge_dx=" .. tostring(sledge ~= nil and sledge.dx or 999)
+              .. " sledge_dy=" .. tostring(sledge ~= nil and sledge.dy or 999)
+          )
+        end
+        if right_sledge_stomped then
+          -- Use the verified stomp bounce to clear the Brother's collision
+          -- box and reach the safe bricks underneath the orange pipe.
+          held.right = true
+          held.left = false
+          held.A = y_speed < 0
+        elseif sledge == nil then
+          held.right = false
+          held.left = true
+          held.A = stomp_mario.air == 0
+        elseif stomp_mario.air == 0 then
+          held.right = sledge.dx > 24
+          held.left = sledge.dx < -24
+          held.A = math.abs(sledge.dx) <= 72
+        elseif y_speed < 0 then
+          -- Keep lateral separation while rising, then align only on the
+          -- descent. Charging directly underneath pins Mario against the
+          -- Brother and misses the stomp.
+          if sledge.dy >= 10 then
+            held.right = sledge.dx > 2
+            held.left = sledge.dx < -2
+          else
+            held.right = sledge.dx > 64
+            held.left = sledge.dx < 48
+          end
+          held.A = true
+        else
+          held.right = sledge.dx > 2
+          held.left = sledge.dx < -2
+          held.A = false
+        end
+        held.B = held.right or held.left
+        held.up = false
+        held.down = false
+        apply()
+        advance_frame()
+      end
+      if has_active_enemy_id(-122) then
+        log_state("post_probe_world_8_hand_trap_right_gameplay_stall")
+        return
+      end
+      m = mario()
+      log_state(
+        "post_probe_world_8_hand_trap_right_sledge_defeated_boundary",
+        object_summary_between(m, -240, 320, 240)
+      )
+    end
+    if right_sledge_fixed then
+      right_pipe_frame = right_pipe_frame + 1
+      right_pipe_transition = right_pipe_transition or m.x >= 994
+      local align = right_pipe_transition
+      local centered = align and m.x >= 982 and m.x <= 986
+      held.right = (not align) or m.x < 982
+      held.left = align and m.x > 986
+      held.B = not align
+      held.A = (not align and right_pipe_frame % 42 < 20) or centered
+      held.up = centered
+      held.down = false
+      if right_pipe_frame % 30 == 0 then
+        log_state(
+          "post_probe_world_8_hand_trap_right_pipe_tick",
+          "pipe_frame=" .. tostring(right_pipe_frame)
+            .. " align_started=" .. tostring(align and 1 or 0)
+            .. " centered=" .. tostring(centered and 1 or 0)
+        )
+      end
+    elseif m.x >= 550 then
+      if not right_rhythm_logged then
+        right_rhythm_logged = true
+        log_state(
+          "post_probe_world_8_hand_trap_right_rhythm_boundary",
+          object_summary_between(m, -240, 320, 240)
+        )
+      end
+      right_rhythm_frame = right_rhythm_frame + 1
+      if not right_sledge_approach_started and m.x >= 720 then
+        right_sledge_approach_started = true
+        right_sledge_approach_release = 6
+        right_sledge_approach_jump = 64
+      end
+      if right_sledge_approach_started
+          and right_sledge_approach_release > 0 then
+        held.right = false
+        held.left = false
+        held.B = false
+        held.A = false
+        if m.air == 0 then
+          right_sledge_approach_release = right_sledge_approach_release - 1
+        end
+      elseif right_sledge_approach_started
+          and right_sledge_approach_jump > 0 then
+        held.right = true
+        held.left = false
+        held.B = true
+        held.A = true
+        right_sledge_approach_jump = right_sledge_approach_jump - 1
+      elseif not right_sledge_approach_started then
+        held.right = true
+        held.left = false
+        held.B = true
+        held.A = right_rhythm_frame % 42 < 20
+      else
+        held.right = true
+        held.left = false
+        held.B = true
+        held.A = false
+      end
+      held.up = false
+      held.down = false
+    else
+      if math.abs(m.x - right_last_x) <= 2 then right_stuck = right_stuck + 1 else right_stuck = 0 end
+      right_last_x = m.x
+      local enemy = nearest_negative_id_enemy_between(m, -180, 120)
+      if frame <= 360 and m.x < 300 then enemy = nil end
+      if right_jump == 0 and right_backup == 0 and right_brake == 0
+          and enemy == nil and right_stuck > 12 then
+        if m.x < 300 then
+          right_jump = 72
+          right_cooldown = 90
+        else
+          right_backup = 180
+        end
+        right_stuck = 0
+      end
+      if right_jump == 0 and right_cooldown == 0 and right_backup == 0
+          and right_brake == 0 and m.air == 0
+          and enemy ~= nil and math.abs(enemy.dx) < 70 then
+        right_jump = 48
+        right_cooldown = 64
+      end
+      if right_backup > 0 then
+        held.right = false
+        held.left = true
+      elseif right_brake > 0 then
+        held.right = false
+        held.left = false
+      else
+        held.right = enemy == nil or enemy.dx >= 0
+        held.left = enemy ~= nil and enemy.dx < 0
+      end
+      held.B = held.right or held.left
+      held.A = right_jump > 0
+      held.up = false
+      held.down = false
+      if right_jump > 0 then right_jump = right_jump - 1 end
+      if right_backup > 0 then
+        if m.x <= 430 then
+          right_backup = 0
+          right_brake = m.y <= 340 and 8 or 24
+        else
+          right_backup = right_backup - 1
+          if right_backup == 0 then right_brake = m.y <= 340 and 8 or 24 end
+        end
+      elseif right_brake > 0 then
+        right_brake = right_brake - 1
+        if right_brake == 0 then
+          right_jump = 72
+          right_cooldown = 90
+        end
+      end
+      if right_cooldown > 0 then right_cooldown = right_cooldown - 1 end
+    end
+    apply()
+    advance_frame()
+  end
+  if memory.readbyte(0x70A) == 0 then
+    log_state("post_probe_world_8_hand_trap_right_missing_reward")
+    return
+  end
+  if not collect_hand_reward("right", 0, 900) then return end
+  if not verify_stable_map(160, 112, 180, "post_probe_world_8_hand_trap_right_unstable_post_clear") then return end
+  log_state(
+    "post_probe_world_8_hand_trap_right_post_clear",
+    "evidence=stable_world_8_map_after_game_clear clear_indicator=consumed_hand_tile_and_map_return stable_frames=180 lives_unchanged=1 player_is_dying=0"
+  )
+  advance(328, "post_probe_world_8_hand_trap_center_map_timing_wait")
+
+  -- Center Hand Trap: spend the awarded Leaf, time the lava platforms, and
+  -- release movement before jumping straight up through the orange pipe.
+  log_state("post_probe_world_8_hand_trap_center_started", "cursor_x=160 cursor_y=112")
+  if not use_map_item(3, true, "post_probe_world_8_hand_trap_center_leaf") then return end
+  press("left", 18, "post_probe_world_8_hand_trap_center_map_left")
+  advance(60, "post_probe_world_8_hand_trap_center_map_left_settle")
+  if memory.readbyte(0x79) ~= 128 or memory.readbyte(0x75) ~= 112 then
+    log_state("post_probe_world_8_hand_trap_center_wrong_tile")
+    return
+  end
+  press("A", 18, "post_probe_world_8_hand_trap_center_deliberate_A")
+  local center_entry = wait_for_stage(11, 24, 368, 300)
+  if center_entry == nil then
+    log_state("post_probe_world_8_hand_trap_center_wrong_stage")
+    return
+  end
+  log_state(
+    "post_probe_world_8_hand_trap_center_entered",
+    "evidence=deliberate_A_input_from_observed_hand_tile input_trace=B,right,A,left,A target_cursor_x=128 target_cursor_y=112 entry_x=24 entry_y=368 entry_air=0 stage_identity=world_8_hand_trap_center"
+  )
+  advance(390, "post_probe_world_8_hand_trap_center_entry_settle")
+  local center_pipe = false
+  local center_release = 0
+  local center_ground_release = 0
+  local center_jump_started = false
+  local center_was_airborne = false
+  local center_reward_room = false
+  local center_gameplay = false
+  for frame = 1, 2400 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() then
+      log_state("post_probe_world_8_hand_trap_center_death")
+      return
+    end
+    local m = mario()
+    if center_pipe and m.x < 100 then center_reward_room = true; break end
+    if m.x >= 340 and not center_gameplay then
+      center_gameplay = true
+      log_state(
+        "post_probe_world_8_hand_trap_center_gameplay",
+        "evidence=normal_lava_platform_traversal hazard_identity=lava_platforms_and_podoboos"
+      )
+    end
+    if m.x >= 994 and not center_pipe then
+      center_pipe = true
+      center_release = 18
+    end
+    local centered = center_pipe and m.x >= 982 and m.x <= 986
+    if center_release > 0 then center_release = center_release - 1 end
+    held.right = (not center_pipe) or m.x < 982
+    held.left = center_pipe and m.x > 986
+    held.B = not center_pipe
+    held.A = not center_pipe
+      and ((m.x < 300 and frame % 54 < 30)
+        or (m.x >= 340 and (m.air == 0 or memory.readbytesigned(0xCF) < 0 or frame % 2 < 1)))
+    if centered and center_release == 0 then
+      if m.air ~= 0 then
+        center_was_airborne = true
+      elseif (not center_jump_started) or center_was_airborne then
+        center_was_airborne = false
+        center_jump_started = true
+        center_ground_release = 6
+      end
+    end
+    if center_pipe then
+      held.A = centered and center_release == 0 and center_ground_release == 0
+    end
+    held.up = centered and center_release == 0
+    if center_ground_release > 0 then
+      center_ground_release = center_ground_release - 1
+      held.A = false
+    end
+    held.down = false
+    apply()
+    advance_frame()
+  end
+  if not center_reward_room then
+    log_state(
+      "post_probe_world_8_hand_trap_center_timeout",
+      "failure_classification=controller_timeout"
+    )
+    return
+  end
+  if not collect_hand_reward("center", 0, 900) then return end
+  if not verify_stable_map(128, 112, 180, "post_probe_world_8_hand_trap_center_unstable_post_clear") then return end
+  log_state(
+    "post_probe_world_8_hand_trap_center_post_clear",
+    "evidence=stable_world_8_map_after_game_clear clear_indicator=consumed_hand_tile_and_map_return stable_frames=180 lives_unchanged=1 player_is_dying=0"
+  )
+  advance(90, "post_probe_world_8_hand_trap_left_map_timing_wait")
+
+  -- Left Hand Trap: use the remaining Star, cross the broken bridge with
+  -- separate launch windows, and center at x=2012 under the exit tube.
+  log_state("post_probe_world_8_hand_trap_left_started", "cursor_x=128 cursor_y=112")
+  if not use_map_item(3, true, "post_probe_world_8_hand_trap_left_leaf") then return end
+  advance(180, "post_probe_world_8_hand_trap_left_leaf_route_wait")
+  press("left", 18, "post_probe_world_8_hand_trap_left_map_left")
+  advance(60, "post_probe_world_8_hand_trap_left_map_left_settle")
+  if memory.readbyte(0x79) ~= 96 or memory.readbyte(0x75) ~= 112 then
+    log_state("post_probe_world_8_hand_trap_left_wrong_tile")
+    return
+  end
+  press("A", 18, "post_probe_world_8_hand_trap_left_deliberate_A")
+  local left_entry = wait_for_stage(11, 24, 320, 360)
+  if left_entry == nil then
+    log_state("post_probe_world_8_hand_trap_left_wrong_stage")
+    return
+  end
+  log_state(
+    "post_probe_world_8_hand_trap_left_entered",
+    "evidence=deliberate_A_input_from_observed_hand_tile input_trace=B,A,left,A target_cursor_x=96 target_cursor_y=112 entry_x=24 entry_y=320 entry_air=0 stage_identity=world_8_hand_trap_left"
+  )
+  advance(208, "post_probe_world_8_hand_trap_left_entry_settle")
+  local left_pipe = false
+  local left_pipe_grounded = 0
+  local left_pipe_jump = false
+  local left_pipe_jump_frames = 0
+  local left_reward_room = false
+  local left_platform = false
+  local left_jump_frames = 0
+  local left_ground_release = 0
+  local left_was_airborne = false
+  local left_jump_count = 0
+  local left_waiting_launch = false
+  local left_gameplay = false
+  local left_opening_pause = 0
+  local left_opening_pause_done = false
+  local left_first_gap_pause = 0
+  local left_first_gap_pause_done = false
+  local left_first_bridge_wait = 0
+  local left_first_bridge_ready = false
+  local left_first_bridge_jump = 0
+  local left_second_bridge_wait = 0
+  local left_second_bridge_safe_frames = 0
+  local left_second_bridge_started = false
+  local left_second_bridge_ready = false
+  local left_second_bridge_jump = 0
+  for frame = 1, 2600 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() then
+      log_state("post_probe_world_8_hand_trap_left_death")
+      return
+    end
+    local m = mario()
+    if left_pipe and m.x < 300 and nearest_object_id_between(m, 82, -240, 240, 240) ~= nil then
+      left_reward_room = true
+      break
+    end
+    if m.x >= 1340 and not left_gameplay then
+      left_gameplay = true
+      log_state(
+        "post_probe_world_8_hand_trap_left_gameplay",
+        "evidence=normal_broken_bridge_traversal hazard_identity=broken_bridge_and_jumping_cheep_cheeps"
+      )
+    end
+    if m.x >= 1995 then left_pipe = true end
+    held.right = not left_pipe
+    held.left = false
+    held.B = not left_pipe
+    held.A = (m.x < 150 or m.x >= 340)
+      and (m.air == 0 or memory.readbytesigned(0xCF) < 0)
+    held.down = false
+    held.up = false
+    if not left_opening_pause_done and m.x >= 170 then
+      left_opening_pause_done = true
+      left_opening_pause = 8
+    end
+    if left_opening_pause > 0 then
+      left_opening_pause = left_opening_pause - 1
+      held.right = false
+      held.B = false
+    end
+    if not left_first_gap_pause_done and m.x >= 370 then
+      left_first_gap_pause_done = true
+      left_first_gap_pause = 5
+    end
+    if left_first_gap_pause > 0 then
+      left_first_gap_pause = left_first_gap_pause - 1
+      held.right = false
+      held.B = false
+    end
+    if not left_first_bridge_ready and m.x >= 400 and m.x < 650 then
+      -- Brake onto the last wide block instead of carrying a blind jump into
+      -- the first broken span.  Wait out one Cheep-Cheep cycle, release A,
+      -- then launch from observed solid footing.
+      held.right = false
+      held.left = m.air ~= 0 and m.x > 430
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        left_first_bridge_wait = left_first_bridge_wait + 1
+        held.left = false
+        if left_first_bridge_wait >= 48 then
+          left_first_bridge_ready = true
+          left_first_bridge_jump = 64
+          log_state(
+            "post_probe_world_8_hand_trap_left_first_gap_launch",
+            "evidence=paused_on_observed_solid_footing_and_waited_for_cheep_cheep_cycle"
+          )
+        end
+      end
+    elseif left_first_bridge_jump > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = true
+      left_first_bridge_jump = left_first_bridge_jump - 1
+    end
+    local form = memory.readbyte(0xED)
+    if not left_second_bridge_started and m.x >= 800 and m.x < 1050
+        and m.air == 0 then
+      left_second_bridge_started = true
+      left_second_bridge_wait = 42
+    end
+    if left_second_bridge_started and not left_second_bridge_ready then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        left_second_bridge_wait = left_second_bridge_wait - 1
+        local second_bridge_fish = nearest_object_id_between(m, 118, -64, 120, 80)
+        if left_second_bridge_wait <= 12 and second_bridge_fish == nil then
+          left_second_bridge_safe_frames = left_second_bridge_safe_frames + 1
+        else
+          left_second_bridge_safe_frames = 0
+        end
+        if left_second_bridge_safe_frames >= 12 then
+          left_second_bridge_ready = true
+          left_second_bridge_jump = 72
+          log_state(
+            "post_probe_world_8_hand_trap_left_second_gap_launch",
+            "evidence=stood_on_observed_bridge_section_and_waited_for_cheep_cheeps"
+          )
+        end
+      end
+    elseif left_second_bridge_jump > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = true
+      left_second_bridge_jump = left_second_bridge_jump - 1
+    end
+    if m.x >= 1300 and not left_pipe then
+      if not left_platform and m.air == 0 then
+        left_platform = true
+        left_jump_count = 1
+      end
+      if left_platform then
+        if m.air ~= 0 then
+          left_was_airborne = true
+          left_jump_frames = left_jump_frames + 1
+        elseif left_was_airborne then
+          left_was_airborne = false
+          left_jump_frames = 0
+          left_ground_release = 2
+          left_jump_count = left_jump_count + 1
+          left_waiting_launch = true
+        end
+        local launch_target = left_jump_count == 2 and 1450 or m.x
+        if left_waiting_launch and m.x < launch_target then
+          held.right = true; held.left = false; held.B = true; held.A = false
+        elseif left_ground_release > 0 then
+          left_ground_release = left_ground_release - 1
+          held.right = true; held.left = false; held.B = true; held.A = false
+        elseif left_jump_frames <= 20 then
+          left_waiting_launch = false
+          held.right = false; held.left = true; held.B = false; held.A = true
+        else
+          held.right = true; held.left = false; held.B = true
+          held.A = m.air == 0 or memory.readbytesigned(0xCF) < 0 or frame % 2 < 1
+        end
+      end
+    elseif m.x >= 1260 and not left_platform and not left_pipe then
+      held.A = false
+    end
+    if m.x >= 1750 and not left_pipe then
+      -- The late bridge has uninterrupted forward landing options.  Do not
+      -- reuse the earlier alternating launch correction here: it can trap
+      -- Mario in a left/right oscillation on the same safe platform.
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = m.air == 0 or memory.readbytesigned(0xCF) < 0
+    end
+    if left_pipe then
+      if not left_pipe_jump then
+        held.right = false; held.left = false; held.B = false; held.A = false
+        if m.air == 0 then left_pipe_grounded = left_pipe_grounded + 1 else left_pipe_grounded = 0 end
+        if left_pipe_grounded >= 10 then left_pipe_jump = true end
+      else
+        left_pipe_jump_frames = left_pipe_jump_frames + 1
+        if m.air == 0 and left_pipe_jump_frames > 40 then
+          left_pipe_jump = false
+          left_pipe_grounded = 0
+          left_pipe_jump_frames = 0
+        end
+        held.right = m.x < 2012
+        held.left = m.x > 2012
+        held.B = false
+        held.A = left_pipe_jump
+        held.up = left_pipe_jump
+      end
+    end
+    local left_standing_for_fish = left_second_bridge_started
+      and not left_second_bridge_ready
+    if form == 3 and left_standing_for_fish then
+      -- Stay planted while repeatedly spinning the tail.  This actively
+      -- clears a safe window instead of waiting forever while fish cycle
+      -- through Mario's standing position.
+      held.B = frame % 16 < 8
+    end
+    apply()
+    advance_frame()
+  end
+  if not left_reward_room then
+    log_state(
+      "post_probe_world_8_hand_trap_left_timeout",
+      "failure_classification=controller_timeout"
+    )
+    return
+  end
+  if not collect_hand_reward("left", 0, 900) then return end
+  if not verify_stable_map(96, 112, 180, "post_probe_world_8_hand_trap_left_unstable_post_clear") then return end
+  log_state(
+    "post_probe_world_8_hand_trap_left_post_clear",
+    "evidence=stable_world_8_map_after_game_clear clear_indicator=consumed_hand_tile_and_map_return stable_frames=180 lives_unchanged=1 player_is_dying=0"
+  )
+
+  -- World 8-Jet.  Preserve and use the P-Wing here, then alternate controlled
+  -- advances with neutral beats for observed fire cycles and fresh footing.
+  advance(51, "post_probe_world_8_jet_map_timing_wait")
+  log_state("post_probe_world_8_jet_started", "cursor_x=96 cursor_y=112")
+  press("left", 18, "post_probe_world_8_jet_map_left")
+  advance(45, "post_probe_world_8_jet_map_after_left")
+  if memory.readbyte(0x79) ~= 64 or memory.readbyte(0x75) ~= 112 then
+    log_state("post_probe_world_8_jet_wrong_map")
+    return
+  end
+  if not use_map_item(8, false, "post_probe_world_8_jet_p_wing") then return end
+  log_state(
+    "post_probe_world_8_jet_p_wing_used",
+    "evidence=owner_directed_normal_inventory_use saved_from_battleships p_wing_remaining="
+      .. tostring(inventory_item_count(8))
+  )
+  press("up", 18, "post_probe_world_8_jet_map_up")
+  local jet_entry = wait_for_stage(10, 0, 320, 300)
+  if jet_entry == nil or memory.readbyte(0x1E) ~= 15 then
+    log_state("post_probe_world_8_jet_wrong_entry_state")
+    return
+  end
+  log_state(
+    "post_probe_world_8_jet_entered",
+    "evidence=normal_left_up_then_game_owned_automatic_entry source_cursor_x=96 source_cursor_y=112 map_node_x=64 map_node_y=80 map_enter_via_id=15 entry_x=0 entry_y=320 entry_air=0 stage_identity=world_8_jet"
+  )
+  local jet_max_x = 0
+  local jet_was_airborne = false
+  local jet_ground_release = 0
+  local jet_gameplay_logged = false
+  local jet_fire_wait = 0
+  local jet_fire_jump = 0
+  local jet_fire_jump_was_airborne = false
+  local jet_fire_release = 0
+  local function apply_jet_rhythm(frame)
+    local m = mario()
+    if memory.readbyte(0xED) == 3 and memory.readbyte(0x56E) == 255 then
+      -- P-Wing flight is altitude-controlled.  Short A pulses hold a safe
+      -- band below the top of the screen; releasing A above that band avoids
+      -- wrapping over the stage ceiling.  Regular neutral beats let flame
+      -- cycles and newly exposed footing advance without blind forward input.
+      local above_screen = m.y > 65000
+      local pause_phase = frame % 180
+      local fire_threat = nearest_object_id_between(m, -83, 0, 120, 90)
+        or nearest_object_id_between(m, 73, 0, 120, 90)
+      local deliberate_wait = (pause_phase >= 132 and pause_phase < 152)
+        or fire_threat ~= nil
+      local horizontal_target = deliberate_wait and 116 or 136
+      held.right = m.sx < horizontal_target
+      held.left = m.sx > horizontal_target + 28
+      held.B = held.right or held.left
+      if above_screen or m.y < 88 or m.sy < -48 then
+        held.A = false
+      elseif m.y > 156 then
+        held.A = frame % 4 ~= 3
+      elseif m.y > 118 then
+        held.A = frame % 3 ~= 2
+      else
+        held.A = frame % 2 == 0
+      end
+      held.down = false
+      held.up = false
+      return
+    end
+    if m.air ~= 0 then
+      jet_was_airborne = true
+    elseif jet_was_airborne then
+      jet_was_airborne = false
+      jet_ground_release = m.x >= 600 and 1 or 2
+    end
+    local target_left = 104
+    local target_right = 136
+    if m.x >= 400 and m.sy >= 80 then target_left = 156; target_right = 180 end
+    held.right = m.sx < target_left
+    held.left = m.sx > target_right
+    held.B = frame % 12 < 10
+    if jet_ground_release > 0 then
+      held.A = false
+      jet_ground_release = jet_ground_release - 1
+    elseif m.x >= 800 then
+      held.A = (frame + 24) % 48 < 24
+    elseif m.x < 240 then
+      held.A = frame % 48 < 30
+    else
+      held.A = m.air == 0 or memory.readbytesigned(0xCF) < 0 or frame % 8 < 4
+    end
+    held.down = false
+    held.up = false
+    local engine = nearest_object_id_between(m, -83, 0, 140, 160)
+    if m.x >= 580 and jet_fire_jump > 0 then
+      if m.air ~= 0 then
+        jet_fire_jump_was_airborne = true
+      elseif jet_fire_jump_was_airborne then
+        jet_fire_jump = 0
+        jet_fire_jump_was_airborne = false
+        jet_fire_release = 6
+      end
+    end
+    if m.x >= 580 and jet_fire_jump > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = true
+      jet_fire_jump = jet_fire_jump - 1
+    elseif jet_fire_release > 0 then
+      held.A = false
+      jet_fire_release = jet_fire_release - 1
+    elseif m.x >= 580 and engine ~= nil
+        and engine.dx >= 52 and engine.dx <= 132 then
+      held.right = false
+      held.left = m.sx > 150
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        jet_fire_wait = jet_fire_wait + 1
+        if jet_fire_wait >= 18 then
+          jet_fire_wait = 0
+          jet_fire_jump = 48
+          jet_fire_jump_was_airborne = false
+          held.right = true
+          held.left = false
+          held.B = true
+          held.A = true
+        end
+      else
+        held.right = true
+        held.left = false
+        held.B = true
+        held.A = frame % 2 == 0
+      end
+    else
+      jet_fire_wait = 0
+    end
+  end
+  for frame = 1, 5000 do
+    if not alive() then log_state("post_probe_world_8_jet_death"); return end
+    local m = mario()
+    if m.x < 8192 and m.y ~= 0 then jet_max_x = math.max(jet_max_x, m.x) end
+    if jet_max_x >= 420 and not jet_gameplay_logged then
+      jet_gameplay_logged = true
+      log_state(
+        "post_probe_world_8_jet_gameplay",
+        "evidence=observed_pause_and_advance_autoscroller_controller pacing=hazard_wait_opening_wait_controlled_advance object_set_identity=10 p_wing_active=1 max_x="
+          .. tostring(jet_max_x)
+      )
+    end
+    apply_jet_rhythm(frame)
+    apply()
+    advance_frame()
+    if jet_max_x >= 2900 then break end
+  end
+  if jet_max_x < 2900 then
+    log_state("post_probe_world_8_jet_gameplay_stall", "max_x=" .. tostring(jet_max_x))
+    return
+  end
+  local jet_pipe_jump = 0
+  local jet_pipe_right = false
+  local boss_seen = false
+  local boss_room_logged = false
+  local boss_room_frames = 0
+  local boss_defeated = false
+  local boss_last_state = nil
+  local boss_stomp_transitions = 0
+  local boss_dive_frames = 0
+  local jet_clear_logged = false
+  local returned_to_map = false
+  for frame = 600, 3000 do
+    local object_set = memory.readbyte(0x70A)
+    if object_set == 0 then returned_to_map = true; break end
+    if not alive() then log_state("post_probe_world_8_jet_death"); return end
+    local m = mario()
+    if m.x < 8192 and m.y ~= 0 then jet_max_x = math.max(jet_max_x, m.x) end
+    if jet_max_x >= 2800 and m.x < 400 then
+      boss_room_frames = boss_room_frames + 1
+      local boss_enemy = nearest_object_id_between(m, 76, -320, 320, 500)
+      local defeated_orb = nearest_object_id_between(m, 74, -320, 320, 500)
+      local boss_state = object_internal_state(76)
+      if boss_enemy ~= nil then boss_seen = true end
+      if boss_enemy ~= nil and not boss_room_logged then
+        boss_room_logged = true
+        log_state(
+          "post_probe_world_8_jet_boss_room_entered",
+          "evidence=normal_end_pipe_transition boss_object_id_76_active=1"
+        )
+      end
+      if boss_state ~= nil and boss_state ~= boss_last_state then
+        if boss_last_state == 4 and boss_state == 0 then
+          boss_stomp_transitions = boss_stomp_transitions + 1
+        end
+        boss_last_state = boss_state
+      end
+      if boss_seen and not has_active_enemy_id(76) and has_active_enemy_id(74)
+          and not boss_defeated then
+        boss_defeated = true
+        log_state(
+          "post_probe_world_8_jet_boss_defeated",
+          "evidence=game_owned_boss_object_76_to_defeated_transition_object_74 boss_object_id_76_active=0 defeated_transition_object_id_74_active=1 mario_alive=1 player_is_dying=0"
+        )
+      end
+      held.up = false
+      held.down = false
+      held.B = false
+      if boss_room_frames <= 90 then
+        -- Keep the direction of travel held through the ceiling-pipe exit;
+        -- releasing Down at the room transition leaves Mario inside the tube.
+        held.right = false
+        held.left = false
+        held.A = false
+        held.down = true
+      elseif boss_defeated and defeated_orb ~= nil then
+        held.right = defeated_orb.dx > 4
+        held.left = defeated_orb.dx < -4
+        held.A = false
+        held.B = false
+      elseif boss_defeated then
+        held.right = false
+        held.left = false
+        held.A = false
+        held.B = false
+      elseif boss_enemy ~= nil
+          and (boss_state == 4
+            or (boss_state == 0 and boss_stomp_transitions == 0)) then
+        local x_speed = memory.readbytesigned(0xBD)
+        local aligned = math.abs(boss_enemy.dx) <= 12
+        local safely_above = boss_enemy.dy >= 34
+        if math.abs(boss_enemy.dx) <= 20 then
+          held.right = x_speed < -3
+          held.left = x_speed > 3
+        else
+          held.right = boss_enemy.dx > 4
+          held.left = boss_enemy.dx < -4
+        end
+        held.B = math.abs(boss_enemy.dx) > 20
+        if boss_dive_frames == 0 and aligned and safely_above
+            and math.abs(x_speed) <= 5 then
+          boss_dive_frames = 72
+        end
+        if boss_dive_frames > 0
+            and boss_enemy.dy < 58
+            and math.abs(boss_enemy.dx) > 14 then
+          -- Break off a dive that has drifted beside Boom Boom; flap away
+          -- before their hitboxes meet, then line up another attempt.
+          boss_dive_frames = 0
+          held.A = true
+          held.B = true
+          held.right = boss_enemy.dx < 0
+          held.left = boss_enemy.dx >= 0
+        elseif boss_dive_frames > 0 then
+          -- Release the P-Wing flap only when Mario is centered and clearly
+          -- above the exposed boss.  This turns the hover into a real stomp.
+          held.A = false
+          held.B = false
+          boss_dive_frames = boss_dive_frames - 1
+        elseif boss_enemy.dy < 42 then
+          held.A = frame % 4 ~= 3
+        else
+          held.A = frame % 2 == 0
+        end
+      elseif boss_enemy ~= nil then
+        boss_dive_frames = 0
+        -- During the invulnerable shell/flying transition, create space and
+        -- regain height before the next exposed-state approach.
+        held.right = boss_enemy.dx < 0 and m.sx < 196
+        held.left = boss_enemy.dx >= 0 and m.sx > 60
+        held.A = m.y > 170 and frame % 4 ~= 3 or frame % 2 == 0
+      else
+        held.right = m.sx < 112
+        held.left = m.sx > 152
+        held.A = m.y > 170 and frame % 4 ~= 3 or frame % 2 == 0
+      end
+    else
+      apply_jet_rhythm(frame)
+      if jet_max_x >= 2900 and m.x >= 2800 then
+        if jet_pipe_jump == 0 and m.y >= 280 and m.air == 0
+            and (m.x < 2888 or m.x > 2898) then
+          jet_pipe_jump = 32
+          jet_pipe_right = m.x < 2888
+        end
+        if jet_pipe_jump > 0 then
+          held.right = jet_pipe_right
+          held.left = not jet_pipe_right
+          held.B = false
+          held.A = true
+          held.down = false
+          jet_pipe_jump = jet_pipe_jump - 1
+        else
+          held.right = m.x < 2888
+          held.left = m.x > 2898
+          held.B = false
+          held.A = false
+          held.down = m.x >= 2888 and m.x <= 2898 and m.air == 0
+        end
+      end
+    end
+    if boss_defeated and memory.readbyte(0x14) == 1 and not jet_clear_logged then
+      jet_clear_logged = true
+      log_state(
+        "post_probe_world_8_jet_clear",
+        "evidence=game_owned_return_map_transition_after_defeated_flying_boom_boom return_map=1 boss_object_id_76_active=0 defeated_transition_object_id_74_observed=1 mario_alive=1 player_is_dying=0"
+      )
+    end
+    apply()
+    advance_frame()
+  end
+  neutral()
+  if not returned_to_map or not boss_seen or not boss_defeated or not jet_clear_logged then
+    log_state(
+      "post_probe_world_8_jet_false_clear",
+      "failure_classification=false_clear returned_to_map=" .. tostring(returned_to_map and 1 or 0)
+        .. " boss_seen=" .. tostring(boss_seen and 1 or 0)
+        .. " boss_defeated=" .. tostring(boss_defeated and 1 or 0)
+    )
+    return
+  end
+  if not verify_stable_map(64, 80, 180, "post_probe_world_8_jet_unstable_post_clear") then return end
+  press("left", 18, "post_probe_world_8_jet_map_to_left_pipe")
+  advance(45, "post_probe_world_8_jet_map_left_pipe_settle")
+  press("A", 18, "post_probe_world_8_jet_map_enter_left_pipe")
+  advance(120, "post_probe_world_8_jet_map_dark_area_settle")
+  log_state("post_probe_world_8_jet_map_dark_area_entered")
+  local dark_area_returned = false
+  local dark_pipe_jump_frames = 0
+  for frame = 1, 800 do
+    if memory.readbyte(0x70A) == 0 then
+      dark_area_returned = true
+      break
+    end
+    if not alive() then
+      log_state("post_probe_world_8_jet_dark_area_death")
+      return
+    end
+    local dark_mario = mario()
+    held.up = false
+    held.A = false
+    if dark_mario.x >= 188 and dark_mario.x < 212
+        and dark_mario.air == 0 and dark_pipe_jump_frames == 0 then
+      dark_pipe_jump_frames = 32
+    end
+    if dark_pipe_jump_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = false
+      held.down = false
+      held.A = true
+      dark_pipe_jump_frames = dark_pipe_jump_frames - 1
+    elseif dark_mario.x < 212 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.down = false
+    elseif dark_mario.x > 222 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.down = false
+    else
+      held.right = false
+      held.left = false
+      held.B = false
+      held.down = dark_mario.air == 0
+    end
+    apply()
+    advance_frame()
+  end
+  neutral()
+  if not dark_area_returned then
+    log_state("post_probe_world_8_jet_dark_area_stall")
+    return
+  end
+  advance(120, "post_probe_world_8_jet_map_dark_area_exit_settle")
+  press("right", 18, "post_probe_world_8_jet_map_dark_area_right")
+  advance(45, "post_probe_world_8_jet_map_after_dark_area_right")
+  press("down", 18, "post_probe_world_8_jet_observe_world_8_1_access")
+  advance(60, "post_probe_world_8_jet_world_8_1_cursor_settle")
+  if memory.readbyte(0x79) ~= 64 or memory.readbyte(0x75) ~= 112 then
+    log_state("post_probe_world_8_jet_missing_world_8_1_access")
+    return
+  end
+  if not verify_stable_map(64, 112, 180, "post_probe_world_8_jet_unstable_world_8_1_boundary") then return end
+  log_state(
+    "post_probe_world_8_jet_post_clear",
+    "evidence=stable_world_8_map_with_world_8_1_accessible dark_area_traversed=1 world_8_1_accessible=1 world_8_1_entered=0 stable_frames=180 lives_unchanged=1 player_is_dying=0"
+  )
+end
+
 -- World 8-Battleships shares object set 10 with the accepted World 8 convoy
 -- and airship stages.  The stage is distinguished by the game-owned automatic
 -- map entry at node (128,112), its observed entry coordinates, and the normal
@@ -7237,28 +8468,66 @@ local function run_world_8_battleships_extension(discovery_mode)
     )
     return
   end
-  press("B", 18, "post_probe_world_8_battleships_inventory_open")
-  advance(300, "post_probe_world_8_battleships_inventory_settle")
-  press("right", 18, "post_probe_world_8_battleships_inventory_select_p_wing")
-  advance(60, "post_probe_world_8_battleships_inventory_selected_p_wing")
-  press("A", 18, "post_probe_world_8_battleships_inventory_use_p_wing")
-  advance(300, "post_probe_world_8_battleships_inventory_use_settle")
-  if inventory_item_count(8) ~= starting_p_wing_count - 1 then
+  local preserve_p_wing_for_jet = world_8_extension_mode == "hand_traps_jet"
+  if preserve_p_wing_for_jet then
     log_state(
-      "post_probe_world_8_battleships_wrong_powerup",
-      "failure_classification=wrong_entry_state evidence=p_wing_not_consumed_by_normal_inventory_input"
+      "post_probe_world_8_battleships_p_wing_preserved",
+      "evidence=owner_directed_underwater_battleships_route p_wing_count="
+        .. tostring(starting_p_wing_count)
     )
-    return
+  else
+    press("B", 18, "post_probe_world_8_battleships_inventory_open")
+    advance(300, "post_probe_world_8_battleships_inventory_settle")
+    press("right", 18, "post_probe_world_8_battleships_inventory_select_p_wing")
+    advance(60, "post_probe_world_8_battleships_inventory_selected_p_wing")
+    press("A", 18, "post_probe_world_8_battleships_inventory_use_p_wing")
+    advance(300, "post_probe_world_8_battleships_inventory_use_settle")
+    if inventory_item_count(8) ~= starting_p_wing_count - 1 then
+      log_state(
+        "post_probe_world_8_battleships_wrong_powerup",
+        "failure_classification=wrong_entry_state evidence=p_wing_not_consumed_by_normal_inventory_input"
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_battleships_p_wing_used",
+      "evidence=normal_inventory_B_right_A acquired_from_world_1_king p_wing_before="
+        .. tostring(starting_p_wing_count)
+        .. " p_wing_after=" .. tostring(inventory_item_count(8))
+    )
   end
-  log_state(
-    "post_probe_world_8_battleships_p_wing_used",
-    "evidence=normal_inventory_B_right_A acquired_from_world_1_king p_wing_before="
-      .. tostring(starting_p_wing_count)
-      .. " p_wing_after=" .. tostring(inventory_item_count(8))
-  )
   advance(180, "post_probe_world_8_battleships_entry_wait")
   press("right", 18, "post_probe_world_8_battleships_entry_right_1")
   advance(60, "post_probe_world_8_battleships_entry_after_right_1")
+  if preserve_p_wing_for_jet then
+    local starting_star_count = inventory_item_count(9)
+    if starting_star_count < 2 then
+      log_state(
+        "post_probe_world_8_battleships_missing_star",
+        "failure_classification=wrong_entry_state expected_star_count_at_least=2 observed_star_count="
+          .. tostring(starting_star_count)
+      )
+      return
+    end
+    press("B", 18, "post_probe_world_8_battleships_star_inventory_open")
+    advance(300, "post_probe_world_8_battleships_star_inventory_settle")
+    press("A", 18, "post_probe_world_8_battleships_star_inventory_use")
+    advance(60, "post_probe_world_8_battleships_star_inventory_use_settle")
+    if inventory_item_count(9) ~= starting_star_count - 1 then
+      log_state(
+        "post_probe_world_8_battleships_wrong_star",
+        "failure_classification=wrong_entry_state evidence=star_not_consumed_by_normal_inventory_input"
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_battleships_star_used",
+      "evidence=normal_inventory_B_A_immediately_before_entry for_exposed_first_ship star_before="
+        .. tostring(starting_star_count)
+        .. " star_after=" .. tostring(inventory_item_count(9))
+        .. " p_wing_preserved=1"
+    )
+  end
   press("right", 18, "post_probe_world_8_battleships_entry_right_2")
 
   local entered_stage = false
@@ -7332,6 +8601,20 @@ local function run_world_8_battleships_extension(discovery_mode)
   local returned_to_map = false
   local return_cursor_x = -1
   local return_cursor_y = -1
+  local battleships_dodge_frames = 0
+  local battleships_jump_release_frames = 0
+  local battleships_jump_was_airborne = false
+  local battleships_jump_forward = false
+  local battleships_swim_started = false
+  local battleships_cannon_wait_frames = 0
+  local battleships_first_gap_started = false
+  local battleships_first_gap_wait_frames = 0
+  local battleships_first_gap_runup_frames = 0
+  local battleships_first_gap_jump_frames = 0
+  local battleships_stern_ascent_started = false
+  local battleships_surface_reached = false
+  local battleships_stern_clearance_reached = false
+  local battleships_final_deck_reached = false
 
   for frame = 1, 9000 do
     local m = mario()
@@ -7410,6 +8693,10 @@ local function run_world_8_battleships_extension(discovery_mode)
       if boss_room_entered then
         boss_frames = boss_frames + 1
         local boss_enemy = nearest_enemy_between(m, -240, 240)
+        local defeated_orb = nil
+        if boss_enemy ~= nil and boss_enemy.id == 74 then
+          defeated_orb = boss_enemy
+        end
         local boss_state = object_internal_state(75)
         if boss_enemy ~= nil and boss_enemy.id ~= 75 then
           boss_enemy = nil
@@ -7461,7 +8748,12 @@ local function run_world_8_battleships_extension(discovery_mode)
               .. tostring(boss_stomp_transitions)
           )
         end
-        if not boss_ready then
+        if boss_defeated and defeated_orb ~= nil then
+          held.A = defeated_orb.dy < -12 and m.air == 0
+          held.B = false
+          held.right = defeated_orb.dx > 4
+          held.left = defeated_orb.dx < -4
+        elseif not boss_ready then
           held.A = false
           held.B = false
           held.right = false
@@ -7471,34 +8763,73 @@ local function run_world_8_battleships_extension(discovery_mode)
             log_state("post_probe_world_8_battleships_boss_ready")
           end
         elseif boss_enemy ~= nil and boss_state == 4 then
-          if m.air == 0 and boss_jump_frames == 0 then
-            boss_jump_frames = 32
+          if m.air ~= 0
+              and math.abs(boss_enemy.dx) < 22
+              and boss_enemy.dy < 24 then
+            -- Abort a side-on collision late in the jump. A safe stomp has
+            -- Mario clearly above Boom Boom; otherwise accelerate away.
+            held.A = false
+            held.B = true
+            held.right = boss_enemy.dx < 0 and m.sx < 216
+            held.left = boss_enemy.dx >= 0 and m.sx > 40
+            boss_jump_frames = 0
+          elseif math.abs(boss_enemy.dx) < 32 and m.air == 0 then
+            -- Do not re-engage immediately after a stomp. Make Boom Boom
+            -- uncover enough floor for a clean next jump first.
+            held.B = true
+            if boss_enemy.dx >= 0 and m.sx <= 44 then
+              held.A = true
+              held.right = true
+              held.left = false
+            elseif boss_enemy.dx < 0 and m.sx >= 212 then
+              held.A = true
+              held.right = false
+              held.left = true
+            else
+              held.A = false
+              held.right = boss_enemy.dx < 0 and m.sx < 216
+              held.left = boss_enemy.dx >= 0 and m.sx > 40
+            end
+            boss_jump_frames = 0
+          else
+            if m.air == 0 and boss_jump_frames == 0 then
+              boss_jump_frames = 32
+            end
+            held.A = boss_jump_frames > 0
+            if boss_jump_frames > 0 then
+              boss_jump_frames = boss_jump_frames - 1
+            end
+            held.B = false
+            held.right = boss_enemy.dx > 4
+            held.left = boss_enemy.dx < -4
           end
-          held.A = boss_jump_frames > 0
-          if boss_jump_frames > 0 then
-            boss_jump_frames = boss_jump_frames - 1
-          end
-          held.B = false
-          held.right = boss_enemy.dx > 4
-          held.left = boss_enemy.dx < -4
         elseif boss_enemy ~= nil then
-          if m.air == 0 and boss_jump_frames == 0 then
-            boss_jump_frames = 28
+          -- During the post-hit recovery state, stay grounded and create
+          -- separation instead of bouncing alongside the boss.
+          held.A = false
+          boss_jump_frames = 0
+          held.B = true
+          if boss_enemy.dx > 0 and m.sx <= 44 then
+            -- The recovery state is non-attacking; step away from the wall
+            -- with A released so the next jump has a fresh button edge.
+            held.A = false
+            held.right = true
+            held.left = false
+          elseif boss_enemy.dx < 0 and m.sx >= 212 then
+            held.A = false
+            held.right = false
+            held.left = true
+          else
+            held.right = boss_enemy.dx < 0 and m.sx < 216
+            held.left = boss_enemy.dx > 0 and m.sx > 40
           end
-          held.A = boss_jump_frames > 0
-          if boss_jump_frames > 0 then
-            boss_jump_frames = boss_jump_frames - 1
-          end
-          held.B = false
-          held.right = boss_enemy.dx < 0 and m.sx < 216
-          held.left = boss_enemy.dx > 0 and m.sx > 40
         else
           held.A = false
           held.B = false
           held.right = m.sx < 128
           held.left = m.sx > 160
         end
-      elseif pipe_started or max_x >= 2480 then
+      elseif not preserve_p_wing_for_jet and (pipe_started or max_x >= 2480) then
         if not pipe_started then
           pipe_started = true
           log_state(
@@ -7539,11 +8870,216 @@ local function run_world_8_battleships_extension(discovery_mode)
             and m.air == 0
             and m.y <= 260
         end
+      elseif pipe_started or battleships_surface_reached then
+        if not pipe_started then
+          pipe_started = true
+          log_state(
+            "post_probe_world_8_battleships_pipe_approach",
+            "evidence=surfaced_through_observed_last_gap_before_final_pipe_ship max_x="
+              .. tostring(max_x)
+          )
+        end
+        if not battleships_final_deck_reached
+            and m.x >= 2320
+            and m.air == 0
+            and m.y <= 320 then
+          battleships_final_deck_reached = true
+          log_state(
+            "post_probe_world_8_battleships_final_deck_reached",
+            "evidence=normal_swim_and_jump_out_of_last_water_gap"
+          )
+        end
+        held.B = false
+        if not battleships_final_deck_reached then
+          -- After autoscroll stops there is just enough water behind the
+          -- stern to rise above its hull before turning left onto the ship.
+          if not battleships_stern_clearance_reached and m.y <= 315 then
+            battleships_stern_clearance_reached = true
+            log_state(
+              "post_probe_world_8_battleships_stern_clearance",
+              "evidence=rose_above_observed_stern_hull_before_leftward_jump"
+            )
+          end
+          if battleships_stern_clearance_reached then
+            held.right = m.x < 2478
+            held.left = m.x > 2488
+            held.A = true
+          else
+            held.right = false
+            held.left = m.x > 2488
+            held.A = true
+          end
+          held.up = not battleships_stern_clearance_reached
+          held.down = false
+        elseif not pipe_jump_started then
+          -- The raised pipe blocks a walking approach from the stern. Pause
+          -- on the safe deck landing, then jump left onto its center.
+          held.right = m.x < 2478
+          held.left = m.x > 2492
+          held.A = false
+          held.up = false
+          held.down = false
+          if m.x >= 2470
+              and m.x <= 2500
+              and m.y >= 280
+              and m.air == 0 then
+            pipe_jump_started = true
+            pipe_jump_frames = 40
+            log_state(
+              "post_probe_world_8_battleships_pipe_jump",
+              "evidence=normal_jump_onto_observed_final_down_pipe"
+            )
+          end
+        else
+          held.right = m.x < 2422
+          held.left = m.x > 2434
+          if pipe_jump_frames > 0 then
+            held.A = true
+            held.down = false
+            pipe_jump_frames = pipe_jump_frames - 1
+          else
+            held.A = false
+            held.down = m.x >= 2420
+              and m.x <= 2436
+              and m.air == 0
+              and m.y <= 260
+          end
+        end
       else
         local current_form = memory.readbyte(0xED)
         local p_wing_flight = current_form == 3
           and memory.readbyte(0x56E) == 255
-        if p_wing_flight then
+        if preserve_p_wing_for_jet then
+          local battleships_threat = nearest_enemy_between(m, -24, 240)
+          if not battleships_swim_started and max_x >= 900 and m.y >= 300
+              and m.air ~= 0 then
+            battleships_swim_started = true
+            log_state(
+              "post_probe_world_8_battleships_swim_started",
+              "evidence=normal_fall_into_reddish_water_after_exposed_first_ship max_x="
+                .. tostring(max_x)
+            )
+          end
+          if not battleships_swim_started then
+            -- Cross only the exposed first ship while the deliberately used
+            -- Star is active. Short release beats keep the jumps bounded and
+            -- prevent a blind continuous-forward hold.
+            local threat_close = battleships_threat ~= nil
+              and (battleships_threat.id == -83 or battleships_threat.id == 80)
+              and battleships_threat.dx >= -8
+              and battleships_threat.dx <= 80
+              and math.abs(battleships_threat.dy) <= 80
+            local cannonball_close = battleships_threat ~= nil
+              and battleships_threat.id == -80
+              and battleships_threat.dx >= 0
+              and battleships_threat.dx <= 100
+              and math.abs(battleships_threat.dy) <= 80
+            if battleships_dodge_frames > 0 and m.air ~= 0 then
+              battleships_jump_was_airborne = true
+            elseif battleships_dodge_frames > 0
+                and battleships_jump_was_airborne
+                and battleships_jump_forward
+                and m.air == 0 then
+              battleships_dodge_frames = 0
+              battleships_jump_release_frames = 6
+              battleships_jump_was_airborne = false
+              battleships_jump_forward = false
+            end
+            if cannonball_close
+                and not battleships_first_gap_started
+                and battleships_cannon_wait_frames == 0 then
+              battleships_cannon_wait_frames = 25
+            end
+            if not battleships_first_gap_started
+                and max_x >= 770
+                and m.air == 0
+                and battleships_cannon_wait_frames == 0 then
+              battleships_first_gap_started = true
+              battleships_first_gap_wait_frames = 150
+              battleships_first_gap_runup_frames = 20
+              battleships_first_gap_jump_frames = 50
+            end
+            if threat_close
+                and battleships_dodge_frames == 0
+                and battleships_jump_release_frames == 0 then
+              battleships_dodge_frames = 18
+              battleships_jump_was_airborne = false
+              battleships_jump_forward = true
+            end
+            local battleships_target_left = max_x >= 740 and 228 or 200
+            local battleships_target_right = max_x >= 740 and 238 or 220
+            held.right = m.sx < battleships_target_left
+            held.left = m.sx > battleships_target_right
+            held.B = true
+            if battleships_cannon_wait_frames > 0 then
+              held.right = battleships_cannon_wait_frames < 25
+                and battleships_cannon_wait_frames >= 5
+              held.left = false
+              held.A = battleships_cannon_wait_frames < 25
+                and battleships_cannon_wait_frames >= 5
+              battleships_cannon_wait_frames = battleships_cannon_wait_frames - 1
+            elseif battleships_first_gap_wait_frames > 0 then
+              held.right = false
+              held.left = false
+              held.A = false
+              battleships_first_gap_wait_frames = battleships_first_gap_wait_frames - 1
+            elseif battleships_first_gap_runup_frames > 0 then
+              held.right = true
+              held.left = false
+              held.A = false
+              battleships_first_gap_runup_frames = battleships_first_gap_runup_frames - 1
+            elseif battleships_first_gap_jump_frames > 0 then
+              held.right = true
+              held.left = false
+              held.A = battleships_first_gap_jump_frames > 38
+              battleships_first_gap_jump_frames = battleships_first_gap_jump_frames - 1
+            elseif battleships_dodge_frames > 0 then
+              held.right = battleships_jump_forward
+              held.left = false
+              held.A = true
+              battleships_dodge_frames = battleships_dodge_frames - 1
+            elseif battleships_jump_release_frames > 0 then
+              held.A = false
+              battleships_jump_release_frames = battleships_jump_release_frames - 1
+            else
+              held.A = stage_frames % 54 < 18
+            end
+            held.down = false
+          else
+            -- Once Mario falls into the reddish water between ships one and
+            -- two, stay below the hulls and tap swim quickly enough to resist
+            -- their downward push. Continue under the final ship; once its
+            -- stern and the stopped autoscroll are observed, tap upward in
+            -- the open water behind it.
+            if not battleships_stern_ascent_started and max_x >= 2480 then
+              battleships_stern_ascent_started = true
+              log_state(
+                "post_probe_world_8_battleships_stern_wait",
+                "evidence=waited_for_end_of_autoscroll_behind_final_ship"
+              )
+            end
+            if battleships_stern_ascent_started then
+              held.right = true
+              held.left = false
+              held.A = stage_frames % 2 == 0
+              held.down = false
+              if m.x >= 2495 and m.y <= 350 then
+                battleships_surface_reached = true
+                log_state(
+                  "post_probe_world_8_battleships_surface_reached",
+                  "evidence=rapid_swim_strokes_in_open_water_behind_stern x="
+                    .. tostring(m.x)
+                )
+              end
+            else
+              held.right = true
+              held.left = false
+              held.A = m.y >= 395 and stage_frames % 4 < 2
+              held.down = m.y < 385
+            end
+            held.B = false
+          end
+        elseif p_wing_flight then
           held.right = m.sx < 185
           held.left = m.sx > 215
           held.B = true
@@ -7637,6 +9173,10 @@ local function run_world_8_battleships_extension(discovery_mode)
       .. " player_is_dying=0 starting_lives=" .. tostring(starting_lives)
       .. " current_lives=" .. tostring(memory.readbyte(0x736))
   )
+  if world_8_extension_mode == "hand_traps_jet" then
+    run_world_8_hand_traps_jet_extension()
+    return
+  end
 end
 
 local function run_1_castle_probe()
@@ -8056,6 +9596,7 @@ local function run_1_castle_probe()
   elseif world_8_extension_mode == "big_tanks"
     or world_8_extension_mode == "battleships"
     or world_8_extension_mode == "battleships_discovery"
+    or world_8_extension_mode == "hand_traps_jet"
   then
     if memory.readbyte(0x727) ~= 7
       or memory.readbyte(0x70A) ~= 0
@@ -8906,6 +10447,7 @@ local function run_1_castle_probe()
     )
     if world_8_extension_mode == "battleships"
       or world_8_extension_mode == "battleships_discovery"
+      or world_8_extension_mode == "hand_traps_jet"
     then
       run_world_8_battleships_extension(
         world_8_extension_mode == "battleships_discovery"

@@ -172,6 +172,28 @@ defeated-transition object id `74` while Mario is alive, then return flag
 `post_probe_world_8_battleships_post_clear` at cursor `(128,112)`, after a
 180-frame stable map observation with `hand_trap_entered=0`.
 
+## World 8 Hand Traps and Jet composed contract
+
+`world_8_hand_traps_jet` declares `world_8_battleships` as its unchanged prefix
+and adds exactly four ordered objective segments: right Hand Trap, center Hand
+Trap, left Hand Trap, and World 8-Jet. Resolution is exactly 21 segments and
+zero bridges; the 15-, 16-, and 17-segment goals remain unchanged.
+
+Each trap owns a distinct entry, gameplay, reward, and stable-map contract.
+All use object set `11`; right and left enter at `(24,320)`, while center enters
+at `(24,368)`. Their map cursors are `(160,112)`, `(128,112)`, and `(96,112)`.
+Every reward requires game object `82`, Super Leaf item id `3`, and an observed
+`0 -> 1` inventory transition. One trap's events cannot advance another trap's
+state machine.
+
+Jet requires the preserved P-Wing, automatic map entry id `15`, object set `10`,
+and entry `(0,320)`. Gameplay evidence identifies hazard-aware pause/advance
+pacing rather than continuous forward input. Flying Boom Boom must transition
+from active object `76` to defeated object `74` while Mario is alive, followed
+by the game-owned return-map flag. The final contract traverses the normal dark
+pipe tunnel and stops at World 8 map page 2 cursor `(64,112)`, with World 8-1
+accessible and unentered.
+
 ## Legacy diagnostic
 
 `data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its
@@ -193,8 +215,12 @@ explicitly selected, and its king marker remains local to that diagnostic.
 .venv/bin/python -m smb3_agent goal validate \
   data/goals/world_8_battleships.yaml
 .venv/bin/python -m smb3_agent goal status world_8_battleships
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_hand_traps_jet.yaml
+.venv/bin/python -m smb3_agent goal status world_8_hand_traps_jet
 ```
 
 `goal run world_8_double_whistle` executes the product preset directly and
 never routes to `world_1_king`. The Big Tanks and Battleships presets are
-selected only by their separate goals; neither may fall back to another preset.
+selected only by their separate goals. The Hand-Traps-and-Jet preset follows
+the same no-fallback rule.

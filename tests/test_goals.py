@@ -228,6 +228,70 @@ def test_world_8_battleships_is_the_seventeenth_cumulative_segment() -> None:
     assert big_tanks.segments[-1] == "world_8_big_tanks_clear"
 
 
+def test_world_8_hand_traps_jet_is_exact_21_segment_zero_bridge_extension() -> None:
+    arrival = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+    big_tanks = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    battleships = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
+    goal = load_goal_contract(Path("data/goals/world_8_hand_traps_jet.yaml"))
+
+    assert (len(arrival.segments), len(big_tanks.segments), len(battleships.segments)) == (
+        15,
+        16,
+        17,
+    )
+    assert goal.prefix_goal == battleships.id
+    assert goal.segments[:17] == battleships.segments
+    assert goal.segments[17:] == (
+        "world_8_hand_trap_right_clear",
+        "world_8_hand_trap_center_clear",
+        "world_8_hand_trap_left_clear",
+        "world_8_jet_clear",
+    )
+    assert len(goal.segments) == 21
+    assert goal.bridged_segments == ()
+    assert goal.preset == "fceux_world_8_hand_traps_jet"
+    assert goal.constraints["start_from_power_on"] is True
+    assert goal.constraints["stop_before_world_8_1_gameplay"] is True
+    assert goal.allowed_tactics["runtime_search"] is False
+    assert goal.allowed_tactics["savestate"] is False
+
+
+def test_hand_traps_jet_goal_requires_jet_clear_and_rejects_world_8_1_entry() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_hand_traps_jet.yaml"))
+    attempts = (AttemptSummary(1, True, False, True, True, 3090),)
+    required = (
+        "post_probe_world_8_battleships_post_clear",
+        "post_probe_world_8_battleships_p_wing_preserved",
+        "post_probe_world_8_battleships_star_used",
+        "post_probe_world_8_battleships_swim_started",
+        "post_probe_world_8_battleships_stern_wait",
+        "post_probe_world_8_hand_trap_right_post_clear",
+        "post_probe_world_8_hand_trap_center_post_clear",
+        "post_probe_world_8_hand_trap_left_post_clear",
+        "post_probe_world_8_jet_p_wing_used",
+        "post_probe_world_8_jet_entered",
+        "post_probe_world_8_jet_gameplay",
+        "post_probe_world_8_jet_boss_defeated",
+        "post_probe_world_8_jet_clear",
+        "post_probe_world_8_jet_post_clear",
+    )
+    accepted = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_jet_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required,
+    )
+    entered_later_level = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_jet_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required + ("post_probe_world_8_jet_world_8_1_entered",),
+    )
+
+    assert evaluate_success_metrics(contract, accepted) is True
+    assert evaluate_success_metrics(contract, entered_later_level) is False
+
+
 def test_battleships_goal_cannot_pass_on_prefix_or_entry_alone() -> None:
     contract = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
     attempts = (

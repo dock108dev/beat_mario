@@ -198,6 +198,25 @@ def test_route_lab_renders_and_switches_to_battleships() -> None:
     assert "World 2-first double-whistle route through World 8-Battleships" in html
 
 
+def test_route_lab_renders_exactly_21_hand_traps_jet_locations() -> None:
+    summary = build_control_panel_summary("world_8_hand_traps_jet")
+    html = render_lab_ui(goal_id="world_8_hand_traps_jet")
+
+    assert summary["goal_id"] == "world_8_hand_traps_jet"
+    assert len(summary["locations"]) == 21
+    assert [location["id"] for location in summary["locations"][-4:]] == [
+        "world_8_hand_trap_right",
+        "world_8_hand_trap_center",
+        "world_8_hand_trap_left",
+        "world_8_jet",
+    ]
+    assert "World 8 Right Hand Trap" in html
+    assert "World 8 Center Hand Trap" in html
+    assert "World 8 Left Hand Trap" in html
+    assert "World 8-Jet" in html
+    assert 'href="/?goal=world_8_hand_traps_jet&amp;location=world_8_jet"' in html
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

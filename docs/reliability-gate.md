@@ -4,7 +4,8 @@ Reliability is profile-driven by goal. The default Rank 27 profile proves
 repeatable arrival at the accepted World 8 map boundary. The separate Rank 28
 profile reuses that complete prefix, clears Big Tanks, and proves the normal
 post-clear map return. The Battleships profile adds one cumulative segment and
-stops before a Hand Trap.
+stops before a Hand Trap. The Hand-Traps-and-Jet profile adds four ordered
+segments and stops on accessible World 8-1 without entering it.
 
 ## Authoritative command
 
@@ -67,6 +68,21 @@ Wrong map, stage, entry state, death, false boss clear, missing or reordered
 events, stall, timeout, unexpected next-stage entry, screenshot omission or
 corruption, or fewer than three fresh successes fails the aggregate.
 
+The 21-segment cumulative profile is selected explicitly:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_hand_traps_jet \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+It requires at least three fresh one-attempt processes, all 21 ordered segment
+events, byte-identical logs, and exactly 17 focused screenshots per run. The
+accepted boundary is `world_number=7`, `object_set=0`, `map_page=2`, cursor
+`(64,112)`. Missing, duplicate, or corrupt images; reordered or cross-satisfied
+trap events; missing Leaf transitions; premature Jet; false boss defeat; death;
+or World 8-1 entry fails closed.
+
 ## Watchable command
 
 ```bash
@@ -97,6 +113,11 @@ Select `world_8_battleships` for the cumulative review. The accepted playback
 used the independently validated `--throttle-seconds 0.0001`, retained exactly
 five contact-sheet frames plus a 668-line tick trace, and remains `review_only`,
 `promotable=false`, and excluded from authoritative reliability.
+
+Select `world_8_hand_traps_jet` for the 21-segment review. The accepted playback
+used `--throttle-seconds 0.001`, retained exactly 17 focused frames plus a
+795-line tick trace and contact sheet, and is explicitly `review_only`,
+`promotable=false`, and `counts_toward_reliability=false`.
 
 ## Artifact layout
 
@@ -143,6 +164,11 @@ The Battleships roots are
 `artifacts/review/world_8_battleships/`; its authoritative runs also contain
 the five focused `evidence/png/` files.
 
+The Hand-Traps-and-Jet roots are
+`artifacts/reliability/world_8_hand_traps_jet/` and
+`artifacts/review/world_8_hand_traps_jet/`; every authoritative run contains
+exactly 17 ordered `evidence/png/` files.
+
 Each aggregate records goal and route-catalog hashes, source commit and dirty
 state, start/finish/elapsed time, run count, artifact paths, contract metrics,
 final events, structured-log SHA-256 values, success rate, and overall result.
@@ -169,6 +195,10 @@ missing-post-clear, unexpected-next-stage, and ambiguous-state outcomes.
 Battleships additionally rejects false boss clear, missing gameplay or clear,
 event reordering, screenshot integrity failures, and a batch below its
 three-fresh-success minimum.
+
+Hand-Traps-and-Jet additionally reports and enforces the final accepted map
+page/cursor boundary, rejects duplicate focused captures, and distinguishes the
+last good segment from the first missing milestone.
 
 Every run report includes the last accepted product event and segment, the first
 missing milestone, the first violated event when available, the final observable

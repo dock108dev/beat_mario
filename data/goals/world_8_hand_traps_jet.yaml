@@ -1,0 +1,91 @@
+id: world_8_hand_traps_jet
+game: smb3
+goal_type: product_goal
+execution_status: executable
+user_directive: From fresh power-on, complete the accepted Battleships route, deliberately clear the right, center, and left World 8 Hand Traps in order, clear World 8-Jet and its flying Boom Boom through normal gameplay, prove World 8-1 is accessible, and stop without entering it.
+
+objective:
+  type: route_completion
+  target: world_8_jet_post_clear
+
+runner:
+  backend: fceux
+  preset: fceux_world_8_hand_traps_jet
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_8_hand_traps_jet
+  require_perfect: true
+  executable: true
+
+route:
+  catalog: data/segments/world_8_double_whistle.yaml
+  prefix_goal: world_8_battleships
+  segments:
+    - id: world_8_hand_trap_right_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-10_right_hand_trap]
+    - id: world_8_hand_trap_center_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-10_center_hand_trap]
+    - id: world_8_hand_trap_left_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-10_left_hand_trap]
+    - id: world_8_jet_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-10_jet_flying_boom_boom_and_map_return]
+
+bridged_segments: []
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: false
+  preserve_attempt_artifacts: true
+  explain_failures: true
+  start_from_power_on: true
+  stop_before_world_8_1_gameplay: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: false
+  savestate: false
+  runtime_search: false
+  blind_state_mutation: false
+
+success_metrics:
+  - {id: accepted_battleships_prefix, type: event_present, value: post_probe_world_8_battleships_post_clear}
+  - {id: p_wing_saved_for_jet, type: event_present, value: post_probe_world_8_battleships_p_wing_preserved}
+  - {id: battleships_star_used, type: event_present, value: post_probe_world_8_battleships_star_used}
+  - {id: underwater_route_started, type: event_present, value: post_probe_world_8_battleships_swim_started}
+  - {id: underwater_route_reaches_stern, type: event_present, value: post_probe_world_8_battleships_stern_wait}
+  - {id: right_trap_clear, type: event_present, value: post_probe_world_8_hand_trap_right_post_clear}
+  - {id: center_trap_clear, type: event_present, value: post_probe_world_8_hand_trap_center_post_clear}
+  - {id: left_trap_clear, type: event_present, value: post_probe_world_8_hand_trap_left_post_clear}
+  - {id: p_wing_used_for_jet, type: event_present, value: post_probe_world_8_jet_p_wing_used}
+  - {id: exact_jet_entry, type: event_present, value: post_probe_world_8_jet_entered}
+  - {id: jet_gameplay, type: event_present, value: post_probe_world_8_jet_gameplay}
+  - {id: flying_boom_boom_defeated, type: event_present, value: post_probe_world_8_jet_boss_defeated}
+  - {id: jet_clear, type: event_present, value: post_probe_world_8_jet_clear}
+  - {id: stable_post_clear_boundary, type: final_event, value: post_probe_world_8_jet_post_clear}
+  - {id: no_world_8_1_gameplay, type: event_absent, value: post_probe_world_8_jet_world_8_1_entered}
+  - {id: accepted_observer_trace, type: summary_field, field: post_probe_clear, equals: true}
+
+recovery_policy:
+  wrong_map: {action: stop_and_review}
+  wrong_trap: {action: stop_and_review}
+  wrong_stage: {action: stop_and_review}
+  wrong_entry_state: {action: stop_and_review}
+  death: {action: stop_and_review}
+  missing_reward: {action: stop_and_review}
+  unexplained_inventory_transition: {action: stop_and_review}
+  gameplay_stall: {action: stop_and_review}
+  timeout: {action: stop_and_review}
+  false_clear: {action: stop_and_review}
+  missing_post_clear: {action: stop_and_review}
+  event_reordering: {action: stop_and_review}
+  screenshot_integrity: {action: stop_and_review}
+  world_8_1_entered: {action: stop_and_review}
+  ambiguous_state: {action: capture_artifacts_and_stop}

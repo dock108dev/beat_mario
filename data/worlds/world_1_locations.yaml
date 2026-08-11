@@ -212,3 +212,48 @@ locations:
       - Battleships
       - Boom Boom
       - Hand Trap boundary
+  - id: world_8_hand_trap_right
+    segment_id: world_8_hand_trap_right_clear
+    label: World 8 Right Hand Trap
+    type: level
+    default_status: works
+    objective: Deliberately enter the right Hand Trap, defeat its four Brothers, center beneath the orange ceiling tube, jump while holding Up, and collect the Super Leaf.
+    guide_terms:
+      - Fire Brother
+      - Hammer Brother
+      - Boomerang Brother
+      - Sledge Brother
+      - orange ceiling tube
+  - id: world_8_hand_trap_center
+    segment_id: world_8_hand_trap_center_clear
+    label: World 8 Center Hand Trap
+    type: level
+    default_status: works
+    objective: Deliberately enter the center Hand Trap, time the lava platforms and Podoboos, center beneath its orange tube, and collect the Super Leaf.
+    guide_terms:
+      - lava platforms
+      - Podoboos
+      - orange ceiling tube
+  - id: world_8_hand_trap_left
+    segment_id: world_8_hand_trap_left_clear
+    label: World 8 Left Hand Trap
+    type: level
+    default_status: works
+    objective: Deliberately enter the left Hand Trap, pause for safe Cheep-Cheep windows across the broken bridge, center beneath the exit tube, and collect the Super Leaf.
+    guide_terms:
+      - broken bridge
+      - jumping Cheep-Cheeps
+      - pause and wait
+      - exit tube
+  - id: world_8_jet
+    segment_id: world_8_jet_clear
+    label: World 8-Jet
+    type: level
+    default_status: works
+    objective: Use the preserved P-Wing, pause for Rocket Engine flames and newly exposed footing, defeat flying Boom Boom, traverse the dark pipe tunnel, and stop on accessible World 8-1 without entering it.
+    guide_terms:
+      - P-Wing
+      - Rocket Engine flames
+      - flying Boom Boom
+      - dark pipe tunnel
+      - World 8-1 boundary

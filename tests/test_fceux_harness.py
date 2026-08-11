@@ -245,6 +245,202 @@ def _world_8_battleships_lines() -> list[str]:
     ]
 
 
+def _world_8_hand_traps_jet_lines() -> list[str]:
+    lines = _world_8_battleships_lines()
+    lines.extend(
+        [
+            "frame=161 event=post_probe_world_8_battleships_p_wing_preserved "
+            "p_wing_count=1 evidence=owner_directed_underwater_battleships_route",
+            "frame=162 event=post_probe_world_8_battleships_star_used "
+            "star_before=2 star_after=1 p_wing_preserved=1 "
+            "evidence=normal_inventory_B_A_immediately_before_entry",
+            "frame=163 event=post_probe_world_8_battleships_swim_started "
+            "evidence=normal_fall_into_reddish_water_after_exposed_first_ship",
+            "frame=164 event=post_probe_world_8_battleships_stern_wait "
+            "evidence=waited_for_end_of_autoscroll_behind_final_ship",
+        ]
+    )
+    frame = 170
+    trap_specs = (
+        ("right", 160, 320, "brother_enemy_ids=-121,-127,-126,-122"),
+        ("center", 128, 368, "hazard_identity=lava_platforms_and_podoboos"),
+        ("left", 96, 320, "hazard_identity=broken_bridge_and_jumping_cheep_cheeps"),
+    )
+    for name, cursor_x, entry_y, gameplay_identity in trap_specs:
+        lines.extend(
+            [
+                f"frame={frame} event=post_probe_world_8_hand_trap_{name}_started",
+                f"frame={frame + 1} event=post_probe_world_8_hand_trap_{name}_entered "
+                f"world_number=7 object_set=11 target_cursor_x={cursor_x} "
+                f"target_cursor_y=112 entry_x=24 entry_y={entry_y} entry_air=0 "
+                f"stage_identity=world_8_hand_trap_{name} "
+                "evidence=deliberate_A_input_from_observed_hand_tile",
+                f"frame={frame + 2} event=post_probe_world_8_hand_trap_{name}_gameplay "
+                f"world_number=7 object_set=11 {gameplay_identity}",
+                f"frame={frame + 3} event=post_probe_world_8_hand_trap_{name}_reward "
+                "world_number=7 object_set=11 reward_item_id=3 leaf_before=0 leaf_after=1 "
+                "evidence=game_owned_reward_object_82_and_inventory_transition",
+                f"frame={frame + 4} event=post_probe_world_8_hand_trap_{name}_post_clear "
+                f"world_number=7 object_set=0 map_cursor_x={cursor_x} map_cursor_y=112 "
+                "player_is_dying=0 lives_unchanged=1 stable_frames=180 "
+                "evidence=stable_world_8_map_after_game_clear",
+            ]
+        )
+        frame += 10
+    lines.extend(
+        [
+            f"frame={frame} event=post_probe_world_8_jet_started",
+            f"frame={frame + 1} event=post_probe_world_8_jet_p_wing_used "
+            "p_wing_remaining=0 evidence=owner_directed_normal_inventory_use "
+            "saved_from_battleships",
+            f"frame={frame + 2} event=post_probe_world_8_jet_entered "
+            "world_number=7 object_set=10 source_cursor_x=96 source_cursor_y=112 "
+            "map_node_x=64 map_node_y=80 map_enter_via_id=15 entry_x=0 entry_y=320 "
+            "entry_air=0 stage_identity=world_8_jet "
+            "evidence=normal_left_up_then_game_owned_automatic_entry",
+            f"frame={frame + 3} event=post_probe_world_8_jet_gameplay "
+            "world_number=7 object_set=10 p_wing_active=1 "
+            "pacing=hazard_wait_opening_wait_controlled_advance "
+            "evidence=observed_pause_and_advance_autoscroller_controller",
+            f"frame={frame + 4} event=post_probe_world_8_jet_boss_defeated "
+            "world_number=7 object_set=10 boss_object_id_76_active=0 "
+            "defeated_transition_object_id_74_active=1 mario_alive=1 player_is_dying=0 "
+            "evidence=game_owned_boss_object_76_to_defeated_transition_object_74",
+            f"frame={frame + 5} event=post_probe_world_8_jet_clear "
+            "world_number=7 object_set=10 return_map=1 mario_alive=1 player_is_dying=0 "
+            "evidence=game_owned_return_map_transition_after_defeated_flying_boom_boom",
+            f"frame={frame + 6} event=post_probe_world_8_jet_post_clear "
+            "world_number=7 object_set=0 map_page=2 map_cursor_x=64 map_cursor_y=112 "
+            "dark_area_traversed=1 world_8_1_accessible=1 world_8_1_entered=0 "
+            "stable_frames=180 player_is_dying=0 "
+            "evidence=stable_world_8_map_with_world_8_1_accessible",
+        ]
+    )
+    return lines
+
+
+def _parse_lines(tmp_path: Path, lines: list[str]):
+    log_path = tmp_path / "fceux.log"
+    log_path.write_text("\n".join(lines) + "\n")
+    return parse_fceux_log(log_path)
+
+
+def test_parse_fceux_log_accepts_exact_hand_traps_and_jet_sequence(
+    tmp_path: Path,
+) -> None:
+    summary = _parse_lines(tmp_path, _world_8_hand_traps_jet_lines())
+
+    assert summary.post_probe_clear is True
+    assert summary.post_probe_last_event == "post_probe_world_8_jet_post_clear"
+
+
+@pytest.mark.parametrize(
+    "failure_event",
+    [
+        "post_probe_world_8_hand_trap_right_death",
+        "post_probe_world_8_hand_trap_center_death",
+        "post_probe_world_8_hand_trap_left_death",
+        "post_probe_world_8_jet_death",
+        "post_probe_world_8_jet_fall",
+        "post_probe_world_8_jet_gameplay_stall",
+        "post_probe_world_8_jet_timeout",
+        "post_probe_world_8_jet_world_8_1_entered",
+    ],
+)
+def test_parse_fceux_log_rejects_hand_trap_and_jet_fail_closed_events(
+    tmp_path: Path, failure_event: str
+) -> None:
+    lines = _world_8_hand_traps_jet_lines()
+    lines.append(f"frame=999 event={failure_event}")
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+@pytest.mark.parametrize(
+    ("needle", "replacement"),
+    [
+        (
+            "evidence=deliberate_A_input_from_observed_hand_tile",
+            "evidence=unobserved_automatic_entry",
+        ),
+        ("stage_identity=world_8_hand_trap_center", "stage_identity=world_8_hand_trap_right"),
+        ("leaf_after=1", "leaf_after=2"),
+        ("boss_object_id_76_active=0", "boss_object_id_76_active=1"),
+        ("map_page=2 map_cursor_x=64", "map_page=1 map_cursor_x=96"),
+    ],
+)
+def test_parse_fceux_log_rejects_wrong_hand_or_jet_identity(
+    tmp_path: Path, needle: str, replacement: str
+) -> None:
+    lines = _world_8_hand_traps_jet_lines()
+    index = next(index for index, line in enumerate(lines) if needle in line)
+    lines[index] = lines[index].replace(needle, replacement)
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_missing_duplicate_and_reordered_trap_events(
+    tmp_path: Path,
+) -> None:
+    original = _world_8_hand_traps_jet_lines()
+    reward_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_hand_trap_center_reward " in line
+    )
+    right_entry = next(
+        line
+        for line in original
+        if "event=post_probe_world_8_hand_trap_right_entered " in line
+    )
+    center_started_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_hand_trap_center_started" in line
+    )
+    right_started_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_hand_trap_right_started" in line
+    )
+    cases = [
+        original[:reward_index] + original[reward_index + 1 :],
+        original[:center_started_index] + [right_entry] + original[center_started_index:],
+        original[:right_started_index]
+        + [original[center_started_index]]
+        + original[right_started_index:],
+    ]
+
+    for index, lines in enumerate(cases):
+        case_dir = tmp_path / str(index)
+        case_dir.mkdir()
+        assert _parse_lines(case_dir, lines).post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_premature_jet_and_missing_post_clear(
+    tmp_path: Path,
+) -> None:
+    original = _world_8_hand_traps_jet_lines()
+    left_started_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_hand_trap_left_started" in line
+    )
+    premature = (
+        original[:left_started_index]
+        + ["frame=199 event=post_probe_world_8_jet_started"]
+        + original[left_started_index:]
+    )
+    no_post_clear = original[:-1]
+
+    premature_dir = tmp_path / "premature"
+    missing_dir = tmp_path / "missing"
+    premature_dir.mkdir()
+    missing_dir.mkdir()
+    assert _parse_lines(premature_dir, premature).post_probe_clear is False
+    assert _parse_lines(missing_dir, no_post_clear).post_probe_clear is False
+
+
 def test_parse_fceux_log_accepts_exact_big_tanks_completion_sequence(
     tmp_path: Path,
 ) -> None:

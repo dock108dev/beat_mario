@@ -13,7 +13,9 @@ World 8 arrival remains that goal's boundary. Rank 28 adds a separate
 clears the first reachable World 8 stage (Big Tanks), observes the normal map
 return, and stops before another stage. The cumulative `world_8_battleships`
 goal reuses that accepted 16-segment route, clears Battleships, and stops on the
-stable map before a Hand Trap.
+stable map before a Hand Trap. The cumulative `world_8_hand_traps_jet` goal
+adds the right, center, and left Hand Traps plus World 8-Jet, for exactly 21
+normal-gameplay segments and zero bridges.
 
 ## Current truth
 
@@ -25,6 +27,9 @@ stable map before a Hand Trap.
 - `data/goals/world_8_battleships.yaml` composes `world_8_big_tanks` with only
   `world_8_battleships_clear`, for 17 ordered events and zero bridges. The 15-
   and 16-segment goals remain unchanged.
+- `data/goals/world_8_hand_traps_jet.yaml` composes the unchanged Battleships
+  prefix with the right, center, and left Hand Traps followed by Jet. It stops
+  at map page 2 cursor `(64,112)`, where World 8-1 is accessible but unentered.
 - World 1-4 is not in the active route.
 - World 1-5 and World 1-6 are retained as the route to the final World 1
   castle after the owner corrected the boundary to require World 2 before
@@ -49,6 +54,10 @@ stable map before a Hand Trap.
 - The Battleships runner passed three fresh, byte-identical, no-bridge
   processes with five authoritative screenshots per run. Its separate
   review-only playback passed at a validated `0.0001`-second throttle.
+- The Hand-Traps-and-Jet runner passed 3/3 fresh processes with 21/21 ordered
+  milestones, byte-identical logs, and exactly 17 focused screenshots per run.
+  Its separate review-only playback passed at a validated `0.001`-second
+  throttle with a tick trace and contact sheet.
 - Rank 33 completes the reviewed route-patch loop. CLI and Mario Route Lab use
   one hash-bound patch contract, detached candidate worktrees, internal
   validation profiles, exact atomic promotion, and conflict-safe rollback.
@@ -204,6 +213,42 @@ The separate review command is:
 Its accepted non-promotable report, tick trace, and five-frame contact sheet are
 under
 `artifacts/review/world_8_battleships/20260810T224805.096938Z_watchable/`.
+
+## World 8 Hand Traps and Jet proof
+
+Run the cumulative 21-segment gate:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_hand_traps_jet \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+The route preserves the P-Wing through Battleships, uses a Star on the exposed
+first ship, swims beneath the remaining fleet, and reserves the P-Wing for Jet.
+It then deliberately clears the right, center, and left Hand Traps. Every
+ceiling-pipe exit is taken from the center of the tube with the appropriate Up
+input; the right trap first defeats the Sledge Brother. Jet uses controlled
+advance and neutral beats around Rocket Engine fire cycles and newly exposed
+footing, enters its final pipe, and defeats flying Boom Boom through the
+game-owned object `76` to object `74` transition.
+
+After Jet, the controller moves left to the map pipe, presses A, traverses the
+dark pipe tunnel (`object_set=14`), exits onto map page 2, moves right and then
+down, and stops at cursor `(64,112)` without pressing A. The accepted aggregate
+is `artifacts/reliability/world_8_hand_traps_jet/20260811T062336.029178Z_reliability/`.
+
+The separate review command uses the validated throttle:
+
+```bash
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_hand_traps_jet \
+  --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.001
+```
+
+Its review-only report, 795-line trace, 17-image set, and contact sheet are in
+`artifacts/review/world_8_hand_traps_jet/20260811T060954.667404Z_watchable/`.
 
 ## Legacy diagnostic
 
