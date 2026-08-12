@@ -9,6 +9,7 @@ from smb3_agent.goals import (
     evaluate_success_metrics,
     load_goal_contract,
     resolve_goal_path,
+    run_goal_contract,
 )
 
 
@@ -290,6 +291,108 @@ def test_hand_traps_jet_goal_requires_jet_clear_and_rejects_world_8_1_entry() ->
 
     assert evaluate_success_metrics(contract, accepted) is True
     assert evaluate_success_metrics(contract, entered_later_level) is False
+
+
+def test_world_8_8_2_is_exact_23_segment_zero_bridge_extension() -> None:
+    arrival = load_goal_contract(Path("data/goals/world_8_double_whistle.yaml"))
+    big_tanks = load_goal_contract(Path("data/goals/world_8_big_tanks.yaml"))
+    battleships = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
+    hand_traps_jet = load_goal_contract(
+        Path("data/goals/world_8_hand_traps_jet.yaml")
+    )
+    goal = load_goal_contract(Path("data/goals/world_8_8_2.yaml"))
+
+    assert tuple(
+        len(contract.segments)
+        for contract in (arrival, big_tanks, battleships, hand_traps_jet, goal)
+    ) == (15, 16, 17, 21, 23)
+    assert goal.prefix_goal == hand_traps_jet.id
+    assert goal.segments[:21] == hand_traps_jet.segments
+    assert goal.segments[21:] == ("world_8_1_clear", "world_8_2_clear")
+    assert goal.bridged_segments == ()
+    assert goal.preset == "fceux_world_8_8_2"
+    assert goal.constraints["start_from_power_on"] is True
+    assert goal.constraints["require_distinct_goal_cards"] is True
+    assert goal.constraints["stop_before_world_8_fortress_gameplay"] is True
+    assert goal.allowed_tactics["runtime_search"] is False
+    assert goal.allowed_tactics["savestate"] is False
+
+
+def test_world_8_8_2_metrics_require_both_levels_and_reject_fortress_entry() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_8_2.yaml"))
+    attempts = (AttemptSummary(1, True, False, True, True, 3709),)
+    required = (
+        "post_probe_world_8_jet_post_clear",
+        "post_probe_world_8_1_entered",
+        "post_probe_world_8_1_gameplay",
+        "post_probe_world_8_1_goal_card",
+        "post_probe_world_8_1_course_clear",
+        "post_probe_world_8_1_post_clear",
+        "post_probe_world_8_2_entered",
+        "post_probe_world_8_2_gameplay",
+        "post_probe_world_8_2_goal_card",
+        "post_probe_world_8_2_course_clear",
+        "post_probe_world_8_2_post_clear",
+    )
+    accepted = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_2_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required,
+    )
+    missing_world_8_1_goal = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_2_post_clear",
+        post_probe_clear=True,
+        post_probe_events=tuple(
+            event for event in required if event != "post_probe_world_8_1_goal_card"
+        ),
+    )
+    fortress_entered = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_2_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required + ("post_probe_world_8_fortress_entered",),
+    )
+
+    assert resolve_goal_path("world_8_8_2") == Path("data/goals/world_8_8_2.yaml")
+    assert evaluate_success_metrics(contract, accepted) is True
+    assert evaluate_success_metrics(contract, missing_world_8_1_goal) is False
+    assert evaluate_success_metrics(contract, fortress_entered) is False
+
+
+def test_world_8_8_2_uses_its_exact_product_preset_without_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_fceux_1_1(**kwargs):
+        captured.update(kwargs)
+        return BatchSummary(
+            attempts=(AttemptSummary(1, True, False, True, True, 3709),),
+            post_probe_last_event="post_probe_world_8_2_post_clear",
+            post_probe_clear=True,
+            post_probe_events=(),
+        )
+
+    monkeypatch.setattr("smb3_agent.goals.run_fceux_1_1", fake_run_fceux_1_1)
+    contract = load_goal_contract(Path("data/goals/world_8_8_2.yaml"))
+    game_path = tmp_path / "local-game.nes"
+    game_path.write_bytes(b"local")
+
+    run_goal_contract(
+        contract,
+        game_path=game_path,
+        attempts=1,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+
+    assert captured["env_overrides"] == (
+        "SMB3_WORLD_8_EXTENSION_MODE=world_8_8_2",
+        "SMB3_WORLD_8_FOCUSED_CAPTURE=1",
+    )
+    assert captured["post_1_1_probe"] == "run_1_castle_after_1_6"
+    assert captured["allow_bridges"] is False
 
 
 def test_battleships_goal_cannot_pass_on_prefix_or_entry_alone() -> None:

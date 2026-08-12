@@ -536,3 +536,59 @@ artifacts/reliability/world_8_double_whistle/20260811T061710.427413Z_reliability
 artifacts/reliability/world_8_big_tanks/20260811T061936.683562Z_reliability/
 artifacts/reliability/world_8_battleships/20260811T062230.086277Z_reliability/
 ```
+
+## Gate 27: World 8-1 and World 8-2 contract and observer
+
+```bash
+.venv/bin/python -m smb3_agent goal validate data/goals/world_8_8_2.yaml
+.venv/bin/python -m smb3_agent goal status world_8_8_2
+```
+
+Pass condition: the unchanged 21-segment Hand-Traps-and-Jet goal is the prefix;
+only `world_8_1_clear` and `world_8_2_clear` are appended; the result is exactly
+23 segments and zero bridges; both stages have distinct entry, gameplay, object
+`65` touched-state, course-clear, card-transition, and map-return proofs; and
+the final map is stable at Fortress cursor `(64,144)` without stage entry.
+
+## Gate 28: World 8-1 and World 8-2 reliability and watchable review
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_8_2 --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_8_2 --game-file "$SMB3_GAME_FILE" \
+  --throttle-seconds 0.001
+```
+
+The authoritative aggregate passed 3/3 with all 23 milestones, exactly nine
+focused screenshots per run, `success_rate=1.0`, `overall_pass=true`, and
+byte-identical SHA-256
+`f6d4ff8ba659b46496b9ed2e20413903073d6da9bab71ee2abf8388af91bafcb`:
+
+```text
+artifacts/reliability/world_8_8_2/20260811T221626.293001Z_reliability/
+```
+
+The separate review passed at the independently exercised `0.001` throttle,
+retaining nine focused images, an 823-line trace, and a contact sheet while
+remaining review-only and non-promotable:
+
+```text
+artifacts/review/world_8_8_2/20260811T221806.076219Z_watchable/
+```
+
+## Gate 29: World 8-1 and World 8-2 regressions and hygiene
+
+The canonical ROM-free gate passes 213 tests. Live regressions pass at:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260811T222531.669742Z_reliability/  # 5/5
+artifacts/reliability/world_8_big_tanks/20260811T222645.167671Z_reliability/      # 3/3
+artifacts/reliability/world_8_battleships/20260811T222747.028266Z_reliability/   # 3/3
+artifacts/reliability/world_8_hand_traps_jet/20260811T222848.457322Z_reliability/ # 3/3
+```
+
+Pass condition: every earlier goal retains its segment count, zero-bridge
+status, and endpoint; `git diff --check` passes; generated evidence remains
+ignored; and no ROM, savestate, credential, log, screenshot, report, trace, or
+temporary worktree becomes tracked.

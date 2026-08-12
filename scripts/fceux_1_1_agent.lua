@@ -24,6 +24,8 @@ local world_8_focused_capture_events = {
 if world_8_extension_mode == "battleships"
   or world_8_extension_mode == "battleships_discovery"
   or world_8_extension_mode == "hand_traps_jet"
+  or world_8_extension_mode == "world_8_8_2"
+  or world_8_extension_mode == "world_8_8_2_discovery"
 then
   world_8_focused_capture_events = {
     post_probe_world_8_big_tanks_post_clear = true,
@@ -33,7 +35,10 @@ then
     post_probe_world_8_battleships_post_clear = true,
   }
 end
-if world_8_extension_mode == "hand_traps_jet" then
+if world_8_extension_mode == "hand_traps_jet"
+  or world_8_extension_mode == "world_8_8_2"
+  or world_8_extension_mode == "world_8_8_2_discovery"
+then
   world_8_focused_capture_events = {
     post_probe_world_8_battleships_post_clear = true,
     post_probe_world_8_hand_trap_right_entered = true,
@@ -52,6 +57,38 @@ if world_8_extension_mode == "hand_traps_jet" then
     post_probe_world_8_jet_gameplay = true,
     post_probe_world_8_jet_boss_defeated = true,
     post_probe_world_8_jet_post_clear = true,
+  }
+end
+if world_8_extension_mode == "world_8_8_2" then
+  world_8_focused_capture_events = {
+    post_probe_world_8_jet_post_clear = true,
+    post_probe_world_8_1_entered = true,
+    post_probe_world_8_1_gameplay = true,
+    post_probe_world_8_1_goal_card = true,
+    post_probe_world_8_1_post_clear = true,
+    post_probe_world_8_2_entered = true,
+    post_probe_world_8_2_gameplay = true,
+    post_probe_world_8_2_goal_card = true,
+    post_probe_world_8_2_post_clear = true,
+  }
+end
+if world_8_extension_mode == "world_8_8_2_discovery" then
+  world_8_focused_capture_events = {
+    post_probe_world_8_8_2_discovery_boundary = true,
+    post_probe_world_8_1_entered = true,
+    post_probe_world_8_1_leaf_form_applied = true,
+    post_probe_world_8_1_discovery_vertical_obstacle = true,
+    post_probe_world_8_1_discovery_landing = true,
+    post_probe_world_8_1_discovery_hazard_brake = true,
+    post_probe_world_8_1_discovery_star_area = true,
+    post_probe_world_8_1_discovery_final_gap_launch = true,
+    post_probe_world_8_1_discovery_post_wall_plant_wait = true,
+    post_probe_world_8_1_discovery_post_wall_plant_retracted = true,
+    post_probe_world_8_1_death = true,
+    post_probe_world_8_1_false_clear = true,
+    post_probe_world_8_2_quicksand_entered = true,
+    post_probe_world_8_2_quicksand_bonus_exit = true,
+    post_probe_world_8_2_final_gap_probe = true,
   }
 end
 local world_8_discovery_sequence = os.getenv("SMB3_WORLD_8_DISCOVERY_SEQUENCE") or "right,A"
@@ -1122,6 +1159,23 @@ function nearest_object_id_between(m, target_id, min_dx, max_dx, max_abs_dy)
   return best
 end
 
+local function level_plant_near_x(target_x, tolerance)
+  local best = nil
+  for i = 1, 9 do
+    local active = memory.readbytesigned(0x660 + i) ~= 0
+    local object_id = memory.readbytesigned(0x670 + i)
+    if active and (object_id == -92 or object_id == -94 or object_id == -96) then
+      local ex = memory.readbyte(0x90 + i) + memory.readbyte(0x75 + i) * 256
+      local ey = memory.readbyte(0xA2 + i) + memory.readbyte(0x87 + i) * 256
+      local distance = math.abs(ex - target_x)
+      if distance <= tolerance and (best == nil or distance < best.distance) then
+        best = {slot = i, id = object_id, x = ex, y = ey, distance = distance}
+      end
+    end
+  end
+  return best
+end
+
 function object_summary_between(m, min_dx, max_dx, max_abs_dy)
   local objects = {}
   for i = 1, 9 do
@@ -1154,6 +1208,10 @@ end
 
 
 local function log_state(event, extra)
+  if world_8_extension_mode == "world_8_8_2"
+      and string.find(event, "_discovery_", 1, true) ~= nil then
+    return
+  end
   local m = mario()
   local enemy = nearest_enemy_ahead(m)
   local parts = {
@@ -1173,6 +1231,7 @@ local function log_state(event, extra)
     "return_map=" .. tostring(memory.readbyte(0x14)),
     "flight_timer=" .. tostring(memory.readbyte(0x56E)),
     "flight_flag=" .. tostring(memory.readbyte(0x57B)),
+    "star_inv=" .. tostring(memory.readbyte(0x553)),
     "change_form=" .. tostring(memory.readbyte(0x578)),
     "object_set=" .. tostring(memory.readbyte(0x70A)),
     "world_number=" .. tostring(memory.readbyte(0x727)),
@@ -1203,6 +1262,9 @@ local function log_state(event, extra)
     "item_7=" .. tostring(memory.readbyte(0x7D87)),
     "item_8=" .. tostring(memory.readbyte(0x7D88)),
     "item_9=" .. tostring(memory.readbyte(0x7D89)),
+    "card_0=" .. tostring(memory.readbyte(0x7D9C)),
+    "card_1=" .. tostring(memory.readbyte(0x7D9D)),
+    "card_2=" .. tostring(memory.readbyte(0x7D9E)),
     "complete_0=" .. tostring(memory.readbyte(0x7D00)),
     "complete_1=" .. tostring(memory.readbyte(0x7D01)),
     "complete_2=" .. tostring(memory.readbyte(0x7D02)),
@@ -7250,7 +7312,7 @@ local function run_world_8_hand_traps_jet_extension()
   end
 
   local function alive()
-    return memory.readbyte(0x736) == starting_lives
+    return memory.readbyte(0x736) >= starting_lives
   end
 
   local function wait_for_stage(object_set, entry_x, entry_y, frames)
@@ -8424,6 +8486,2571 @@ local function run_world_8_hand_traps_jet_extension()
     "post_probe_world_8_jet_post_clear",
     "evidence=stable_world_8_map_with_world_8_1_accessible dark_area_traversed=1 world_8_1_accessible=1 world_8_1_entered=0 stable_frames=180 lives_unchanged=1 player_is_dying=0"
   )
+  if world_8_extension_mode ~= "world_8_8_2"
+      and world_8_extension_mode ~= "world_8_8_2_discovery" then
+    return
+  end
+
+  local discovery_run = world_8_extension_mode == "world_8_8_2_discovery"
+  if discovery_run then
+    log_state(
+      "post_probe_world_8_8_2_discovery_boundary",
+      "review_only=1 promotable=0 counts_toward_reliability=0"
+        .. " accepted_form=0 accepted_item_0=3"
+    )
+  else
+    log_state(
+      "post_probe_world_8_8_2_started",
+      "evidence=accepted_21_segment_jet_post_clear_boundary"
+        .. " accepted_form=0 accepted_item_0=3"
+    )
+  end
+  if memory.readbyte(0xED) ~= 0 or memory.readbyte(0x7D80) ~= 3 then
+    log_state(
+      "post_probe_world_8_1_wrong_boundary",
+      "failure_classification=wrong_entry_state expected_form=0 expected_item_0=3"
+    )
+    return
+  end
+  if not use_map_item(3, false, "post_probe_world_8_1_leaf") then return end
+  log_state(
+    "post_probe_world_8_1_leaf_used",
+    "evidence=normal_inventory_B_A item_id=3 leaf_before=1 leaf_after=0"
+  )
+  press("A", 18, "post_probe_world_8_1_map_entry_A")
+  local world_8_1_entry = nil
+  for _ = 1, 360 do
+    local candidate = mario()
+    if memory.readbyte(0x70A) ~= 0
+        and candidate.x < 8192 and candidate.y ~= 0 then
+      world_8_1_entry = candidate
+      break
+    end
+    advance_frame()
+  end
+  if world_8_1_entry == nil then
+    log_state("post_probe_world_8_1_wrong_stage", "failure_classification=wrong_stage")
+    return
+  end
+  local world_8_1_object_set = memory.readbyte(0x70A)
+  local world_8_1_entry_id = memory.readbyte(0x1E)
+  log_state(
+    "post_probe_world_8_1_entered",
+    "evidence=normal_A_input_from_world_8_1_map_node stage_identity=world_8_1"
+      .. " entry_id=" .. tostring(world_8_1_entry_id)
+      .. " entry_object_set=" .. tostring(world_8_1_object_set)
+      .. " entry_x=" .. tostring(world_8_1_entry.x)
+      .. " entry_y=" .. tostring(world_8_1_entry.y)
+      .. " entry_air=" .. tostring(world_8_1_entry.air)
+      .. " entry_form=" .. tostring(memory.readbyte(0xED))
+  )
+  neutral()
+  for _ = 1, 300 do
+    if memory.readbyte(0xED) == 3 then break end
+    advance_frame()
+  end
+  if memory.readbyte(0xED) ~= 3 then
+    log_state(
+      "post_probe_world_8_1_leaf_form_missing",
+      "failure_classification=unexplained_inventory_transition expected_form=3"
+    )
+    return
+  end
+  log_state(
+    "post_probe_world_8_1_leaf_form_applied",
+    "evidence=normal_map_inventory_use_then_game_owned_stage_form_transition form=3"
+  )
+  advance(80, "post_probe_world_8_1_discovery_entry_phase_wait")
+
+  local world_8_1_max_x = world_8_1_entry.x
+  local world_8_1_next_progress = 256
+  local world_8_1_gameplay_logged = false
+  local world_8_1_goal_seen = false
+  local world_8_1_goal_touched = false
+  local world_8_1_goal_state = -1
+  local world_8_1_goal_slot = -1
+  local world_8_1_goal_jump_cycle = 0
+  local world_8_1_form_before_clear = -1
+  local world_8_1_cards_before = {
+    memory.readbyte(0x7D9C),
+    memory.readbyte(0x7D9D),
+    memory.readbyte(0x7D9E),
+  }
+  local world_8_1_course_clear_logged = false
+  local world_8_1_last_x = world_8_1_entry.x
+  local world_8_1_stuck = 0
+  local world_8_1_jump_frames = 0
+  local world_8_1_jump_release = 0
+  local world_8_1_opening_jump_started = false
+  local world_8_1_opening_jump_elapsed = 0
+  local world_8_1_was_airborne = false
+  local world_8_1_vertical_obstacle = false
+  local world_8_1_opening_obstacle_attempted = false
+  local world_8_1_vertical_target_x = 0
+  local world_8_1_last_hazard_id = -1
+  local world_8_1_handled_hazards = {[110] = true, [120] = true}
+  local world_8_1_hazard_jump_release = 0
+  local world_8_1_hazard_jump_frames = 0
+  local world_8_1_plant_handoff = 0
+  local world_8_1_plant_safe_frames = 0
+  local world_8_1_plant_bullet_seen = false
+  local world_8_1_plant_decoy_frames = 0
+  local world_8_1_plant_runup_frames = 0
+  local world_8_1_plant_forward_release = 0
+  local world_8_1_plant_forward_frames = 0
+  local world_8_1_bullet_bounce_started = false
+  local world_8_1_bullet_bounce_release = 0
+  local world_8_1_bullet_bounce_frames = 0
+  local world_8_1_bullet_bounce_handoff = 0
+  local world_8_1_altitude_brake_done = false
+  local world_8_1_wall_1450_logged = false
+  local world_8_1_wall_1500_logged = false
+  local world_8_1_secret_pipe_logged = false
+  local world_8_1_star_area_logged = false
+  local world_8_1_wall_platform_state = 6
+  local world_8_1_wall_platform_frames = 0
+  local world_8_1_star_state = 6
+  local world_8_1_star_frames = 0
+  local world_8_1_star_seen = false
+  local world_8_1_star_collected = false
+  local world_8_1_pipe_hold_state = 3
+  local world_8_1_pipe_hold_frames = 0
+  local world_8_1_gap_platform_state = 0
+  local world_8_1_gap_platform_frames = 0
+  local world_8_1_tower_state = 0
+  local world_8_1_tower_frames = 0
+  local world_8_1_runway_state = 0
+  local world_8_1_runway_tail_frames = 0
+  local world_8_1_runway_wait_frames = 0
+  local world_8_1_runway_attack_frames = 0
+  local world_8_1_runway_passes = 0
+  local world_8_1_wall_jump_release = 0
+  local world_8_1_damage_release = 0
+  local world_8_1_launch_form = 3
+  local world_8_1_tunnel_state = 0
+  local world_8_1_tunnel_frames = 0
+  local world_8_1_tunnel_passes = 0
+  local world_8_1_post_wall_plant_state = 0
+  local world_8_1_post_wall_plant_frames = 0
+  local world_8_1_post_wall_plant_faced_left = false
+  local world_8_1_tile_grid_logged = false
+  local world_8_1_input_probe_done = true
+  local world_8_1_second_gap_state = 0
+  local world_8_1_second_gap_frames = 0
+  local world_8_1_final_gap_state = 0
+  local world_8_1_final_gap_frames = 0
+  for frame = 1, 7200 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() or memory.readbyte(0xF1) ~= 0 then
+      log_state(
+        "post_probe_world_8_1_death",
+        "failure_classification=death starting_lives=" .. tostring(starting_lives)
+          .. " current_lives=" .. tostring(memory.readbyte(0x736))
+      )
+      return
+    end
+    local m = mario()
+    if discovery_run and m.x >= 700 and frame % 30 == 0 then
+      log_state(
+        "post_probe_world_8_1_discovery_route_tick",
+        "review_only=1 promotable=0 route_frame=" .. tostring(frame)
+          .. " " .. object_summary_between(m, -128, 256, 240)
+      )
+    end
+    if m.air ~= 0 then
+      world_8_1_was_airborne = true
+    elseif world_8_1_was_airborne then
+      world_8_1_was_airborne = false
+      world_8_1_jump_frames = 0
+      world_8_1_jump_release = world_8_1_max_x >= 700 and 2 or 6
+      if discovery_run and ((m.x >= 500 and m.x <= 800) or m.x >= 1500) then
+        log_state(
+          "post_probe_world_8_1_discovery_landing",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+            .. " landing_y=" .. tostring(m.y)
+        )
+      end
+    end
+    if m.x < 8192 and m.y ~= 0 then
+      world_8_1_max_x = math.max(world_8_1_max_x, m.x)
+    end
+    if math.abs(m.x - world_8_1_last_x) <= 1 then
+      world_8_1_stuck = world_8_1_stuck + 1
+    else
+      world_8_1_stuck = 0
+    end
+    world_8_1_last_x = m.x
+    if world_8_1_max_x >= world_8_1_next_progress then
+      log_state(
+        "post_probe_world_8_1_discovery_progress",
+        "review_only=1 promotable=0 max_x=" .. tostring(world_8_1_max_x)
+          .. " " .. object_summary_between(m, -160, 320, 240)
+      )
+      world_8_1_next_progress = world_8_1_next_progress + 256
+    end
+    if not world_8_1_wall_1450_logged and world_8_1_max_x >= 1450 then
+      world_8_1_wall_1450_logged = true
+      log_state(
+        "post_probe_world_8_1_discovery_wall_1450",
+        "review_only=1 promotable=0 y_speed="
+          .. tostring(memory.readbytesigned(0xCF))
+          .. " " .. object_summary_between(m, -64, 160, 192)
+      )
+    end
+    if not world_8_1_star_area_logged and world_8_1_max_x >= 900 then
+      world_8_1_star_area_logged = true
+      log_state(
+        "post_probe_world_8_1_discovery_star_area",
+        "review_only=1 promotable=0 disassembly=fixed_generator_18_x_928"
+      )
+    end
+    if not world_8_1_wall_1500_logged and world_8_1_max_x >= 1500 then
+      world_8_1_wall_1500_logged = true
+      log_state(
+        "post_probe_world_8_1_discovery_wall_1500",
+        "review_only=1 promotable=0 y_speed="
+          .. tostring(memory.readbytesigned(0xCF))
+          .. " " .. object_summary_between(m, -64, 160, 192)
+      )
+    end
+    if world_8_1_max_x >= 768 and not world_8_1_gameplay_logged then
+      world_8_1_gameplay_logged = true
+      log_state(
+        "post_probe_world_8_1_gameplay",
+        "evidence=normal_dark_level_progression hazards=bill_blasters_bullet_bills_piranha_plants_koopas_pits_boo max_x="
+          .. tostring(world_8_1_max_x)
+      )
+    end
+    local goal = nearest_object_id_between(m, 65, -256, 240, 200)
+    if goal ~= nil then world_8_1_goal_seen = true end
+    local goal_state, goal_slot = object_internal_state(65)
+    if goal_state ~= nil and goal_state > 0 and not world_8_1_goal_touched then
+      world_8_1_goal_touched = true
+      world_8_1_goal_state = goal_state
+      world_8_1_goal_slot = goal_slot
+      world_8_1_form_before_clear = memory.readbyte(0xED)
+      log_state(
+        "post_probe_world_8_1_goal_card",
+        "evidence=game_owned_goal_object_65_internal_state_after_touch"
+          .. " goal_object_id=65 goal_seen=" .. tostring(world_8_1_goal_seen and 1 or 0)
+          .. " goal_card_state=" .. tostring(world_8_1_goal_state)
+          .. " goal_card_object_slot=" .. tostring(world_8_1_goal_slot)
+          .. " form_before_clear=" .. tostring(world_8_1_form_before_clear)
+          .. " cards_before_touch=" .. tostring(world_8_1_cards_before[1])
+            .. "," .. tostring(world_8_1_cards_before[2])
+            .. "," .. tostring(world_8_1_cards_before[3])
+          .. " cards_at_touch=" .. tostring(memory.readbyte(0x7D9C))
+            .. "," .. tostring(memory.readbyte(0x7D9D))
+            .. "," .. tostring(memory.readbyte(0x7D9E))
+          .. " mario_alive=1 player_is_dying=0 starting_lives="
+            .. tostring(starting_lives)
+          .. " current_lives=" .. tostring(memory.readbyte(0x736))
+      )
+    end
+    if m.x >= 8192 and world_8_1_goal_touched
+        and not world_8_1_course_clear_logged then
+      world_8_1_course_clear_logged = true
+      log_state(
+        "post_probe_world_8_1_course_clear",
+        "evidence=goal_card_touch_then_genuine_course_clear_transition"
+          .. " goal_object_id=65 goal_card_state=" .. tostring(world_8_1_goal_state)
+          .. " form_before_clear=" .. tostring(world_8_1_form_before_clear)
+          .. " cards_after=" .. tostring(memory.readbyte(0x7D9C))
+            .. "," .. tostring(memory.readbyte(0x7D9D))
+            .. "," .. tostring(memory.readbyte(0x7D9E))
+      )
+    end
+
+    local pipe_plant = nearest_object_id_between(m, -92, 0, 96, 240)
+    if not world_8_1_vertical_obstacle
+        and not world_8_1_opening_obstacle_attempted
+        and world_8_1_max_x >= 300
+        and world_8_1_max_x < 400
+        and m.air == 0
+        and m.y >= 350
+        and world_8_1_jump_release == 0
+        and (pipe_plant ~= nil or world_8_1_stuck >= 12) then
+      world_8_1_vertical_obstacle = true
+      world_8_1_opening_obstacle_attempted = true
+      world_8_1_vertical_target_x = pipe_plant ~= nil and pipe_plant.x or m.x + 32
+      world_8_1_jump_frames = 100
+      log_state(
+        "post_probe_world_8_1_discovery_vertical_obstacle",
+        "review_only=1 promotable=0 target_x=" .. tostring(world_8_1_vertical_target_x)
+      )
+      neutral()
+      advance(4, "post_probe_world_8_1_discovery_vertical_release")
+      advance(4, "post_probe_world_8_1_discovery_vertical_release_settle")
+      local opening_plant_safe_frames = 0
+      for wait_frame = 1, 180 do
+        local wait_m = mario()
+        local opening_plant = nearest_object_id_between(wait_m, -92, 0, 64, 192)
+        held.up = false
+        held.down = false
+        held.left = false
+        held.right = false
+        held.B = false
+        held.A = false
+        apply()
+        advance_frame()
+        if opening_plant ~= nil and opening_plant.y >= 300 then
+          opening_plant_safe_frames = opening_plant_safe_frames + 1
+        else
+          opening_plant_safe_frames = 0
+        end
+        if opening_plant_safe_frames >= 4 then
+          log_state(
+            "post_probe_world_8_1_discovery_opening_plant_retracted",
+            "review_only=1 promotable=0 plant_x=" .. tostring(opening_plant.x)
+              .. " plant_y=" .. tostring(opening_plant.y)
+          )
+          break
+        end
+      end
+      for vertical_frame = 1, 40 do
+        held.up = false
+        held.down = false
+        held.left = vertical_frame > 18 and vertical_frame <= 35
+        held.right = false
+        held.B = vertical_frame >= 36 and vertical_frame <= 38
+        held.A = true
+        apply()
+        advance_frame()
+        if vertical_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_vertical_tick",
+            "review_only=1 promotable=0 vertical_frame=" .. tostring(vertical_frame)
+          )
+        end
+      end
+      neutral()
+      advance(1, "post_probe_world_8_1_discovery_block_landing")
+      log_state("post_probe_world_8_1_discovery_block_launch")
+      for vertical_frame = 1, 60 do
+        held.up = false
+        held.down = false
+        held.left = vertical_frame > 40
+        held.right = vertical_frame <= 40
+        held.B = vertical_frame <= 20
+          or (vertical_frame > 30 and vertical_frame <= 40)
+        held.A = vertical_frame <= 40
+        apply()
+        advance_frame()
+        if vertical_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_pipe_tick",
+            "review_only=1 promotable=0 vertical_frame=" .. tostring(vertical_frame)
+          )
+        end
+      end
+      neutral()
+      for _ = 1, 60 do
+        if mario().air == 0 then break end
+        advance_frame()
+      end
+      log_state("post_probe_world_8_1_discovery_first_pipe_landing")
+      local world_8_1_middle_pipe_landed = false
+      for vertical_frame = 1, 70 do
+        held.up = false
+        held.down = false
+        held.left = vertical_frame > 50
+        held.right = vertical_frame <= 50
+        held.B = true
+        held.A = vertical_frame <= 40
+        apply()
+        advance_frame()
+        local middle_m = mario()
+        if vertical_frame > 40
+            and middle_m.x >= 440 and middle_m.x <= 480
+            and middle_m.air == 0 then
+          world_8_1_middle_pipe_landed = true
+          break
+        end
+        if vertical_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_middle_pipe_tick",
+            "review_only=1 promotable=0 vertical_frame=" .. tostring(vertical_frame)
+          )
+        end
+      end
+      neutral()
+      advance(1, "post_probe_world_8_1_discovery_middle_pipe_landing")
+      for dodge_frame = 1, 60 do
+        held.up = false
+        held.down = false
+        held.left = mario().x > 456
+        held.right = mario().x < 452
+        held.B = false
+        held.A = dodge_frame <= 40
+        apply()
+        advance_frame()
+        if dodge_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_fireball_dodge_tick",
+            "review_only=1 promotable=0 dodge_frame=" .. tostring(dodge_frame)
+          )
+        end
+      end
+      log_state(
+        "post_probe_world_8_1_discovery_pipe_window",
+        "review_only=1 promotable=0 fireball_dodged=1"
+      )
+      local world_8_1_second_pipe_landed = false
+      for vertical_frame = 1, 80 do
+        held.up = false
+        held.down = false
+        held.left = vertical_frame > 50
+        held.right = vertical_frame <= 50
+        held.B = true
+        held.A = vertical_frame <= 40
+        apply()
+        advance_frame()
+        local transfer_m = mario()
+        if vertical_frame > 30
+            and transfer_m.x >= 510 and transfer_m.x <= 544
+            and transfer_m.air == 0 then
+          world_8_1_second_pipe_landed = true
+          break
+        end
+        if vertical_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_second_pipe_tick",
+            "review_only=1 promotable=0 vertical_frame=" .. tostring(vertical_frame)
+          )
+        end
+      end
+      neutral()
+      advance(1, "post_probe_world_8_1_discovery_second_pipe_landing")
+      for brake_frame = 1, 24 do
+        held.up = false
+        held.down = false
+        held.left = true
+        held.right = false
+        held.B = true
+        held.A = false
+        apply()
+        advance_frame()
+        if math.abs(memory.readbytesigned(0xBD)) <= 3 then break end
+      end
+      neutral()
+      advance(1, "post_probe_world_8_1_discovery_second_pipe_braked")
+      local final_plant_safe_frames = 0
+      for wait_frame = 1, 240 do
+        local final_plant = level_plant_near_x(584, 4)
+        held.up = false
+        held.down = true
+        held.left = false
+        held.right = false
+        held.B = false
+        held.A = false
+        apply()
+        advance_frame()
+        if final_plant ~= nil and final_plant.y >= 300 then
+          final_plant_safe_frames = final_plant_safe_frames + 1
+        else
+          final_plant_safe_frames = 0
+        end
+        if final_plant_safe_frames >= 4 then
+          log_state(
+            "post_probe_world_8_1_discovery_final_plant_retracted",
+            "review_only=1 promotable=0 plant_x=584"
+          )
+          break
+        end
+      end
+      local world_8_1_opening_transfer_landed = false
+      for vertical_frame = 1, 120 do
+        held.up = false
+        held.down = false
+        held.left = mario().x >= 700
+        held.right = mario().x < 700
+        held.B = true
+        held.A = vertical_frame <= 40
+        apply()
+        advance_frame()
+        local transfer_m = mario()
+        if transfer_m.x >= 680 and transfer_m.air == 0 then
+          world_8_1_opening_transfer_landed = true
+          break
+        end
+        if vertical_frame % 20 == 0 then
+          log_state(
+            "post_probe_world_8_1_discovery_gap_after_pipes_tick",
+            "review_only=1 promotable=0 vertical_frame=" .. tostring(vertical_frame)
+          )
+        end
+      end
+      if world_8_1_opening_transfer_landed then
+        log_state(
+          "post_probe_world_8_1_discovery_opening_transfer_landed",
+          "review_only=1 promotable=0"
+        )
+      end
+      neutral()
+      advance(6, "post_probe_world_8_1_discovery_vertical_after")
+      world_8_1_vertical_obstacle = false
+      world_8_1_jump_frames = 0
+      world_8_1_jump_release = 0
+    end
+
+    m = mario()
+    if m.x < 8192 and m.y ~= 0 then
+      world_8_1_max_x = math.max(world_8_1_max_x, m.x)
+    end
+    held.up = false
+    held.down = false
+    held.left = false
+    held.right = not world_8_1_goal_touched
+    held.B = not world_8_1_goal_touched
+    if not world_8_1_goal_touched
+        and world_8_1_max_x < 240 then
+      if not world_8_1_opening_jump_started
+          and m.x >= 150 and memory.readbyte(0xED) == 3 then
+        world_8_1_opening_jump_started = true
+        world_8_1_jump_frames = 100
+        log_state(
+          "post_probe_world_8_1_discovery_opening_launch",
+          "review_only=1 promotable=0 launch_p_meter="
+            .. tostring(memory.readbyte(0x3DD))
+        )
+      end
+      if world_8_1_opening_jump_started then
+        world_8_1_opening_jump_elapsed = world_8_1_opening_jump_elapsed + 1
+        held.right = world_8_1_opening_jump_elapsed > 24
+        held.B = held.right
+      end
+      held.A = world_8_1_opening_jump_started
+        and world_8_1_jump_frames > 0
+      if world_8_1_jump_frames > 0 then
+        world_8_1_jump_frames = world_8_1_jump_frames - 1
+      end
+    elseif world_8_1_goal_touched then
+      held.A = false
+    elseif world_8_1_jump_release > 0 then
+      if world_8_1_max_x >= 700 then
+        held.right = false
+        held.B = false
+      end
+      held.A = false
+      world_8_1_jump_release = world_8_1_jump_release - 1
+    elseif m.air == 0 or world_8_1_stuck >= 10 then
+      world_8_1_jump_frames = 70
+      world_8_1_stuck = 0
+      held.A = true
+    elseif world_8_1_jump_frames > 0 then
+      held.A = true
+      world_8_1_jump_frames = world_8_1_jump_frames - 1
+      if world_8_1_jump_frames == 0 then
+        world_8_1_jump_release = world_8_1_max_x >= 700 and 2 or 6
+      end
+    elseif memory.readbyte(0xED) == 3 and m.y > 170 then
+      held.A = frame % 4 ~= 3
+    else
+      held.A = false
+    end
+    local imminent_hazard = nearest_enemy_between(m, 0, 96)
+    local imminent_plant = nearest_object_id_between(m, -92, 0, 240, 240)
+    if world_8_1_max_x >= 1520
+        and imminent_plant ~= nil
+        and world_8_1_last_hazard_id ~= -92 then
+      imminent_hazard = imminent_plant
+    end
+    local imminent_bullet = nearest_object_id_between(m, 47, 0, 120, 160)
+    if world_8_1_max_x >= 1450
+        and imminent_bullet ~= nil
+        and not world_8_1_handled_hazards[47] then
+      imminent_hazard = imminent_bullet
+    end
+    if world_8_1_hazard_jump_frames > 0
+        and world_8_1_last_hazard_id == -92
+        and m.x >= 1400 and m.air == 0 then
+      world_8_1_hazard_jump_frames = 0
+      world_8_1_plant_handoff = -1
+    end
+    if world_8_1_plant_handoff == -1 then
+      held.right = false
+      held.left = (m.air ~= 0 and m.x > 1475)
+        or (m.air == 0 and m.x > 1498)
+      held.B = false
+      held.A = false
+      if imminent_bullet ~= nil then
+        world_8_1_plant_bullet_seen = true
+      end
+      if imminent_plant ~= nil
+          and imminent_plant.dy >= -12
+          and imminent_bullet == nil then
+        world_8_1_plant_safe_frames = world_8_1_plant_safe_frames + 1
+      else
+        world_8_1_plant_safe_frames = 0
+      end
+      if world_8_1_plant_safe_frames >= 3 then
+        log_state(
+          "post_probe_world_8_1_discovery_plant_retracted",
+          "review_only=1 promotable=0 plant_dx=" .. tostring(imminent_plant.dx)
+            .. " plant_dy=" .. tostring(imminent_plant.dy)
+        )
+        world_8_1_plant_handoff = 3
+      end
+    elseif world_8_1_plant_handoff > 0 then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      world_8_1_plant_handoff = world_8_1_plant_handoff - 1
+      if world_8_1_plant_handoff == 0 then
+        world_8_1_plant_forward_frames = 100
+        world_8_1_handled_hazards[47] = true
+        log_state(
+          "post_probe_world_8_1_discovery_plant_forward",
+          "review_only=1 promotable=0"
+        )
+      end
+    elseif world_8_1_plant_decoy_frames > 0 then
+      held.right = false
+      held.left = true
+      held.B = false
+      held.A = false
+      world_8_1_plant_decoy_frames = world_8_1_plant_decoy_frames - 1
+      if m.x <= 1470 or world_8_1_plant_decoy_frames == 0 then
+        world_8_1_plant_decoy_frames = 0
+        world_8_1_plant_runup_frames = 8
+      end
+    elseif world_8_1_plant_runup_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = false
+      world_8_1_plant_runup_frames = world_8_1_plant_runup_frames - 1
+      if world_8_1_plant_runup_frames == 0 then
+        world_8_1_plant_forward_frames = 79
+      end
+    elseif world_8_1_plant_forward_release > 0 then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      world_8_1_plant_forward_release = world_8_1_plant_forward_release - 1
+      if world_8_1_plant_forward_release == 0 then
+        world_8_1_plant_forward_frames = 79
+      end
+    elseif world_8_1_plant_forward_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = true
+      held.A = m.air == 0 or world_8_1_plant_forward_frames < 80
+      if m.air == 0 and world_8_1_plant_forward_frames >= 80 then
+        held.right = false
+        held.B = false
+        held.A = false
+        world_8_1_plant_forward_frames = 0
+        world_8_1_plant_decoy_frames = 20
+      else
+        world_8_1_plant_forward_frames = world_8_1_plant_forward_frames - 1
+      end
+      if world_8_1_plant_forward_frames > 0
+          and world_8_1_plant_forward_frames % 20 == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_plant_forward_tick",
+          "review_only=1 promotable=0 frames_left="
+            .. tostring(world_8_1_plant_forward_frames)
+            .. " " .. object_summary_between(m, -64, 192, 192)
+        )
+      end
+    elseif world_8_1_hazard_jump_frames > 0 then
+      held.right = true
+      held.left = false
+      held.B = held.right
+      held.A = true
+      world_8_1_hazard_jump_frames = world_8_1_hazard_jump_frames - 1
+      if world_8_1_hazard_jump_frames == 0
+          and world_8_1_last_hazard_id == -92 then
+        world_8_1_plant_handoff = -1
+      end
+    elseif world_8_1_hazard_jump_release == -1 then
+      held.right = false
+      held.left = world_8_1_last_hazard_id == -92
+        or world_8_1_last_hazard_id == 110
+      held.B = false
+      if m.air == 0 or m.y >= 380 then
+        world_8_1_hazard_jump_release = 2
+        held.A = false
+      else
+        held.A = false
+      end
+    elseif world_8_1_hazard_jump_release > 0 then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      world_8_1_hazard_jump_release = world_8_1_hazard_jump_release - 1
+      if world_8_1_hazard_jump_release == 0 then
+        world_8_1_hazard_jump_frames =
+          world_8_1_last_hazard_id == -92 and 45 or 70
+      end
+    elseif world_8_1_max_x >= 700
+        and imminent_hazard ~= nil
+        and (imminent_hazard.id == 110
+          or imminent_hazard.id == 120
+          or (imminent_hazard.id == 47 and world_8_1_max_x >= 1450)
+          or (imminent_hazard.id == -92
+            and m.air == 0 and world_8_1_max_x >= 1520))
+        and not world_8_1_handled_hazards[imminent_hazard.id]
+        and (m.air ~= 0 or imminent_hazard.id == -92)
+        and (m.y >= 300 or imminent_hazard.id == -92) then
+      held.right = false
+      held.left = false
+      held.B = false
+      held.A = false
+      world_8_1_last_hazard_id = imminent_hazard.id
+      world_8_1_handled_hazards[imminent_hazard.id] = true
+      world_8_1_hazard_jump_release = -1
+      log_state(
+        "post_probe_world_8_1_discovery_hazard_brake",
+        "review_only=1 promotable=0 enemy_id="
+          .. tostring(imminent_hazard.id)
+          .. " enemy_dx=" .. tostring(imminent_hazard.dx)
+          .. " y_speed=" .. tostring(memory.readbytesigned(0xCF))
+          .. " " .. object_summary_between(m, -96, 192, 192)
+      )
+    end
+    local bounce_bill = nearest_object_id_between(m, 47, 0, 120, 160)
+    if world_8_1_bullet_bounce_frames > 0
+        and m.x >= 1280 and m.air == 0 then
+      world_8_1_bullet_bounce_frames = 0
+      world_8_1_bullet_bounce_handoff = 3
+    end
+    if world_8_1_bullet_bounce_handoff > 0 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_bullet_bounce_handoff = world_8_1_bullet_bounce_handoff - 1
+    elseif world_8_1_bullet_bounce_frames > 0 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = true
+      world_8_1_bullet_bounce_frames = world_8_1_bullet_bounce_frames - 1
+    elseif world_8_1_bullet_bounce_release > 0 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_bullet_bounce_release = world_8_1_bullet_bounce_release - 1
+      if world_8_1_bullet_bounce_release == 0 then
+        world_8_1_bullet_bounce_frames = 180
+      end
+    elseif not world_8_1_bullet_bounce_started
+        and world_8_1_max_x >= 1200
+        and world_8_1_max_x < 1400
+        and m.air == 0
+        and bounce_bill ~= nil then
+      world_8_1_bullet_bounce_started = true
+      world_8_1_bullet_bounce_release = 3
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      log_state(
+        "post_probe_world_8_1_discovery_bullet_bounce",
+        "review_only=1 promotable=0 bullet_dx=" .. tostring(bounce_bill.dx)
+          .. " bullet_dy=" .. tostring(bounce_bill.dy)
+      )
+    end
+    if not world_8_1_altitude_brake_done
+        and world_8_1_max_x >= 1350 and world_8_1_max_x < 1450
+        and m.air ~= 0
+        and memory.readbytesigned(0xCF) < 0 then
+      world_8_1_altitude_brake_done = true
+      held.left = true
+      held.right = false
+      held.B = false
+      held.A = true
+    end
+    local wall_enemy = nearest_object_id_between(m, -92, 0, 128, 160)
+    if world_8_1_wall_platform_state == 0
+        and m.x >= 1450 and m.y <= 300
+        and wall_enemy ~= nil then
+      world_8_1_wall_platform_state = 1
+    end
+    if world_8_1_wall_platform_state == 1 then
+      held.left = m.air ~= 0 and m.x > 1470
+      held.right = false
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        world_8_1_wall_platform_state = 4
+        world_8_1_wall_platform_frames = 0
+      end
+    elseif world_8_1_wall_platform_state == 2 then
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        world_8_1_wall_platform_state = 4
+        world_8_1_wall_platform_frames = 0
+      end
+    elseif world_8_1_wall_platform_state == 3 and m.x < 1580 then
+      held.left = false
+      held.right = world_8_1_wall_platform_frames < 88
+      held.B = true
+      held.A = true
+      world_8_1_wall_platform_frames = world_8_1_wall_platform_frames - 1
+      if world_8_1_wall_platform_frames == 0 then
+        world_8_1_wall_platform_state = 6
+      end
+    elseif world_8_1_wall_platform_state == 4 then
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      local wall_enemy_safe_dy = m.y >= 384 and -67 or 25
+      if wall_enemy ~= nil and wall_enemy.dy >= wall_enemy_safe_dy then
+        world_8_1_wall_platform_frames = world_8_1_wall_platform_frames + 1
+      else
+        world_8_1_wall_platform_frames = 0
+      end
+      if world_8_1_wall_platform_frames >= 3 then
+        log_state(
+          "post_probe_world_8_1_discovery_wall_plant_retracted",
+          "review_only=1 promotable=0 plant_dy="
+            .. tostring(wall_enemy.dy)
+        )
+        world_8_1_wall_platform_state = 5
+        world_8_1_wall_platform_frames = 3
+      end
+    elseif world_8_1_wall_platform_state == 5 then
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_wall_platform_frames = world_8_1_wall_platform_frames - 1
+      if world_8_1_wall_platform_frames == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_wall_second_launch",
+          "review_only=1 promotable=0"
+        )
+        world_8_1_wall_platform_state = 3
+        world_8_1_wall_platform_frames = 100
+      end
+    end
+    if world_8_1_pipe_hold_state == 0
+        and m.x >= 1488 and m.x < 1512
+        and m.y <= 280
+        and wall_enemy ~= nil then
+      world_8_1_pipe_hold_state = 1
+      world_8_1_pipe_hold_frames = 0
+      log_state(
+        "post_probe_world_8_1_discovery_pipe_apex_hold",
+        "review_only=1 promotable=0 plant_x=" .. tostring(wall_enemy.x)
+          .. " plant_y=" .. tostring(wall_enemy.y)
+      )
+    end
+    if world_8_1_pipe_hold_state == 1 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = true
+      held.A = true
+      world_8_1_pipe_hold_frames = world_8_1_pipe_hold_frames + 1
+      if world_8_1_pipe_hold_frames >= 8 then
+        world_8_1_pipe_hold_state = 2
+        log_state(
+          "post_probe_world_8_1_discovery_pipe_apex_release",
+          "review_only=1 promotable=0 hold_frames="
+            .. tostring(world_8_1_pipe_hold_frames)
+            .. " plant_y="
+            .. tostring(wall_enemy ~= nil and wall_enemy.y or -1)
+        )
+      end
+    elseif world_8_1_pipe_hold_state == 2 and m.x < 1600 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = true
+      if m.air == 0 and m.x < 1520 then
+        world_8_1_pipe_hold_state = 6
+        world_8_1_pipe_hold_frames = 5
+        log_state(
+          "post_probe_world_8_1_discovery_pipe_landing_release",
+          "review_only=1 promotable=0"
+        )
+      end
+      if m.x >= 1580 then
+        world_8_1_pipe_hold_state = 3
+      end
+    elseif world_8_1_pipe_hold_state == 6 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      if wall_enemy ~= nil and wall_enemy.y >= 317 then
+        world_8_1_pipe_hold_frames = world_8_1_pipe_hold_frames - 1
+      else
+        world_8_1_pipe_hold_frames = 5
+      end
+      if world_8_1_pipe_hold_frames == 0 then
+        world_8_1_pipe_hold_state = 5
+        world_8_1_pipe_hold_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_pipe_safe_launch",
+          "review_only=1 promotable=0 plant_y="
+            .. tostring(wall_enemy ~= nil and wall_enemy.y or -1)
+        )
+      end
+    elseif world_8_1_pipe_hold_state == 5 and m.x < 1600 then
+      world_8_1_pipe_hold_frames = world_8_1_pipe_hold_frames + 1
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = world_8_1_pipe_hold_frames > 20
+      held.B = held.right
+      held.A = true
+      if world_8_1_pipe_hold_frames == 20 then
+        log_state(
+          "post_probe_world_8_1_discovery_pipe_vertical_jump",
+          "review_only=1 promotable=0"
+        )
+      end
+      if m.x >= 1580 then
+        world_8_1_pipe_hold_state = 3
+      end
+    end
+    local authored_star = nearest_object_id_between(m, 12, -192, 256, 240)
+    if authored_star ~= nil then
+      world_8_1_star_seen = true
+    end
+    if world_8_1_star_state == 0
+        and world_8_1_max_x >= 900
+        and world_8_1_max_x < 1150
+        and m.air == 0 then
+      world_8_1_star_state = 1
+      log_state(
+        "post_probe_world_8_1_discovery_star_return",
+        "review_only=1 promotable=0 target_block_x=928"
+      )
+    end
+    if world_8_1_star_state == 1 then
+      held.up = false
+      held.down = false
+      held.right = false
+      held.left = m.x > 946
+      held.B = true
+      held.A = true
+      if m.x <= 946 and m.air == 0 and m.y >= 350 then
+        world_8_1_star_state = 2
+        world_8_1_star_frames = 4
+        log_state(
+          "post_probe_world_8_1_discovery_star_positioned",
+          "review_only=1 promotable=0 target_block_x=928"
+        )
+      end
+    elseif world_8_1_star_state == 2 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_star_frames = world_8_1_star_frames - 1
+      if world_8_1_star_frames == 0 then
+        world_8_1_star_state = 3
+        world_8_1_star_frames = 70
+        log_state(
+          "post_probe_world_8_1_discovery_star_launch",
+          "review_only=1 promotable=0 target_block_x=928"
+        )
+      end
+    elseif world_8_1_star_state == 3 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = true
+      world_8_1_star_frames = world_8_1_star_frames - 1
+      if authored_star ~= nil then
+        world_8_1_star_state = 4
+        world_8_1_star_frames = 180
+        log_state(
+          "post_probe_world_8_1_discovery_star_spawned",
+          "review_only=1 promotable=0 object_id=12 object_slot="
+            .. tostring(authored_star.slot)
+        )
+      elseif world_8_1_star_frames == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_star_missing",
+          "review_only=1 promotable=0 target_block_x=928"
+        )
+        world_8_1_star_state = 6
+      end
+    elseif world_8_1_star_state == 4 then
+      held.up = false
+      held.down = false
+      held.left = authored_star ~= nil and authored_star.dx < -8
+      held.right = authored_star == nil or authored_star.dx >= -8
+      held.B = true
+      held.A = m.air == 0
+      world_8_1_star_frames = world_8_1_star_frames - 1
+      if memory.readbyte(0x553) > 0 then
+        world_8_1_star_collected = true
+        world_8_1_star_state = 5
+        log_state(
+          "post_probe_world_8_1_discovery_star_collected",
+          "review_only=1 promotable=0 evidence=object_12_then_game_owned_Player_StarInv"
+        )
+      elseif world_8_1_star_frames == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_star_uncollected",
+          "review_only=1 promotable=0 star_seen="
+            .. tostring(world_8_1_star_seen and 1 or 0)
+        )
+        world_8_1_star_state = 6
+      end
+    elseif world_8_1_star_state == 5 and m.x < 1700 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = true
+      if m.x >= 1650 then
+        world_8_1_star_state = 6
+      end
+    end
+    if world_8_1_gap_platform_state == 0
+        and m.x >= 1610 and m.x < 1700
+        and m.air ~= 0 then
+      world_8_1_gap_platform_state = 1
+      log_state(
+        "post_probe_world_8_1_discovery_gap_platform_approach",
+        "review_only=1 promotable=0 target_x=1650"
+      )
+    end
+    if world_8_1_gap_platform_state == 1 then
+      held.up = false
+      held.down = false
+      held.left = m.x > 1655
+      held.right = m.x < 1640
+      held.B = false
+      held.A = false
+      if m.air == 0 then
+        world_8_1_gap_platform_state = 2
+        world_8_1_gap_platform_frames = 3
+        log_state(
+          "post_probe_world_8_1_discovery_gap_platform_landed",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+            .. " landing_y=" .. tostring(m.y)
+        )
+      end
+    elseif world_8_1_gap_platform_state == 2 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_gap_platform_frames = world_8_1_gap_platform_frames - 1
+      if world_8_1_gap_platform_frames == 0 then
+        world_8_1_gap_platform_state = 3
+      end
+    elseif world_8_1_gap_platform_state == 3 and m.x < 1940 then
+      world_8_1_gap_platform_frames = world_8_1_gap_platform_frames + 1
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      -- Release into the authored flying Paratroopa, then hold again so the
+      -- normal stomp bounce carries Mario across the long exposed gap.
+      held.A = world_8_1_gap_platform_frames <= 20
+        or world_8_1_gap_platform_frames >= 30
+      if world_8_1_gap_platform_frames % 4 == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_gap_stomp_tick",
+          "review_only=1 promotable=0 gap_frame="
+            .. tostring(world_8_1_gap_platform_frames)
+            .. " y_speed=" .. tostring(memory.readbytesigned(0xCF))
+            .. " objects=" .. object_summary_between(m, -160, 160, 200)
+        )
+      end
+      if m.x >= 1880 and m.air == 0 then
+        world_8_1_gap_platform_state = 4
+        world_8_1_gap_platform_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_stair_climb_started",
+          "review_only=1 promotable=0 climb_x=" .. tostring(m.x)
+        )
+      end
+    elseif world_8_1_gap_platform_state == 4 and m.x < 2080 then
+      world_8_1_gap_platform_frames = world_8_1_gap_platform_frames + 1
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = true
+      held.A = false
+      if m.x <= 1888 then
+        world_8_1_gap_platform_state = 6
+        world_8_1_gap_platform_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_stair_runway_ready",
+          "review_only=1 promotable=0 runway_x=" .. tostring(m.x)
+        )
+      end
+    elseif world_8_1_gap_platform_state == 6 and m.x < 2080 then
+      world_8_1_gap_platform_frames = world_8_1_gap_platform_frames + 1
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = m.x >= 1905
+      if m.x >= 2040 then
+        world_8_1_gap_platform_state = 5
+        log_state(
+          "post_probe_world_8_1_discovery_stair_climb_cleared",
+          "review_only=1 promotable=0 exit_x=" .. tostring(m.x)
+            .. " exit_y=" .. tostring(m.y)
+        )
+      end
+    end
+    if world_8_1_final_gap_state == 0
+        and m.x >= 2088 and m.x < 2220 then
+      world_8_1_final_gap_state = 1
+      world_8_1_final_gap_frames = 0
+      log_state(
+        "post_probe_world_8_1_discovery_final_gap_launch",
+        "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+      )
+    end
+    if world_8_1_final_gap_state == 1 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = false
+      held.A = false
+      if m.air == 0 and m.x >= 1980 then
+        world_8_1_final_gap_state = m.x >= 2090 and 2 or 4
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_final_gap_landed",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+            .. " landing_y=" .. tostring(m.y)
+        )
+      end
+    elseif world_8_1_final_gap_state == 4 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = false
+      if m.x >= 2078 and memory.readbytesigned(0xBD) >= 35 then
+        world_8_1_final_gap_state = 5
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_final_gap_runup_ready",
+          "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+        )
+      end
+    elseif world_8_1_final_gap_state == 5 then
+      world_8_1_final_gap_frames = world_8_1_final_gap_frames + 1
+      held.up = false
+      held.down = false
+      held.left = world_8_1_final_gap_frames > 7
+      held.right = not held.left
+      held.B = held.right
+      held.A = world_8_1_final_gap_frames <= 12
+      if world_8_1_final_gap_frames % 10 == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_final_gap_tick",
+          "review_only=1 promotable=0 gap_frame="
+            .. tostring(world_8_1_final_gap_frames)
+        )
+      end
+      if world_8_1_final_gap_frames > 30
+          and m.x >= 2100 and m.x <= 2130
+          and memory.readbytesigned(0xCF) < 0 then
+        world_8_1_final_gap_state = 2
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_note_block_bounced",
+          "review_only=1 promotable=0 bounce_x=" .. tostring(m.x)
+            .. " bounce_y=" .. tostring(m.y)
+        )
+      elseif world_8_1_final_gap_frames > 40 and m.air == 0 and m.x >= 2075 then
+        world_8_1_final_gap_state = 2
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_note_block_landed",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+            .. " landing_y=" .. tostring(m.y)
+        )
+      elseif world_8_1_final_gap_frames > 40 and m.air == 0 then
+        world_8_1_final_gap_state = 4
+        world_8_1_final_gap_frames = 0
+      end
+    elseif world_8_1_final_gap_state == 2 and m.x < 2420 then
+      world_8_1_final_gap_frames = world_8_1_final_gap_frames + 1
+      held.up = false
+      held.down = false
+      held.left = m.x >= 2200
+      held.right = not held.left
+      held.B = held.right
+      held.A = true
+      if world_8_1_final_gap_frames > 20 and m.air == 0 and m.x < 2200 then
+        world_8_1_final_gap_state = 4
+        world_8_1_final_gap_frames = 0
+      elseif m.air == 0 and m.x >= 2190 then
+        world_8_1_final_gap_state = 3
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_empty_pipe_landed",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+        )
+      end
+    elseif world_8_1_final_gap_state == 3 then
+      held.up = false
+      held.down = false
+      local empty_pipe_x_speed = memory.readbytesigned(0xBD)
+      held.left = m.x > 2225 and empty_pipe_x_speed >= 0
+      held.right = empty_pipe_x_speed < 0 or m.x < 2220
+      held.B = false
+      held.A = false
+      local final_pipe_plant = level_plant_near_x(2328, 4)
+      if final_pipe_plant ~= nil and final_pipe_plant.y >= 317 then
+        world_8_1_final_gap_frames = world_8_1_final_gap_frames + 1
+      else
+        world_8_1_final_gap_frames = 0
+      end
+      if world_8_1_final_gap_frames >= 4 then
+        world_8_1_final_gap_state = 6
+        world_8_1_final_gap_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_final_pipe_plant_retracted",
+          "review_only=1 promotable=0 plant_x=2328"
+        )
+      end
+    elseif world_8_1_final_gap_state == 6 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = true
+      if m.x >= 2440 then
+        world_8_1_final_gap_state = 7
+      end
+    end
+    local tower_bullet = nearest_object_id_between(m, 120, 0, 96, 160)
+    if world_8_1_tower_state == 0
+        and world_8_1_runway_state == -1
+        and m.x >= 800 and m.x < 960
+        and m.air == 0 and tower_bullet ~= nil then
+      world_8_1_tower_state = 1
+      world_8_1_tower_frames = 3
+      log_state(
+        "post_probe_world_8_1_discovery_tower_bullet_jump",
+        "review_only=1 promotable=0 bullet_dx="
+          .. tostring(tower_bullet.dx)
+          .. " bullet_dy=" .. tostring(tower_bullet.dy)
+      )
+    end
+    if world_8_1_tower_state == 1 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = false
+      held.A = false
+      world_8_1_tower_frames = world_8_1_tower_frames - 1
+      if world_8_1_tower_frames == 0 then
+        world_8_1_tower_state = 2
+        world_8_1_tower_frames = 90
+      end
+    elseif world_8_1_tower_state == 2 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = world_8_1_tower_frames <= 50
+      held.B = held.right
+      held.A = true
+      world_8_1_tower_frames = world_8_1_tower_frames - 1
+      if m.x >= 960 then
+        world_8_1_tower_state = 3
+      elseif world_8_1_tower_frames == 0 then
+        world_8_1_tower_state = 0
+      end
+    end
+    if world_8_1_second_gap_state == 0
+        and m.x >= 1240 and m.x < 1400
+        and m.air == 0
+        and math.abs(memory.readbytesigned(0xBD)) <= 8 then
+      world_8_1_second_gap_state = 1
+      world_8_1_second_gap_frames = 60
+      log_state(
+        "post_probe_world_8_1_discovery_second_gap_jump",
+        "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+      )
+    end
+    if world_8_1_second_gap_state == 1 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = true
+      held.A = false
+      world_8_1_second_gap_frames = world_8_1_second_gap_frames - 1
+      if world_8_1_second_gap_frames == 0 then
+        world_8_1_second_gap_state = 2
+        world_8_1_second_gap_frames = 45
+      end
+    elseif world_8_1_second_gap_state == 2 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = false
+      world_8_1_second_gap_frames = world_8_1_second_gap_frames - 1
+      if world_8_1_second_gap_frames == 0 then
+        world_8_1_second_gap_state = 4
+        world_8_1_second_gap_frames = 60
+      end
+    elseif world_8_1_second_gap_state == 4 then
+      held.up = false
+      held.down = true
+      held.left = false
+      held.right = false
+      held.B = true
+      held.A = false
+      world_8_1_second_gap_frames = world_8_1_second_gap_frames - 1
+      if m.x >= 1400 then
+        world_8_1_second_gap_state = 3
+      elseif world_8_1_second_gap_frames == 0 then
+        world_8_1_second_gap_state = 0
+      end
+    end
+    if world_8_1_max_x >= 680
+        and (world_8_1_max_x < 960
+          or (world_8_1_runway_state >= 2 and world_8_1_max_x < 1400))
+        and world_8_1_runway_state ~= 4
+        and world_8_1_tower_state == 0 then
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = false
+      if world_8_1_runway_state == 0 then
+        if m.x >= 680 then
+          world_8_1_runway_state = 12
+          log_state(
+            "post_probe_world_8_1_discovery_runway_direct_setup",
+            "review_only=1 promotable=0 "
+              .. object_summary_between(m, -64, 192, 192)
+          )
+        end
+      elseif world_8_1_runway_state == 1 then
+        held.left = true
+        held.right = false
+        held.B = true
+        held.A = false
+        if m.x <= 720 then
+          if world_8_1_runway_passes < 8 then
+            world_8_1_runway_state = 10
+          else
+            world_8_1_runway_state = 6
+          end
+          log_state(
+            "post_probe_world_8_1_discovery_flight_runup_right",
+            "review_only=1 promotable=0 p_meter="
+              .. tostring(memory.readbyte(0x3DD))
+          )
+        end
+      elseif world_8_1_runway_state == 2 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        if world_8_1_runway_attack_frames == 0
+            and m.air == 0 and m.x >= 740 and m.x < 1020 then
+          world_8_1_runway_attack_frames = 60
+        end
+        if world_8_1_runway_attack_frames > 0 then
+          held.A = world_8_1_runway_attack_frames > 8
+          world_8_1_runway_attack_frames =
+            world_8_1_runway_attack_frames - 1
+        end
+        if m.x >= 1020 and m.air == 0 then
+          world_8_1_runway_state = 4
+        end
+        if memory.readbyte(0x57B) ~= 0 then
+          world_8_1_runway_state = 3
+          world_8_1_runway_tail_frames = 0
+          log_state(
+            "post_probe_world_8_1_discovery_flight_started",
+            "review_only=1 promotable=0 p_meter="
+              .. tostring(memory.readbyte(0x3DD))
+          )
+        end
+      elseif world_8_1_runway_state == 10 then
+        local shuttle_paratroopa = nearest_object_id_between(
+          m, 110, -64, 160, 192
+        ) or nearest_object_id_between(m, 108, -64, 160, 192)
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        if shuttle_paratroopa ~= nil
+            and world_8_1_runway_attack_frames == 0
+            and m.air == 0
+            and shuttle_paratroopa.dx >= 40
+            and shuttle_paratroopa.dx <= 120 then
+          world_8_1_runway_attack_frames = 70
+        end
+        if world_8_1_runway_attack_frames > 0 then
+          held.A = world_8_1_runway_attack_frames > 12
+          held.B = world_8_1_runway_attack_frames % 12 < 3
+          world_8_1_runway_attack_frames =
+            world_8_1_runway_attack_frames - 1
+        end
+        if m.x >= 790 and world_8_1_runway_attack_frames == 0 then
+          world_8_1_runway_passes = world_8_1_runway_passes + 1
+          world_8_1_runway_state = 6
+          log_state(
+            "post_probe_world_8_1_discovery_runway_pass",
+            "review_only=1 promotable=0 pass="
+              .. tostring(world_8_1_runway_passes)
+              .. " p_meter=" .. tostring(memory.readbyte(0x3DD))
+          )
+        end
+      elseif world_8_1_runway_state == 3 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = frame % 4 ~= 0
+        if not world_8_1_secret_pipe_logged and m.x >= 940 then
+          world_8_1_secret_pipe_logged = true
+          log_state(
+            "post_probe_world_8_1_discovery_secret_pipe_approach",
+            "review_only=1 promotable=0 x=" .. tostring(m.x)
+              .. " y=" .. tostring(m.y)
+          )
+        end
+        if world_8_1_max_x >= 1240 then
+          world_8_1_runway_state = 4
+          log_state(
+            "post_probe_world_8_1_discovery_wall_flown_over",
+            "review_only=1 promotable=0 max_x="
+              .. tostring(world_8_1_max_x)
+          )
+        end
+      elseif world_8_1_runway_state == 12 then
+        held.left = false
+        held.right = m.x < 770
+        held.B = held.right
+        held.A = m.x >= 730
+        if memory.readbyte(0xED) < 3 then
+          world_8_1_runway_state = 13
+          log_state(
+            "post_probe_world_8_1_discovery_damage_route_started",
+            "review_only=1 promotable=0 evidence=normal_paratroopa_contact form="
+              .. tostring(memory.readbyte(0xED))
+              .. " x=" .. tostring(m.x)
+          )
+        end
+        if m.air == 0 and m.x >= 940 then
+          world_8_1_runway_state = 4
+          log_state(
+            "post_probe_world_8_1_discovery_runway_direct_landed",
+            "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+              .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+              .. " p_meter=" .. tostring(memory.readbyte(0x3DD))
+          )
+        end
+      elseif world_8_1_runway_state == 13 then
+        held.left = true
+        held.right = false
+        held.B = true
+        held.A = false
+        if m.x <= 720 and m.air == 0 and memory.readbyte(0x578) == 0 then
+          world_8_1_runway_state = 14
+          world_8_1_damage_release = 8
+          log_state(
+            "post_probe_world_8_1_discovery_damage_route_jump_ready",
+            "review_only=1 promotable=0 evidence=game_owned_form_change_completed_with_runup_restored x="
+              .. tostring(m.x) .. " form=" .. tostring(memory.readbyte(0xED))
+          )
+        end
+      elseif world_8_1_runway_state == 16 then
+        held.left = false
+        held.right = false
+        held.B = false
+        held.A = false
+        if memory.readbyte(0xED) == 0 then
+          world_8_1_runway_state = 14
+          world_8_1_damage_release = 4
+          log_state(
+            "post_probe_world_8_1_discovery_small_route_ready",
+            "review_only=1 promotable=0 evidence=normal_bullet_bill_contact form=0 x="
+              .. tostring(m.x)
+          )
+        end
+      elseif world_8_1_runway_state == 14 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        world_8_1_damage_release = world_8_1_damage_release - 1
+        if memory.readbytesigned(0xBD) >= 30 then
+          world_8_1_runway_state = 15
+          world_8_1_launch_form = memory.readbyte(0xED)
+        end
+      elseif world_8_1_runway_state == 15 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = true
+        if memory.readbyte(0xED) < world_8_1_launch_form and m.x < 900 then
+          world_8_1_runway_state = 13
+          log_state(
+            "post_probe_world_8_1_discovery_small_route_retry",
+            "review_only=1 promotable=0 evidence=second_normal_contact_interrupted_jump x="
+              .. tostring(m.x)
+          )
+        elseif m.air == 0 and m.x >= 940 then
+          if memory.readbyte(0xED) == 0 then
+            world_8_1_runway_state = 4
+            log_state(
+              "post_probe_world_8_1_discovery_runway_damage_route_landed",
+              "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+                .. " form=0"
+            )
+          else
+            world_8_1_runway_state = 16
+            log_state(
+              "post_probe_world_8_1_discovery_damage_route_platform",
+              "review_only=1 promotable=0 evidence=landed_on_observed_solid_footing x="
+                .. tostring(m.x)
+            )
+          end
+        end
+      elseif world_8_1_runway_state == 5 then
+        local runway_paratroopa = nearest_object_id_between(
+          m, 110, -512, 512, 512
+        ) or nearest_object_id_between(m, 108, -512, 512, 512)
+        held.left = m.x > 680
+        held.right = m.x < 676
+        held.B = false
+        held.A = false
+        world_8_1_runway_wait_frames = world_8_1_runway_wait_frames + 1
+        if runway_paratroopa ~= nil
+            and world_8_1_runway_attack_frames == 0
+            and m.air == 0
+            and ((runway_paratroopa.id == 110
+                and runway_paratroopa.dx >= 56
+                and runway_paratroopa.dx <= 104)
+              or (runway_paratroopa.id == 108
+                and runway_paratroopa.dx >= 16
+                and runway_paratroopa.dx <= 64)) then
+          world_8_1_runway_attack_frames = 70
+          log_state(
+            "post_probe_world_8_1_discovery_paratroopa_attack",
+            "review_only=1 promotable=0 paratroopa_dx="
+              .. tostring(runway_paratroopa.dx)
+              .. " object_id=" .. tostring(runway_paratroopa.id)
+          )
+        end
+        if world_8_1_runway_attack_frames > 0 then
+          held.left = false
+          held.right = true
+          held.A = world_8_1_runway_attack_frames > 12
+          held.B = world_8_1_runway_attack_frames % 12 < 3
+          world_8_1_runway_attack_frames =
+            world_8_1_runway_attack_frames - 1
+        end
+        if runway_paratroopa == nil
+            and world_8_1_runway_wait_frames >= 45 then
+          world_8_1_runway_state = 6
+          world_8_1_runway_attack_frames = 0
+          log_state(
+            "post_probe_world_8_1_discovery_paratroopa_cleared",
+            "review_only=1 promotable=0 wait_frames="
+              .. tostring(world_8_1_runway_wait_frames)
+              .. " paratroopa_dx="
+              .. tostring(runway_paratroopa ~= nil and runway_paratroopa.dx or -999)
+          )
+        end
+      elseif world_8_1_runway_state == 11 then
+        held.left = true
+        held.right = false
+        held.B = frame % 12 < 3
+        held.A = true
+        if m.x <= 650 then
+          world_8_1_runway_state = 6
+        end
+      elseif world_8_1_runway_state == 6 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        if m.x >= 816 and m.air == 0 then
+          world_8_1_runway_state = 7
+          log_state(
+            "post_probe_world_8_1_discovery_cannon_gap_launch",
+            "review_only=1 promotable=0 paratroopa_stomped=1"
+          )
+        end
+      elseif world_8_1_runway_state == 7 then
+        held.left = false
+        held.right = true
+        held.B = frame % 12 < 8
+        held.A = true
+        world_8_1_runway_tail_frames =
+          world_8_1_runway_tail_frames + 1
+        if m.air == 0 and m.x >= 940 then
+          world_8_1_runway_state = 4
+          world_8_1_wall_jump_release = 1
+          log_state(
+            "post_probe_world_8_1_discovery_wall_jump_release",
+            "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+              .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+              .. " p_meter=" .. tostring(memory.readbyte(0x3DD))
+          )
+        elseif m.x >= 1150 then
+          world_8_1_runway_state = 4
+          log_state(
+            "post_probe_world_8_1_discovery_runway_clear",
+            "review_only=1 promotable=0 max_x="
+              .. tostring(world_8_1_max_x)
+          )
+        end
+      elseif world_8_1_runway_state == 8 then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        world_8_1_wall_jump_release = world_8_1_wall_jump_release - 1
+        if world_8_1_wall_jump_release == 0 then
+          world_8_1_runway_state = 9
+          log_state(
+            "post_probe_world_8_1_discovery_wall_jump_launch",
+            "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+          )
+        end
+      elseif world_8_1_runway_state == 9 then
+        held.left = false
+        held.right = true
+        held.B = frame % 12 < 3
+        held.A = true
+        if m.x >= 1150 then
+          world_8_1_runway_state = 4
+          log_state(
+            "post_probe_world_8_1_discovery_runway_clear",
+            "review_only=1 promotable=0 max_x="
+              .. tostring(world_8_1_max_x)
+          )
+        end
+      end
+    end
+    if world_8_1_tunnel_state == 0
+        and m.x >= 980 and m.x < 1400
+        and m.air == 0 and m.y >= 350 then
+      if discovery_run and not world_8_1_input_probe_done then
+        world_8_1_input_probe_done = true
+        local input_checkpoint = savestate.create()
+        savestate.save(input_checkpoint)
+        local input_strategies = {
+          "right",
+          "right_b",
+          "jump_right",
+          "slide_late",
+          "duck_right",
+          "duck_step",
+          "small_wait_right",
+        }
+        for _, input_strategy in ipairs(input_strategies) do
+          savestate.load(input_checkpoint)
+          local input_max_x = mario().x
+          for input_frame = 1, 600 do
+            local input_m = mario()
+            held.up = false
+            held.down = false
+            held.left = false
+            held.right = false
+            held.B = false
+            held.A = false
+            if input_frame > 4 then
+              if input_strategy == "right" then
+                held.right = true
+              elseif input_strategy == "right_b" then
+                held.right = true
+                held.B = true
+              elseif input_strategy == "jump_right" then
+                held.right = true
+                held.B = true
+                held.A = input_frame <= 100
+              elseif input_strategy == "slide_late" then
+                held.right = input_frame <= 45 or input_frame > 100
+                held.B = input_frame <= 45
+                held.down = input_frame > 45 and input_frame <= 100
+              elseif input_strategy == "duck_right" then
+                held.down = true
+                held.right = input_frame > 12
+              elseif input_strategy == "duck_step" then
+                held.down = input_frame % 2 == 1
+                held.right = not held.down
+              elseif input_strategy == "small_wait_right" then
+                held.right = memory.readbyte(0xED) == 0
+                held.B = held.right
+              end
+            end
+            apply()
+            advance_frame()
+            input_max_x = math.max(input_max_x, mario().x)
+            if input_max_x >= 1200 or not alive() then break end
+          end
+          log_state(
+            "post_probe_world_8_1_discovery_input_probe",
+            "review_only=1 promotable=0 strategy=" .. input_strategy
+              .. " max_x=" .. tostring(input_max_x)
+              .. " alive=" .. tostring(alive() and 1 or 0)
+              .. " form=" .. tostring(memory.readbyte(0xED))
+          )
+        end
+        savestate.load(input_checkpoint)
+      end
+      world_8_1_tunnel_state = 1
+      world_8_1_tunnel_frames = 0
+      log_state(
+        "post_probe_world_8_1_discovery_low_passage_entered",
+        "review_only=1 promotable=0 entry_x=" .. tostring(m.x)
+          .. " form=" .. tostring(memory.readbyte(0xED))
+      )
+    end
+    if world_8_1_tunnel_state == 1 then
+      world_8_1_tunnel_frames = world_8_1_tunnel_frames + 1
+      local low_passage_bullet = nearest_object_id_between(
+        m, 120, 0, 240, 48
+      )
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = low_passage_bullet == nil
+      held.B = held.right
+      held.A = false
+      if low_passage_bullet == nil and m.x >= 1060 and m.air == 0 then
+        world_8_1_tunnel_state = 2
+        world_8_1_tunnel_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_low_passage_safe_window",
+            "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+            .. " p_meter=" .. tostring(memory.readbyte(0x3DD))
+        )
+      elseif world_8_1_tunnel_frames % 120 == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_low_passage_tick",
+          "review_only=1 promotable=0 tunnel_frames="
+            .. tostring(world_8_1_tunnel_frames)
+        )
+      end
+    elseif world_8_1_tunnel_state == 5 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = true
+      held.A = false
+      if m.x <= 960 and m.air == 0 then
+        world_8_1_tunnel_state = 1
+      end
+    elseif world_8_1_tunnel_state == 2 then
+      world_8_1_tunnel_frames = world_8_1_tunnel_frames + 1
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = true
+      held.B = true
+      -- The preceding wait lets the first right-moving ground-level Bullet
+      -- Bill clear the corridor; this bounded jump then carries small Mario
+      -- over the low lip before the following shot can catch him from behind.
+      held.A = world_8_1_tunnel_frames <= 18
+      if m.x >= 1088 and not world_8_1_tile_grid_logged then
+        world_8_1_tile_grid_logged = true
+        local tile_screen = math.floor(m.x / 256)
+        local tile_base = 0x6000 + tile_screen * 0x1B0
+        local tile_rows = {}
+        for tile_row = 18, 26 do
+          local tile_values = {}
+          for tile_col = 0, 15 do
+            table.insert(
+              tile_values,
+              string.format("%02X", memory.readbyte(
+                tile_base + tile_row * 16 + tile_col
+              ))
+            )
+          end
+          table.insert(
+            tile_rows,
+            tostring(tile_row) .. ":" .. table.concat(tile_values, ",")
+          )
+        end
+        log_state(
+          "post_probe_world_8_1_discovery_tile_grid",
+          "review_only=1 promotable=0 screen=" .. tostring(tile_screen)
+            .. " rows=" .. table.concat(tile_rows, ";")
+        )
+      end
+      if world_8_1_tunnel_frames <= 24 then
+        log_state(
+          "post_probe_world_8_1_discovery_low_hazard_jump_frame",
+          "review_only=1 promotable=0 slide_frame="
+            .. tostring(world_8_1_tunnel_frames)
+            .. " slide_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+        )
+      end
+      if m.x >= 1140 then
+        world_8_1_tunnel_state = 3
+        log_state(
+          "post_probe_world_8_1_discovery_low_hazard_jump_cleared",
+          "review_only=1 promotable=0 short_jump_then_release=1 exit_x=" .. tostring(m.x)
+            .. " form=" .. tostring(memory.readbyte(0xED))
+        )
+      elseif world_8_1_tunnel_frames % 60 == 0 then
+        log_state(
+          "post_probe_world_8_1_discovery_low_hazard_jump_tick",
+          "review_only=1 promotable=0 slide_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+        )
+      end
+    elseif world_8_1_tunnel_state == 7 then
+      held.up = false
+      held.down = false
+      held.left = true
+      held.right = false
+      held.B = true
+      held.A = false
+      if m.x <= 1024 and m.air == 0 then
+        world_8_1_tunnel_state = 8
+        log_state(
+          "post_probe_world_8_1_discovery_slide_runway_ready",
+          "review_only=1 promotable=0 runway_x=" .. tostring(m.x)
+        )
+      end
+    elseif world_8_1_tunnel_state == 8 then
+      held.up = false
+      held.down = m.x >= 1210
+      held.left = false
+      held.right = not held.down
+      held.B = not held.down
+      held.A = false
+      if m.x >= 1280 then
+        world_8_1_tunnel_state = 6
+        world_8_1_tunnel_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_slide_cleared",
+          "review_only=1 promotable=0 exit_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+        )
+      end
+    elseif world_8_1_tunnel_state == 3 then
+      held.up = false
+      held.down = memory.readbyte(0xED) > 0 and m.x >= 1244
+      held.left = false
+      held.right = not held.down
+      held.B = not held.down
+      held.A = false
+      if m.x >= 1270 and m.air == 0 then
+        world_8_1_tunnel_state = 6
+        world_8_1_tunnel_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_blue_wall_exit_jump_started",
+          "review_only=1 promotable=0 launch_x=" .. tostring(m.x)
+            .. " x_speed=" .. tostring(memory.readbytesigned(0xBD))
+        )
+      elseif m.x >= 1390 then
+        world_8_1_tunnel_state = 4
+        log_state(
+          "post_probe_world_8_1_discovery_low_passage_cleared",
+          "review_only=1 promotable=0 exit_x=" .. tostring(m.x)
+            .. " form=" .. tostring(memory.readbyte(0xED))
+        )
+      end
+    elseif world_8_1_tunnel_state == 6 then
+      world_8_1_tunnel_frames = world_8_1_tunnel_frames + 1
+      held.up = false
+      held.down = false
+      held.left = m.x >= 1380
+      held.right = not held.left
+      held.B = held.right
+      held.A = world_8_1_tunnel_frames <= 40
+      if m.x >= 1400 and m.air == 0 then
+        world_8_1_tunnel_state = 9
+        world_8_1_tunnel_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_post_wall_foothold",
+          "review_only=1 promotable=0 evidence=normal_jump_from_blue_wall_exit foothold_x="
+            .. tostring(m.x)
+            .. " form=" .. tostring(memory.readbyte(0xED))
+        )
+      end
+    elseif world_8_1_tunnel_state == 9 then
+      world_8_1_tunnel_frames = world_8_1_tunnel_frames + 1
+      held.up = false
+      held.down = false
+      held.left = m.x >= 1465
+      held.right = not held.left
+      held.B = held.right
+      held.A = world_8_1_tunnel_frames <= 45
+      if world_8_1_tunnel_frames > 8
+          and m.x >= 1470 and m.air == 0 then
+        world_8_1_tunnel_state = 4
+        log_state(
+          "post_probe_world_8_1_discovery_low_passage_cleared",
+          "review_only=1 promotable=0 evidence=normal_second_jump_to_black_tower exit_x="
+            .. tostring(m.x)
+            .. " exit_y=" .. tostring(m.y)
+            .. " form=" .. tostring(memory.readbyte(0xED))
+        )
+      end
+    end
+    if world_8_1_post_wall_plant_state == 0
+        and world_8_1_tunnel_state == 4
+        and m.x >= 1470 and m.x < 1520 and m.air == 0 then
+      world_8_1_post_wall_plant_state = 1
+      world_8_1_post_wall_plant_frames = 0
+      log_state(
+        "post_probe_world_8_1_discovery_post_wall_plant_wait",
+        "review_only=1 promotable=0 wait_x=" .. tostring(m.x)
+      )
+    end
+    if world_8_1_post_wall_plant_state == 1 then
+      local post_wall_plant = nearest_object_id_between(m, -92, 0, 128, 192)
+      local tower_x_speed = memory.readbytesigned(0xBD)
+      held.up = false
+      held.down = false
+      held.left = (m.x > 1480 and tower_x_speed >= -2)
+        or (m.x < 1476 and tower_x_speed > 2)
+        or (m.x >= 1476 and m.x <= 1480 and tower_x_speed > 0)
+      held.right = (m.x < 1476 and tower_x_speed <= 2)
+        or (m.x > 1480 and tower_x_speed < -2)
+        or (m.x >= 1476 and m.x <= 1480 and tower_x_speed < 0)
+      held.B = false
+      held.A = false
+      world_8_1_post_wall_plant_faced_left = true
+      local proximity_suppressed = post_wall_plant == nil
+        and m.x >= 1470 and m.x <= 1490
+      if (post_wall_plant ~= nil and post_wall_plant.y >= 317)
+          or proximity_suppressed then
+        world_8_1_post_wall_plant_frames =
+          world_8_1_post_wall_plant_frames + 1
+      else
+        world_8_1_post_wall_plant_frames = 0
+      end
+      if proximity_suppressed
+          and world_8_1_post_wall_plant_frames >= 1 then
+        world_8_1_post_wall_plant_state = 5
+        world_8_1_post_wall_plant_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_post_wall_plant_suppressed",
+          "review_only=1 promotable=0 evidence=normal_player_proximity_suppression"
+        )
+      elseif world_8_1_post_wall_plant_frames >= 48 then
+        world_8_1_post_wall_plant_state = 5
+        world_8_1_post_wall_plant_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_post_wall_plant_retracted",
+          "review_only=1 promotable=0 plant_y="
+            .. tostring(post_wall_plant.y)
+            .. " retracted_wait_frames=48"
+        )
+      end
+    elseif world_8_1_post_wall_plant_state == 2 then
+      world_8_1_post_wall_plant_frames =
+        world_8_1_post_wall_plant_frames + 1
+      held.up = false
+      held.down = false
+      -- The authored question block is directly above the landing spot.
+      -- Rise left of it first, then redirect across the retracted plant pipe.
+      held.left = world_8_1_post_wall_plant_frames <= 10
+      held.right = world_8_1_post_wall_plant_frames > 10
+      held.B = held.right
+      held.A = world_8_1_post_wall_plant_frames <= 45
+      if world_8_1_post_wall_plant_frames > 12
+          and m.air == 0 and m.y <= 330 and m.x >= 1485 then
+        world_8_1_post_wall_plant_state = 5
+        world_8_1_post_wall_plant_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_black_tower_landed",
+          "review_only=1 promotable=0 landing_x=" .. tostring(m.x)
+            .. " landing_y=" .. tostring(m.y)
+        )
+      end
+    elseif world_8_1_post_wall_plant_state == 4 then
+      local tower_plant = nearest_object_id_between(m, -92, 0, 96, 192)
+      held.up = false
+      held.down = false
+      held.left = m.x > 1485
+      held.right = m.x < 1480
+      held.B = false
+      held.A = false
+      if tower_plant ~= nil and tower_plant.y >= 317 then
+        world_8_1_post_wall_plant_frames =
+          world_8_1_post_wall_plant_frames + 1
+      else
+        world_8_1_post_wall_plant_frames = 0
+      end
+      if world_8_1_post_wall_plant_frames >= 36 then
+        world_8_1_post_wall_plant_state = 5
+        world_8_1_post_wall_plant_frames = 0
+        log_state(
+          "post_probe_world_8_1_discovery_tower_plant_window",
+          "review_only=1 promotable=0 plant_y=" .. tostring(tower_plant.y)
+            .. " retracted_wait_frames=36"
+        )
+      end
+    elseif world_8_1_post_wall_plant_state == 5 then
+      world_8_1_post_wall_plant_frames =
+        world_8_1_post_wall_plant_frames + 1
+      held.up = false
+      held.down = false
+      held.left = false
+      held.right = world_8_1_post_wall_plant_frames > 3
+      held.B = held.right
+      held.A = world_8_1_post_wall_plant_frames > 3
+        and world_8_1_post_wall_plant_frames <= 53
+      if m.x >= 1600 and m.air == 0 then
+        world_8_1_post_wall_plant_state = 3
+        log_state(
+          "post_probe_world_8_1_discovery_post_wall_plant_cleared",
+          "review_only=1 promotable=0 exit_x=" .. tostring(m.x)
+        )
+      end
+    end
+    if goal ~= nil and not world_8_1_goal_touched then
+      world_8_1_goal_jump_cycle = (world_8_1_goal_jump_cycle + 1) % 60
+      held.up = false
+      held.down = false
+      held.left = m.x > goal.x + 4
+      held.right = not held.left
+      held.B = true
+      held.A = world_8_1_goal_jump_cycle >= 5
+        and world_8_1_goal_jump_cycle <= 50
+    end
+    apply()
+    advance_frame()
+  end
+  if world_8_1_goal_touched and not world_8_1_course_clear_logged
+      and memory.readbyte(0x70A) == 0 then
+    world_8_1_course_clear_logged = true
+    log_state(
+      "post_probe_world_8_1_course_clear",
+      "evidence=goal_card_touch_then_game_owned_return_to_world_map"
+        .. " goal_object_id=65 goal_card_state=" .. tostring(world_8_1_goal_state)
+        .. " form_before_clear=" .. tostring(world_8_1_form_before_clear)
+        .. " cards_at_map_return=" .. tostring(memory.readbyte(0x7D9C))
+          .. "," .. tostring(memory.readbyte(0x7D9D))
+          .. "," .. tostring(memory.readbyte(0x7D9E))
+        .. " mario_alive=1 player_is_dying=0 lives_unchanged=1"
+    )
+  end
+  neutral()
+  if not world_8_1_gameplay_logged or not world_8_1_goal_seen
+      or not world_8_1_goal_touched or not world_8_1_course_clear_logged
+      or memory.readbyte(0x70A) ~= 0 then
+    log_state(
+      "post_probe_world_8_1_false_clear",
+      "failure_classification=false_clear max_x=" .. tostring(world_8_1_max_x)
+        .. " gameplay=" .. tostring(world_8_1_gameplay_logged and 1 or 0)
+        .. " goal_seen=" .. tostring(world_8_1_goal_seen and 1 or 0)
+        .. " goal_touched=" .. tostring(world_8_1_goal_touched and 1 or 0)
+        .. " course_clear=" .. tostring(world_8_1_course_clear_logged and 1 or 0)
+    )
+    return
+  end
+  local world_8_1_return_x = memory.readbyte(0x79)
+  local world_8_1_return_y = memory.readbyte(0x75)
+  if not verify_stable_map(
+      world_8_1_return_x,
+      world_8_1_return_y,
+      180,
+      "post_probe_world_8_1_unstable_post_clear"
+    ) then
+    return
+  end
+  log_state(
+    "post_probe_world_8_1_post_clear",
+    "evidence=stable_world_8_map_after_goal_card_course_clear"
+      .. " stable_frames=180 world_8_2_accessible=1 world_8_2_entered=0"
+      .. " return_cursor_x=" .. tostring(world_8_1_return_x)
+      .. " return_cursor_y=" .. tostring(world_8_1_return_y)
+      .. " card_slot_0=" .. tostring(memory.readbyte(0x7D9C))
+      .. " card_slot_1=" .. tostring(memory.readbyte(0x7D9D))
+      .. " card_slot_2=" .. tostring(memory.readbyte(0x7D9E))
+  )
+  if discovery_run then
+    local world_8_2_map_checkpoint = savestate.create()
+    savestate.save(world_8_2_map_checkpoint)
+    for _, direction in ipairs({"left", "right", "up", "down"}) do
+      savestate.load(world_8_2_map_checkpoint)
+      press(direction, 18, "post_probe_world_8_2_map_probe_" .. direction)
+      advance(60, "post_probe_world_8_2_map_probe_settle_" .. direction)
+      log_state(
+        "post_probe_world_8_2_map_probe",
+        "review_only=1 promotable=0 direction=" .. direction
+          .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+          .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+      )
+    end
+    savestate.load(world_8_2_map_checkpoint)
+  end
+  press("left", 18, "post_probe_world_8_2_map_left")
+  advance(60, "post_probe_world_8_2_map_left_settle")
+  press("down", 18, "post_probe_world_8_2_map_down")
+  advance(60, "post_probe_world_8_2_map_down_settle")
+  log_state(
+    "post_probe_world_8_2_map_node",
+    "evidence=normal_map_left_then_down_after_world_8_1 cursor_x="
+      .. tostring(memory.readbyte(0x79))
+      .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+  )
+  press("A", 18, "post_probe_world_8_2_map_entry_A")
+  local world_8_2_entry = nil
+  for _ = 1, 360 do
+    local candidate = mario()
+    if memory.readbyte(0x70A) ~= 0
+        and candidate.x < 8192 and candidate.y ~= 0 then
+      world_8_2_entry = candidate
+      break
+    end
+    advance_frame()
+  end
+  if world_8_2_entry == nil then
+    log_state(
+      "post_probe_world_8_2_missing_entry",
+      "failure_classification=wrong_map_or_inaccessible_node"
+    )
+    return
+  end
+  log_state(
+    "post_probe_world_8_2_entered",
+    "evidence=normal_A_input_from_accessible_world_8_2_map_node stage_identity=world_8_2"
+      .. " entry_object_set=" .. tostring(memory.readbyte(0x70A))
+      .. " entry_id=" .. tostring(memory.readbyte(0x1E))
+      .. " entry_x=" .. tostring(world_8_2_entry.x)
+      .. " entry_y=" .. tostring(world_8_2_entry.y)
+      .. " entry_air=" .. tostring(world_8_2_entry.air)
+      .. " entry_form=" .. tostring(memory.readbyte(0xED))
+  )
+  advance(80, "post_probe_world_8_2_entry_phase_wait")
+  local world_8_2_max_x = world_8_2_entry.x
+  local world_8_2_gameplay_logged = false
+  local world_8_2_goal_seen = false
+  local world_8_2_goal_touched = false
+  local world_8_2_goal_state = -1
+  local world_8_2_goal_slot = -1
+  local world_8_2_clear_state = {
+    form = -1,
+    cards_before = {
+      memory.readbyte(0x7D9C),
+      memory.readbyte(0x7D9D),
+      memory.readbyte(0x7D9E),
+    },
+  }
+  local world_8_2_goal_jump_cycle = 0
+  local world_8_2_jump_cycle = 0
+  local world_8_2_shortcut_phase = "approach"
+  local world_8_2_shortcut_frames = 0
+  local world_8_2_bonus_exit_logged = false
+  local world_8_2_final_gap_phase = "approach"
+  local world_8_2_final_gap_jump_frames = 0
+  local world_8_2_final_gap_brake_frames = 0
+  local world_8_2_final_gap_probe_logged = false
+  for frame = 1, 9000 do
+    if memory.readbyte(0x70A) == 0 then break end
+    if not alive() or memory.readbyte(0xF1) ~= 0 then
+      log_state(
+        "post_probe_world_8_2_death",
+        "failure_classification=death max_x=" .. tostring(world_8_2_max_x)
+      )
+      return
+    end
+    local m = mario()
+    if m.y > 1000 and m.y < 65000 then
+      log_state(
+        "post_probe_world_8_2_invalid_position",
+        "failure_classification=invalid_position_or_pit"
+          .. " x=" .. tostring(m.x)
+          .. " y=" .. tostring(m.y)
+          .. " max_x=" .. tostring(world_8_2_max_x)
+      )
+      return
+    end
+    if m.x < 8192 and m.y ~= 0 then
+      world_8_2_max_x = math.max(world_8_2_max_x, m.x)
+    end
+    if not world_8_2_gameplay_logged and world_8_2_max_x >= 768 then
+      world_8_2_gameplay_logged = true
+      log_state(
+        "post_probe_world_8_2_gameplay",
+        "evidence=normal_world_8_2_progression quicksand_shortcut=first_sandfall_right_pipe"
+          .. " angry_sun_handling=suppressed_by_normal_in_level_shortcut"
+          .. " hazards=venus_fire_traps_slopes_pits_spawned_enemies max_x="
+          .. tostring(world_8_2_max_x)
+      )
+    end
+    if discovery_run and frame % 60 == 0 then
+      log_state(
+        "post_probe_world_8_2_discovery_route_tick",
+        "review_only=1 promotable=0 route_frame=" .. tostring(frame)
+          .. " max_x=" .. tostring(world_8_2_max_x)
+          .. " " .. object_summary_between(m, -160, 320, 240)
+      )
+    end
+    local goal = nearest_object_id_between(m, 65, -256, 240, 200)
+    if goal ~= nil then world_8_2_goal_seen = true end
+    local goal_state, goal_slot = object_internal_state(65)
+    if goal_state ~= nil and goal_state > 0 and not world_8_2_goal_touched then
+      world_8_2_goal_touched = true
+      world_8_2_goal_state = goal_state
+      world_8_2_goal_slot = goal_slot
+      world_8_2_clear_state.form = memory.readbyte(0xED)
+      log_state(
+        "post_probe_world_8_2_goal_card",
+        "evidence=game_owned_goal_object_65_internal_state_after_touch"
+          .. " goal_object_id=65 goal_seen=" .. tostring(world_8_2_goal_seen and 1 or 0)
+          .. " goal_card_state=" .. tostring(goal_state)
+          .. " goal_card_object_slot=" .. tostring(goal_slot)
+          .. " form_before_clear=" .. tostring(world_8_2_clear_state.form)
+          .. " cards_before_touch=" .. tostring(world_8_2_clear_state.cards_before[1])
+            .. "," .. tostring(world_8_2_clear_state.cards_before[2])
+            .. "," .. tostring(world_8_2_clear_state.cards_before[3])
+          .. " cards_at_touch=" .. tostring(memory.readbyte(0x7D9C))
+            .. "," .. tostring(memory.readbyte(0x7D9D))
+            .. "," .. tostring(memory.readbyte(0x7D9E))
+          .. " mario_alive=1 player_is_dying=0 starting_lives="
+            .. tostring(starting_lives)
+          .. " current_lives=" .. tostring(memory.readbyte(0x736))
+      )
+    end
+    held.up = false
+    held.down = false
+    held.left = false
+    held.right = not world_8_2_goal_touched
+    held.B = held.right
+    world_8_2_jump_cycle = (world_8_2_jump_cycle + 1) % 54
+    held.A = not world_8_2_goal_touched
+      and world_8_2_jump_cycle >= 5 and world_8_2_jump_cycle <= 48
+    if world_8_2_shortcut_phase == "approach" then
+      local shortcut_x_speed = memory.readbytesigned(0xBD)
+      held.left = shortcut_x_speed > 4 and m.x >= 370
+        or (math.abs(shortcut_x_speed) <= 4 and m.x > 414)
+      held.right = shortcut_x_speed < -4
+        or (math.abs(shortcut_x_speed) <= 4 and m.x < 406)
+      held.B = false
+      held.A = false
+      if m.x >= 406 and m.x <= 414 and math.abs(shortcut_x_speed) <= 4 then
+        world_8_2_shortcut_phase = "sandfall"
+        world_8_2_shortcut_frames = 0
+        log_state(
+          "post_probe_world_8_2_quicksand_entered",
+          "evidence=normal_walk_into_first_sandfall shortcut=first_sandfall"
+        )
+      end
+    elseif world_8_2_shortcut_phase == "sandfall" then
+      world_8_2_shortcut_frames = world_8_2_shortcut_frames + 1
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      held.down = false
+      if world_8_2_shortcut_frames >= 30 then
+        world_8_2_shortcut_phase = "chamber_pipe"
+        world_8_2_shortcut_frames = 0
+        log_state(
+          "post_probe_world_8_2_quicksand_chamber",
+          "evidence=normal_first_sandfall_transition_to_two_pipe_chamber"
+        )
+      end
+    elseif world_8_2_shortcut_phase == "chamber_pipe" then
+      world_8_2_shortcut_frames = world_8_2_shortcut_frames + 1
+      local shortcut_x_speed = memory.readbytesigned(0xBD)
+      held.left = shortcut_x_speed > 4 and m.x >= 540
+        or (math.abs(shortcut_x_speed) <= 4 and m.x > 588)
+      held.right = shortcut_x_speed < -4
+        or (math.abs(shortcut_x_speed) <= 4 and m.x < 580)
+      held.B = false
+      held.A = m.x >= 520 and world_8_2_shortcut_frames % 60 >= 1
+        and world_8_2_shortcut_frames % 60 <= 36
+      held.down = false
+      if m.x >= 580 and m.x <= 588 and math.abs(shortcut_x_speed) <= 4 then
+        world_8_2_shortcut_phase = "right_pipe"
+        world_8_2_shortcut_frames = 0
+        log_state(
+          "post_probe_world_8_2_quicksand_right_pipe",
+          "evidence=normal_alignment_on_chamber_right_pipe"
+        )
+      end
+    elseif world_8_2_shortcut_phase == "right_pipe" then
+      world_8_2_shortcut_frames = world_8_2_shortcut_frames + 1
+      held.left = false
+      held.right = false
+      held.B = false
+      held.A = false
+      held.down = true
+      if world_8_2_shortcut_frames >= 180 then
+        world_8_2_shortcut_phase = "bonus_room"
+        world_8_2_shortcut_frames = 0
+        log_state(
+          "post_probe_world_8_2_quicksand_bonus_room",
+          "evidence=normal_down_input_through_chamber_right_pipe"
+        )
+      end
+    elseif world_8_2_shortcut_phase == "bonus_room" then
+      world_8_2_shortcut_frames = world_8_2_shortcut_frames + 1
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = m.x >= 680 and world_8_2_shortcut_frames % 60 >= 1
+        and world_8_2_shortcut_frames % 60 <= 36
+      held.down = false
+      if not world_8_2_bonus_exit_logged and m.x >= 720 then
+        world_8_2_bonus_exit_logged = true
+        world_8_2_shortcut_phase = "bonus_drop"
+        log_state(
+          "post_probe_world_8_2_quicksand_bonus_exit",
+          "evidence=normal_bonus_room_traversal"
+        )
+      end
+      if memory.readbyte(0x70A) == 14
+          and world_8_2_shortcut_frames >= 60 then
+        world_8_2_shortcut_phase = "main_route"
+        log_state(
+          "post_probe_world_8_2_quicksand_shortcut_complete",
+          "evidence=normal_right_input_through_bonus_exit_pipe angry_sun_suppressed=1"
+        )
+      end
+      if discovery_run and world_8_2_shortcut_frames % 60 == 0 then
+        log_state(
+          "post_probe_world_8_2_quicksand_tick",
+          "review_only=1 promotable=0 shortcut_frames="
+            .. tostring(world_8_2_shortcut_frames)
+        )
+      end
+    elseif world_8_2_shortcut_phase == "bonus_drop" then
+      held.left = true
+      held.right = false
+      held.B = false
+      held.A = false
+      held.down = false
+      if m.y >= 384 then
+        world_8_2_shortcut_phase = "bonus_exit"
+        log_state(
+          "post_probe_world_8_2_quicksand_bonus_floor",
+          "evidence=normal_descent_through_coin_room"
+        )
+      end
+    elseif world_8_2_shortcut_phase == "bonus_exit" then
+      held.left = false
+      held.right = true
+      held.B = true
+      held.A = false
+      held.down = false
+      if memory.readbyte(0x70A) == 14 then
+        world_8_2_shortcut_phase = "main_route"
+        log_state(
+          "post_probe_world_8_2_quicksand_shortcut_complete",
+          "evidence=normal_right_input_through_bonus_exit_pipe angry_sun_suppressed=1"
+        )
+      end
+    end
+    if not world_8_2_goal_touched and m.x >= 2600 and m.x < 3200 then
+      held.up = false
+      held.down = false
+      local final_gap_x_speed = memory.readbytesigned(0xBD)
+      if world_8_2_final_gap_phase == "approach" then
+        held.left = final_gap_x_speed > 8
+          or (math.abs(final_gap_x_speed) <= 8 and m.x > 2670)
+        held.right = final_gap_x_speed < -8
+          or (math.abs(final_gap_x_speed) <= 8 and m.x < 2650)
+        held.B = false
+        held.A = false
+        if m.air == 0 and m.x >= 2650 and m.x <= 2670
+            and math.abs(final_gap_x_speed) <= 8 then
+          world_8_2_final_gap_phase = "runup"
+          log_state(
+            "post_probe_world_8_2_final_gap_runup",
+            "evidence=normal_grounded_runup_before_two_jump_block_chasm"
+          )
+        end
+      elseif world_8_2_final_gap_phase == "runup" then
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = false
+        if m.x >= 2700 then
+          world_8_2_final_gap_phase = "jump"
+          world_8_2_final_gap_jump_frames = 0
+          log_state(
+            "post_probe_world_8_2_final_gap_jump",
+            "evidence=normal_running_jump_across_two_jump_block_chasm"
+          )
+        end
+      elseif world_8_2_final_gap_phase == "jump" then
+        world_8_2_final_gap_jump_frames =
+          world_8_2_final_gap_jump_frames + 1
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = world_8_2_final_gap_jump_frames <= 40
+          or (m.x >= 2950 and memory.readbytesigned(0xCF) < 0)
+        if discovery_run and not world_8_2_final_gap_probe_logged and m.x >= 2950 then
+          world_8_2_final_gap_probe_logged = true
+          log_state(
+            "post_probe_world_8_2_final_gap_probe",
+            "review_only=1 promotable=0 y_speed="
+              .. tostring(memory.readbytesigned(0xCF))
+          )
+        end
+        if m.x >= 3010 and memory.readbytesigned(0xCF) >= 0 then
+          world_8_2_final_gap_phase = "block_brake"
+          world_8_2_final_gap_brake_frames = 0
+        end
+      elseif world_8_2_final_gap_phase == "block_brake" then
+        world_8_2_final_gap_brake_frames =
+          world_8_2_final_gap_brake_frames + 1
+        held.left = final_gap_x_speed > 0 or m.x > 3064
+        held.right = not held.left and m.x < 3048
+        held.B = false
+        held.A = false
+        local final_gap_y_speed = memory.readbytesigned(0xCF)
+        if m.x >= 3035 and m.x <= 3080
+            and m.y >= 350 and m.y <= 390
+            and m.air == 0 then
+          world_8_2_final_gap_phase = "block_commit"
+          log_state(
+            "post_probe_world_8_2_final_gap_jump_block",
+            "evidence=game_owned_grounded_landing_on_jump_block"
+              .. " block_x=" .. tostring(m.x)
+              .. " block_y=" .. tostring(m.y)
+          )
+        elseif m.x >= 3035 and m.x <= 3080
+            and m.y >= 300 and m.y <= 430
+            and final_gap_y_speed <= -16 then
+          world_8_2_final_gap_phase = "bounce_commit"
+          log_state(
+            "post_probe_world_8_2_final_gap_bounce",
+            "evidence=game_owned_jump_block_bounce y_speed="
+              .. tostring(final_gap_y_speed)
+              .. " bounce_x=" .. tostring(m.x)
+              .. " bounce_y=" .. tostring(m.y)
+          )
+        elseif world_8_2_final_gap_brake_frames >= 180
+            or m.x < 2990 then
+          log_state(
+            "post_probe_world_8_2_final_gap_missed_bounce",
+            "failure_classification=missed_jump_block_bounce"
+              .. " x=" .. tostring(m.x)
+              .. " y=" .. tostring(m.y)
+              .. " y_speed=" .. tostring(final_gap_y_speed)
+          )
+          return
+        end
+      else
+        held.left = false
+        held.right = true
+        held.B = true
+        held.A = true
+      end
+    end
+    if goal ~= nil and not world_8_2_goal_touched then
+      world_8_2_goal_jump_cycle = (world_8_2_goal_jump_cycle + 1) % 60
+      held.left = m.x > goal.x + 4
+      held.right = not held.left
+      held.B = true
+      held.A = world_8_2_goal_jump_cycle >= 5
+        and world_8_2_goal_jump_cycle <= 50
+    end
+    apply()
+    advance_frame()
+  end
+  if not world_8_2_gameplay_logged or not world_8_2_goal_seen
+      or not world_8_2_goal_touched or memory.readbyte(0x70A) ~= 0 then
+    log_state(
+      "post_probe_world_8_2_false_clear",
+      "failure_classification=false_clear max_x=" .. tostring(world_8_2_max_x)
+        .. " gameplay=" .. tostring(world_8_2_gameplay_logged and 1 or 0)
+        .. " goal_seen=" .. tostring(world_8_2_goal_seen and 1 or 0)
+        .. " goal_touched=" .. tostring(world_8_2_goal_touched and 1 or 0)
+    )
+    return
+  end
+  log_state(
+    "post_probe_world_8_2_course_clear",
+    "evidence=goal_card_touch_then_game_owned_return_to_world_map"
+      .. " goal_object_id=65 goal_card_state=" .. tostring(world_8_2_goal_state)
+      .. " goal_card_object_slot=" .. tostring(world_8_2_goal_slot)
+      .. " form_before_clear=" .. tostring(world_8_2_clear_state.form)
+      .. " cards_at_map_return=" .. tostring(memory.readbyte(0x7D9C))
+        .. "," .. tostring(memory.readbyte(0x7D9D))
+        .. "," .. tostring(memory.readbyte(0x7D9E))
+      .. " card_transition=three_cards_converted_by_game"
+      .. " mario_alive=1 player_is_dying=0 lives_unchanged=1"
+  )
+  local world_8_2_return_x = memory.readbyte(0x79)
+  local world_8_2_return_y = memory.readbyte(0x75)
+  if not verify_stable_map(
+      world_8_2_return_x,
+      world_8_2_return_y,
+      180,
+      "post_probe_world_8_2_unstable_post_clear"
+    ) then
+    return
+  end
+  log_state(
+    "post_probe_world_8_2_map_return",
+    "evidence=stable_world_8_map_after_goal_card_course_clear"
+      .. " stable_frames=180 return_cursor_x=" .. tostring(world_8_2_return_x)
+      .. " return_cursor_y=" .. tostring(world_8_2_return_y)
+  )
+  press("right", 18, "post_probe_world_8_2_fortress_access_right")
+  advance(60, "post_probe_world_8_2_fortress_access_settle")
+  if not verify_stable_map(
+      64,
+      144,
+      180,
+      "post_probe_world_8_2_unstable_fortress_boundary"
+    ) then
+    return
+  end
+  log_state(
+    "post_probe_world_8_2_post_clear",
+    "evidence=normal_right_input_reached_accessible_world_8_fortress_node"
+      .. " stable_frames=180 fortress_accessible=1 fortress_entered=0"
+      .. " source_return_cursor_x=" .. tostring(world_8_2_return_x)
+      .. " source_return_cursor_y=" .. tostring(world_8_2_return_y)
+      .. " fortress_cursor_x=64 fortress_cursor_y=144"
+  )
 end
 
 -- World 8-Battleships shares object set 10 with the accepted World 8 convoy
@@ -8469,6 +11096,8 @@ local function run_world_8_battleships_extension(discovery_mode)
     return
   end
   local preserve_p_wing_for_jet = world_8_extension_mode == "hand_traps_jet"
+    or world_8_extension_mode == "world_8_8_2"
+    or world_8_extension_mode == "world_8_8_2_discovery"
   if preserve_p_wing_for_jet then
     log_state(
       "post_probe_world_8_battleships_p_wing_preserved",
@@ -9173,7 +11802,10 @@ local function run_world_8_battleships_extension(discovery_mode)
       .. " player_is_dying=0 starting_lives=" .. tostring(starting_lives)
       .. " current_lives=" .. tostring(memory.readbyte(0x736))
   )
-  if world_8_extension_mode == "hand_traps_jet" then
+  if world_8_extension_mode == "hand_traps_jet"
+    or world_8_extension_mode == "world_8_8_2"
+    or world_8_extension_mode == "world_8_8_2_discovery"
+  then
     run_world_8_hand_traps_jet_extension()
     return
   end
@@ -9597,6 +12229,8 @@ local function run_1_castle_probe()
     or world_8_extension_mode == "battleships"
     or world_8_extension_mode == "battleships_discovery"
     or world_8_extension_mode == "hand_traps_jet"
+    or world_8_extension_mode == "world_8_8_2"
+    or world_8_extension_mode == "world_8_8_2_discovery"
   then
     if memory.readbyte(0x727) ~= 7
       or memory.readbyte(0x70A) ~= 0
@@ -10448,6 +13082,8 @@ local function run_1_castle_probe()
     if world_8_extension_mode == "battleships"
       or world_8_extension_mode == "battleships_discovery"
       or world_8_extension_mode == "hand_traps_jet"
+      or world_8_extension_mode == "world_8_8_2"
+      or world_8_extension_mode == "world_8_8_2_discovery"
     then
       run_world_8_battleships_extension(
         world_8_extension_mode == "battleships_discovery"

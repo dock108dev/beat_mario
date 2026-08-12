@@ -49,6 +49,10 @@ route with four rows in exact order: right Hand Trap, center Hand Trap, left
 Hand Trap, and World 8-Jet. It renders exactly 21 locations and does not include
 World 8-1 gameplay or any later level.
 
+The `world_8_8_2` view preserves all 21 earlier rows and appends World 8-1 and
+World 8-2. It renders exactly 23 locations and stops at Fortress access; the
+Fortress is not a row because its gameplay is outside this goal.
+
 Each route row uses player-facing language and displays its role:
 
 - `goal milestone` for owner-required outcomes;
@@ -127,6 +131,8 @@ artifacts. New active mappings include:
 - `world_8_hand_trap_center_clear` -> World 8 Center Hand Trap
 - `world_8_hand_trap_left_clear` -> World 8 Left Hand Trap
 - `world_8_jet_clear` -> World 8-Jet
+- `world_8_1_clear` -> World 8-1
+- `world_8_2_clear` -> World 8-2
 
 ## Commands
 
@@ -149,6 +155,8 @@ Inspect the contract independently:
 python -m smb3_agent goal status world_8_double_whistle
 python -m smb3_agent goal status world_8_big_tanks
 python -m smb3_agent goal status world_8_battleships
+python -m smb3_agent goal status world_8_hand_traps_jet
+python -m smb3_agent goal status world_8_8_2
 ```
 
 ## Visual contract

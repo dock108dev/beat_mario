@@ -15,7 +15,10 @@ return, and stops before another stage. The cumulative `world_8_battleships`
 goal reuses that accepted 16-segment route, clears Battleships, and stops on the
 stable map before a Hand Trap. The cumulative `world_8_hand_traps_jet` goal
 adds the right, center, and left Hand Traps plus World 8-Jet, for exactly 21
-normal-gameplay segments and zero bridges.
+normal-gameplay segments and zero bridges. The cumulative `world_8_8_2` goal
+adds World 8-1 and World 8-2 as distinct goal-card stages, for exactly 23
+normal-gameplay segments and zero bridges, then stops on the accessible World 8
+Fortress node without entering it.
 
 ## Current truth
 
@@ -30,6 +33,9 @@ normal-gameplay segments and zero bridges.
 - `data/goals/world_8_hand_traps_jet.yaml` composes the unchanged Battleships
   prefix with the right, center, and left Hand Traps followed by Jet. It stops
   at map page 2 cursor `(64,112)`, where World 8-1 is accessible but unentered.
+- `data/goals/world_8_8_2.yaml` preserves that 21-segment prefix and adds only
+  `world_8_1_clear` and `world_8_2_clear`. It stops at map page 2 cursor
+  `(64,144)`, where the Fortress is accessible but unentered.
 - World 1-4 is not in the active route.
 - World 1-5 and World 1-6 are retained as the route to the final World 1
   castle after the owner corrected the boundary to require World 2 before
@@ -249,6 +255,39 @@ The separate review command uses the validated throttle:
 
 Its review-only report, 795-line trace, 17-image set, and contact sheet are in
 `artifacts/review/world_8_hand_traps_jet/20260811T060954.667404Z_watchable/`.
+
+## World 8-1 and World 8-2 acceptance
+
+Run the cumulative 23-segment gate:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_8_2 \
+  --game-file "$SMB3_GAME_FILE"
+```
+
+World 8-1 enters as object set `1`, entry id `0`, at `(0,384)`. World 8-2 is
+distinct: object set `14`, entry id `0`, at `(0,112)`. Both require goal object
+`65` in game-owned touched state `4`, genuine course-clear/map-return events,
+unchanged lives, and their own ordered parser state. World 8-2 uses the normal
+first-sandfall/right-pipe bonus shortcut, which suppresses the Angry Sun, then
+crosses the remaining Venus Fire Traps and final jump-block chasm.
+
+The accepted 3/3 aggregate, with exactly nine focused screenshots per run and
+byte-identical log SHA-256
+`f6d4ff8ba659b46496b9ed2e20413903073d6da9bab71ee2abf8388af91bafcb`, is:
+
+```text
+artifacts/reliability/world_8_8_2/20260811T221626.293001Z_reliability/
+```
+
+The independently validated `0.001`-second watchable review retained nine
+focused frames, an 823-line trace, and a contact sheet. It is review-only and
+non-promotable:
+
+```text
+artifacts/review/world_8_8_2/20260811T221806.076219Z_watchable/
+```
 
 ## Legacy diagnostic
 

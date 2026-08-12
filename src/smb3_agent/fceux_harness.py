@@ -12,6 +12,7 @@ from pathlib import Path
 STATE_RE = re.compile(r"\battempt_(?P<attempt>\d+)_(?P<event>[A-Za-z0-9_]+)\b")
 X_RE = re.compile(r"\bx=(?P<x>-?\d+)\b")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
+FIELD_RE = re.compile(r"(?P<key>[A-Za-z][A-Za-z0-9_]*)=(?P<value>\S+)")
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,98 @@ class BatchSummary:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class GoalCardObserverContract:
+    level: str
+    entry_tokens: tuple[str, ...]
+    gameplay_tokens: tuple[str, ...]
+    cards_before_touch: str
+    course_clear_tokens: tuple[str, ...]
+    post_clear_tokens: tuple[str, ...]
+
+
+GOAL_CARD_OBSERVER_CONTRACTS = (
+    GoalCardObserverContract(
+        level="world_8_1",
+        entry_tokens=(
+            "evidence=normal_A_input_from_world_8_1_map_node",
+            "stage_identity=world_8_1",
+            "entry_id=0",
+            "entry_object_set=1",
+            "entry_x=0",
+            "entry_y=384",
+            "entry_air=0",
+        ),
+        gameplay_tokens=(
+            "evidence=normal_dark_level_progression",
+            "hazards=bill_blasters_bullet_bills_piranha_plants_koopas_pits_boo",
+            "object_set=1",
+        ),
+        cards_before_touch="2,0,0",
+        course_clear_tokens=(
+            "evidence=goal_card_touch_then_game_owned_return_to_world_map",
+            "cards_at_map_return=2,3,0",
+            "mario_alive=1",
+            "player_is_dying=0",
+            "lives_unchanged=1",
+        ),
+        post_clear_tokens=(
+            "evidence=stable_world_8_map_after_goal_card_course_clear",
+            "world_number=7",
+            "object_set=0",
+            "map_page=2",
+            "map_cursor_x=64",
+            "map_cursor_y=112",
+            "world_8_2_accessible=1",
+            "world_8_2_entered=0",
+            "stable_frames=180",
+        ),
+    ),
+    GoalCardObserverContract(
+        level="world_8_2",
+        entry_tokens=(
+            "evidence=normal_A_input_from_accessible_world_8_2_map_node",
+            "stage_identity=world_8_2",
+            "entry_id=0",
+            "entry_object_set=14",
+            "entry_x=0",
+            "entry_y=112",
+            "entry_air=0",
+        ),
+        gameplay_tokens=(
+            "evidence=normal_world_8_2_progression",
+            "quicksand_shortcut=first_sandfall_right_pipe",
+            "angry_sun_handling=suppressed_by_normal_in_level_shortcut",
+            "object_set=14",
+        ),
+        cards_before_touch="2,3,0",
+        course_clear_tokens=(
+            "evidence=goal_card_touch_then_game_owned_return_to_world_map",
+            "cards_at_map_return=0,0,0",
+            "card_transition=three_cards_converted_by_game",
+            "mario_alive=1",
+            "player_is_dying=0",
+            "lives_unchanged=1",
+        ),
+        post_clear_tokens=(
+            "evidence=normal_right_input_reached_accessible_world_8_fortress_node",
+            "world_number=7",
+            "object_set=0",
+            "map_page=2",
+            "map_cursor_x=64",
+            "map_cursor_y=144",
+            "fortress_accessible=1",
+            "fortress_entered=0",
+            "stable_frames=180",
+        ),
+    ),
+)
+
+
+def _line_fields(line: str) -> dict[str, str]:
+    return {match.group("key"): match.group("value") for match in FIELD_RE.finditer(line)}
+
+
 def parse_fceux_log(
     log_path: Path,
     expected_attempts: int | None = None,
@@ -118,6 +211,9 @@ def parse_fceux_log(
     valid_world_8_jet_gameplay = False
     valid_world_8_jet_boss_defeated = False
     valid_world_8_jet_clear = False
+    valid_world_8_jet_post_clear = False
+    world_8_8_2_started = False
+    goal_card_states = {contract.level: 0 for contract in GOAL_CARD_OBSERVER_CONTRACTS}
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -591,6 +687,7 @@ def parse_fceux_log(
                 valid_world_8_jet_gameplay = False
                 valid_world_8_jet_boss_defeated = False
                 valid_world_8_jet_clear = False
+                valid_world_8_jet_post_clear = False
                 if hand_trap_sequence_index != 3 or hand_trap_sequence_failed:
                     hand_trap_sequence_failed = True
                 post_probe_clear = False
@@ -654,7 +751,7 @@ def parse_fceux_log(
                 )
                 post_probe_clear = False
             if event == "post_probe_world_8_jet_post_clear":
-                post_probe_clear = (
+                valid_world_8_jet_post_clear = (
                     valid_world_8_jet_clear
                     and "evidence=stable_world_8_map_with_world_8_1_accessible" in line
                     and "world_number=7" in line
@@ -668,6 +765,97 @@ def parse_fceux_log(
                     and "stable_frames=180" in line
                     and not playback_contaminated
                 )
+                post_probe_clear = valid_world_8_jet_post_clear
+            if event == "post_probe_world_8_8_2_started":
+                world_8_8_2_started = (
+                    valid_world_8_jet_post_clear
+                    and "evidence=accepted_21_segment_jet_post_clear_boundary" in line
+                    and "accepted_form=0" in line
+                    and "accepted_item_0=3" in line
+                    and not playback_contaminated
+                )
+                goal_card_states = {
+                    contract.level: 0 for contract in GOAL_CARD_OBSERVER_CONTRACTS
+                }
+                post_probe_clear = False
+            for contract_index, contract in enumerate(GOAL_CARD_OBSERVER_CONTRACTS):
+                prefix = f"post_probe_{contract.level}_"
+                if event is None or not event.startswith(prefix):
+                    continue
+                suffix = event.removeprefix(prefix)
+                state = goal_card_states[contract.level]
+                prior_complete = (
+                    valid_world_8_jet_post_clear
+                    if contract_index == 0
+                    else goal_card_states[
+                        GOAL_CARD_OBSERVER_CONTRACTS[contract_index - 1].level
+                    ] == 5
+                )
+                valid = False
+                if suffix == "entered":
+                    valid = (
+                        world_8_8_2_started
+                        and prior_complete
+                        and state == 0
+                        and all(token in line for token in contract.entry_tokens)
+                        and not playback_contaminated
+                    )
+                    goal_card_states[contract.level] = 1 if valid else -1
+                    post_probe_clear = False
+                elif suffix == "gameplay":
+                    valid = state == 1 and all(
+                        token in line for token in contract.gameplay_tokens
+                    )
+                    goal_card_states[contract.level] = 2 if valid else -1
+                    post_probe_clear = False
+                elif suffix == "goal_card":
+                    fields = _line_fields(line)
+                    cards_at_touch = fields.get("cards_at_touch")
+                    valid = (
+                        state == 2
+                        and "evidence=game_owned_goal_object_65_internal_state_after_touch" in line
+                        and fields.get("goal_object_id") == "65"
+                        and fields.get("goal_seen") == "1"
+                        and fields.get("goal_card_state") == "4"
+                        and fields.get("cards_before_touch")
+                        == contract.cards_before_touch
+                        and cards_at_touch is not None
+                        and cards_at_touch != contract.cards_before_touch
+                        and fields.get("mario_alive") == "1"
+                        and fields.get("player_is_dying") == "0"
+                        and fields.get("starting_lives") == fields.get("current_lives")
+                    )
+                    goal_card_states[contract.level] = 3 if valid else -1
+                    post_probe_clear = False
+                elif suffix == "course_clear":
+                    fields = _line_fields(line)
+                    valid = (
+                        state == 3
+                        and fields.get("goal_object_id") == "65"
+                        and fields.get("goal_card_state") == "4"
+                        and all(token in line for token in contract.course_clear_tokens)
+                    )
+                    goal_card_states[contract.level] = 4 if valid else -1
+                    post_probe_clear = False
+                elif suffix == "post_clear":
+                    valid = (
+                        state == 4
+                        and all(token in line for token in contract.post_clear_tokens)
+                        and not playback_contaminated
+                    )
+                    goal_card_states[contract.level] = 5 if valid else -1
+                    post_probe_clear = valid
+                elif any(
+                    token in suffix
+                    for token in (
+                        "wrong", "death", "invalid", "missed", "stall", "timeout",
+                        "false", "missing", "unstable", "premature", "unexpected",
+                    )
+                ):
+                    goal_card_states[contract.level] = -1
+                    post_probe_clear = False
+            if event.startswith("post_probe_world_8_fortress_"):
+                post_probe_clear = False
             if event.startswith("post_probe_world_8_jet_") and any(
                 token in event
                 for token in (

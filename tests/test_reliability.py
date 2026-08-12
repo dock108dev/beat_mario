@@ -14,6 +14,7 @@ from smb3_agent.reliability import (
     BIG_TANKS_FINAL_EVENT,
     FINAL_EVENT,
     HAND_TRAPS_JET_FINAL_EVENT,
+    WORLD_8_8_2_FINAL_EVENT,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -118,6 +119,12 @@ def _write_log(
                 "map_cursor_y=112 dark_area_traversed=1 world_8_1_accessible=1 "
                 "world_8_1_entered=0 player_is_dying=0 "
                 "evidence=stable_world_8_map_with_world_8_1_accessible"
+            )
+        elif event == WORLD_8_8_2_FINAL_EVENT:
+            suffix = (
+                " world_number=7 object_set=0 map_page=2 map_cursor_x=64 "
+                "map_cursor_y=144 fortress_accessible=1 fortress_entered=0 "
+                "evidence=normal_right_input_reached_accessible_world_8_fortress_node"
             )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
@@ -227,6 +234,18 @@ def _fake_runner_factory(
                     HAND_TRAPS_JET_FINAL_EVENT,
                 ]
                 if goal_id == "world_8_hand_traps_jet"
+                else [
+                    "post_probe_world_8_jet_post_clear",
+                    "post_probe_world_8_1_entered",
+                    "post_probe_world_8_1_gameplay",
+                    "post_probe_world_8_1_goal_card",
+                    "post_probe_world_8_1_post_clear",
+                    "post_probe_world_8_2_entered",
+                    "post_probe_world_8_2_gameplay",
+                    "post_probe_world_8_2_goal_card",
+                    WORLD_8_8_2_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_8_2"
                 else []
             )
             image_events = focused_events or ["review"]
@@ -532,6 +551,162 @@ def test_hand_traps_jet_rejects_wrong_final_map_boundary(tmp_path: Path) -> None
     assert run["passed"] is False
     assert run["accepted_boundary_matches"] is False
     assert run["failure_classification"] == "wrong-boundary"
+
+
+def test_world_8_8_2_requires_three_fresh_successes_and_exactly_nine_images(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_8_2",
+        artifacts_root=tmp_path / "world-8-8-2",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_8_2", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["minimum_authoritative_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["success_rate"] == 1.0
+    assert result.report["route_segment_count"] == 23
+    assert result.report["bridged_segment_count"] == 0
+    assert result.report["required_final_event"] == WORLD_8_8_2_FINAL_EVENT
+    assert result.report["byte_identical_logs"] is True
+    assert all(len(run["focused_screenshots"]) == 9 for run in result.report["runs"])
+    assert all(run["accepted_boundary_matches"] is True for run in result.report["runs"])
+    assert all(call["attempts"] == 1 for call in calls)
+    assert all(call["clean_product_env"] is True for call in calls)
+
+
+def test_two_world_8_8_2_successes_are_not_authoritative(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_8_2",
+        requested_runs=2,
+        artifacts_root=tmp_path / "world-8-8-2",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_8_2", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.report["successful_runs"] == 2
+    assert result.report["success_rate"] == 1.0
+    assert result.passed is False
+
+
+@pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])
+def test_world_8_8_2_rejects_invalid_focused_screenshot_sets(
+    tmp_path: Path, mode: str
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_8_2", write_image=True
+    )
+
+    def damaged_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        image_dir = kwargs["artifacts_dir"] / "images"
+        target = next(image_dir.glob("*_post_probe_world_8_2_goal_card.gd"))
+        if mode == "missing":
+            target.unlink()
+        elif mode == "duplicate":
+            image_dir.joinpath("999999_post_probe_world_8_2_goal_card.gd").write_bytes(
+                target.read_bytes()
+            )
+        else:
+            target.write_bytes(b"corrupt")
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_8_2",
+        requested_runs=1,
+        artifacts_root=tmp_path / mode,
+        goal_runner=damaged_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["failure_classification"] == "artifact-integrity"
+    assert run["screenshot_evidence_error"] is not None
+
+
+def test_world_8_8_2_rejects_wrong_fortress_boundary(tmp_path: Path) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_8_2", write_image=True
+    )
+
+    def wrong_boundary_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        log_path = kwargs["artifacts_dir"] / "fceux_1_1.log"
+        log_path.write_text(
+            log_path.read_text().replace(
+                "map_page=2 map_cursor_x=64 map_cursor_y=144",
+                "map_page=2 map_cursor_x=32 map_cursor_y=144",
+            )
+        )
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_8_2",
+        requested_runs=1,
+        artifacts_root=tmp_path / "wrong-boundary",
+        goal_runner=wrong_boundary_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["accepted_boundary_matches"] is False
+    assert run["failure_classification"] == "wrong-boundary"
+
+
+def test_world_8_8_2_failure_reports_last_good_and_first_missing(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_8_2",
+        requested_runs=1,
+        artifacts_root=tmp_path / "world-8-8-2-failure",
+        goal_runner=_fake_runner_factory(
+            calls,
+            goal_id="world_8_8_2",
+            failing_run=1,
+            partial_count=22,
+            extra_line="frame=99 event=post_probe_world_8_2_timeout",
+            write_image=True,
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["failure_classification"] == "timeout"
+    assert run["last_accepted_segment"] == "world_8_1_clear"
+    assert run["first_missing_milestone"] == {
+        "segment_id": "world_8_2_clear",
+        "event": WORLD_8_8_2_FINAL_EVENT,
+    }
 
 
 def test_only_battleships_requires_byte_identical_logs(tmp_path: Path) -> None:

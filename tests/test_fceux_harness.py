@@ -319,6 +319,57 @@ def _world_8_hand_traps_jet_lines() -> list[str]:
     return lines
 
 
+def _world_8_8_2_lines() -> list[str]:
+    return _world_8_hand_traps_jet_lines() + [
+        "frame=240 event=post_probe_world_8_8_2_started accepted_form=0 "
+        "accepted_item_0=3 evidence=accepted_21_segment_jet_post_clear_boundary",
+        "frame=241 event=post_probe_world_8_1_entered world_number=7 object_set=1 "
+        "stage_identity=world_8_1 entry_id=0 entry_object_set=1 entry_x=0 "
+        "entry_y=384 entry_air=0 entry_form=0 "
+        "evidence=normal_A_input_from_world_8_1_map_node",
+        "frame=242 event=post_probe_world_8_1_gameplay world_number=7 object_set=1 "
+        "hazards=bill_blasters_bullet_bills_piranha_plants_koopas_pits_boo "
+        "evidence=normal_dark_level_progression",
+        "frame=243 event=post_probe_world_8_1_goal_card world_number=7 object_set=1 "
+        "goal_object_id=65 goal_seen=1 goal_card_state=4 goal_card_object_slot=7 "
+        "form_before_clear=0 cards_before_touch=2,0,0 cards_at_touch=2,3,0 "
+        "mario_alive=1 player_is_dying=0 starting_lives=5 current_lives=5 "
+        "evidence=game_owned_goal_object_65_internal_state_after_touch",
+        "frame=244 event=post_probe_world_8_1_course_clear world_number=7 object_set=0 "
+        "goal_object_id=65 goal_card_state=4 form_before_clear=0 "
+        "cards_at_map_return=2,3,0 mario_alive=1 player_is_dying=0 "
+        "lives_unchanged=1 "
+        "evidence=goal_card_touch_then_game_owned_return_to_world_map",
+        "frame=245 event=post_probe_world_8_1_post_clear world_number=7 object_set=0 "
+        "map_page=2 map_cursor_x=64 map_cursor_y=112 world_8_2_accessible=1 "
+        "world_8_2_entered=0 stable_frames=180 "
+        "evidence=stable_world_8_map_after_goal_card_course_clear",
+        "frame=246 event=post_probe_world_8_2_entered world_number=7 object_set=14 "
+        "stage_identity=world_8_2 entry_id=0 entry_object_set=14 entry_x=0 "
+        "entry_y=112 entry_air=0 entry_form=0 "
+        "evidence=normal_A_input_from_accessible_world_8_2_map_node",
+        "frame=247 event=post_probe_world_8_2_gameplay world_number=7 object_set=14 "
+        "quicksand_shortcut=first_sandfall_right_pipe "
+        "angry_sun_handling=suppressed_by_normal_in_level_shortcut "
+        "hazards=venus_fire_traps_slopes_pits_spawned_enemies "
+        "evidence=normal_world_8_2_progression",
+        "frame=248 event=post_probe_world_8_2_goal_card world_number=7 object_set=14 "
+        "goal_object_id=65 goal_seen=1 goal_card_state=4 goal_card_object_slot=7 "
+        "form_before_clear=0 cards_before_touch=2,3,0 cards_at_touch=2,3,1 "
+        "mario_alive=1 player_is_dying=0 starting_lives=5 current_lives=5 "
+        "evidence=game_owned_goal_object_65_internal_state_after_touch",
+        "frame=249 event=post_probe_world_8_2_course_clear world_number=7 object_set=0 "
+        "goal_object_id=65 goal_card_state=4 form_before_clear=0 "
+        "cards_at_map_return=0,0,0 card_transition=three_cards_converted_by_game "
+        "mario_alive=1 player_is_dying=0 lives_unchanged=1 "
+        "evidence=goal_card_touch_then_game_owned_return_to_world_map",
+        "frame=250 event=post_probe_world_8_2_post_clear world_number=7 object_set=0 "
+        "map_page=2 map_cursor_x=64 map_cursor_y=144 fortress_accessible=1 "
+        "fortress_entered=0 stable_frames=180 "
+        "evidence=normal_right_input_reached_accessible_world_8_fortress_node",
+    ]
+
+
 def _parse_lines(tmp_path: Path, lines: list[str]):
     log_path = tmp_path / "fceux.log"
     log_path.write_text("\n".join(lines) + "\n")
@@ -332,6 +383,118 @@ def test_parse_fceux_log_accepts_exact_hand_traps_and_jet_sequence(
 
     assert summary.post_probe_clear is True
     assert summary.post_probe_last_event == "post_probe_world_8_jet_post_clear"
+
+
+def test_parse_fceux_log_accepts_distinct_world_8_1_and_8_2_goal_cards(
+    tmp_path: Path,
+) -> None:
+    summary = _parse_lines(tmp_path, _world_8_8_2_lines())
+
+    assert summary.post_probe_clear is True
+    assert summary.post_probe_last_event == "post_probe_world_8_2_post_clear"
+
+
+@pytest.mark.parametrize(
+    ("needle", "replacement"),
+    [
+        ("goal_card_state=4", "goal_card_state=0"),
+        ("cards_before_touch=2,3,0", "cards_before_touch=2,0,0"),
+        ("cards_at_map_return=0,0,0", "cards_at_map_return=2,3,1"),
+        ("fortress_accessible=1", "fortress_accessible=0"),
+        ("fortress_entered=0", "fortress_entered=1"),
+        ("map_cursor_x=64 map_cursor_y=144", "map_cursor_x=32 map_cursor_y=144"),
+    ],
+)
+def test_parse_fceux_log_rejects_invalid_goal_card_or_final_map_proof(
+    tmp_path: Path, needle: str, replacement: str
+) -> None:
+    lines = _world_8_8_2_lines()
+    index = next(index for index, line in enumerate(lines) if needle in line)
+    lines[index] = lines[index].replace(needle, replacement)
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+@pytest.mark.parametrize(
+    "failure_event",
+    [
+        "post_probe_world_8_1_death",
+        "post_probe_world_8_1_stall",
+        "post_probe_world_8_1_timeout",
+        "post_probe_world_8_2_death",
+        "post_probe_world_8_2_stall",
+        "post_probe_world_8_2_timeout",
+        "post_probe_world_8_fortress_entered",
+    ],
+)
+def test_parse_fceux_log_rejects_world_8_1_8_2_fail_closed_events(
+    tmp_path: Path, failure_event: str
+) -> None:
+    lines = _world_8_8_2_lines()
+    lines.append(f"frame=999 event={failure_event}")
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+def test_world_8_1_goal_card_cannot_cross_satisfy_world_8_2(tmp_path: Path) -> None:
+    lines = _world_8_8_2_lines()
+    index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_2_goal_card " in line
+    )
+    lines[index] = lines[index].replace(
+        "event=post_probe_world_8_2_goal_card",
+        "event=post_probe_world_8_1_goal_card",
+    )
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+def test_goal_touch_requires_course_clear_before_map_return(tmp_path: Path) -> None:
+    original = _world_8_8_2_lines()
+    course_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_2_course_clear " in line
+    )
+    goal_index = next(
+        index
+        for index, line in enumerate(original)
+        if "event=post_probe_world_8_2_goal_card " in line
+    )
+    cases = (
+        original[:course_index] + original[course_index + 1 :],
+        original[:goal_index] + original[goal_index + 1 :],
+        original[:course_index]
+        + ["frame=248 event=post_probe_world_8_2_death"]
+        + original[course_index:],
+    )
+
+    for index, lines in enumerate(cases):
+        case_dir = tmp_path / str(index)
+        case_dir.mkdir()
+        assert _parse_lines(case_dir, lines).post_probe_clear is False
+
+
+def test_world_8_2_entry_before_world_8_1_post_clear_is_rejected(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_8_2_lines()
+    post_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_1_post_clear " in line
+    )
+    entry_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_2_entered " in line
+    )
+    entry = lines.pop(entry_index)
+    lines.insert(post_index, entry)
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
 
 
 @pytest.mark.parametrize(

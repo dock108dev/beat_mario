@@ -257,3 +257,28 @@ locations:
       - flying Boom Boom
       - dark pipe tunnel
       - World 8-1 boundary
+  - id: world_8_1
+    segment_id: world_8_1_clear
+    label: World 8-1
+    type: level
+    default_status: works
+    objective: Traverse the dark level, prove the distinct game-owned goal card, and stabilize on the map before entering World 8-2.
+    guide_terms:
+      - Bill Blasters
+      - Bullet Bills
+      - Piranha Plants
+      - Boo
+      - goal card
+  - id: world_8_2
+    segment_id: world_8_2_clear
+    label: World 8-2
+    type: level
+    default_status: works
+    objective: Use the normal first-sandfall pipe shortcut, clear the remaining plants and final jump-block chasm, prove the distinct goal card, and stop on the accessible Fortress node without entering it.
+    guide_terms:
+      - first sandfall
+      - bonus-room pipe
+      - Angry Sun suppression
+      - Venus Fire Traps
+      - jump-block chasm
+      - Fortress boundary

@@ -217,6 +217,22 @@ def test_route_lab_renders_exactly_21_hand_traps_jet_locations() -> None:
     assert 'href="/?goal=world_8_hand_traps_jet&amp;location=world_8_jet"' in html
 
 
+def test_route_lab_renders_and_switches_to_exactly_23_world_8_8_2_locations() -> None:
+    summary = build_control_panel_summary("world_8_8_2")
+    html = render_lab_ui(goal_id="world_8_8_2")
+
+    assert summary["goal_id"] == "world_8_8_2"
+    assert len(summary["locations"]) == 23
+    assert [location["id"] for location in summary["locations"][-2:]] == [
+        "world_8_1",
+        "world_8_2",
+    ]
+    assert "World 8-1" in html
+    assert "World 8-2" in html
+    assert "World 2-first double-whistle route through World 8-2 and Fortress access" in html
+    assert 'href="/?goal=world_8_8_2&amp;location=world_8_2"' in html
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

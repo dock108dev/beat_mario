@@ -36,6 +36,7 @@ FINAL_EVENT = "post_probe_world_8_map_arrival"
 BIG_TANKS_FINAL_EVENT = "post_probe_world_8_big_tanks_post_clear"
 BATTLESHIPS_FINAL_EVENT = "post_probe_world_8_battleships_post_clear"
 HAND_TRAPS_JET_FINAL_EVENT = "post_probe_world_8_jet_post_clear"
+WORLD_8_8_2_FINAL_EVENT = "post_probe_world_8_2_post_clear"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -50,6 +51,9 @@ FAILURE_EVENT_TOKENS = (
     "_unstable",
     "_wrong_",
     "_death",
+    "_invalid_",
+    "_missed_",
+    "_premature_",
     "_stall",
     "_timeout",
     "_false_clear",
@@ -169,6 +173,31 @@ RELIABILITY_PROFILES = {
             "post_probe_world_8_jet_gameplay",
             "post_probe_world_8_jet_boss_defeated",
             "post_probe_world_8_jet_post_clear",
+        ),
+        require_byte_identical_logs=True,
+    ),
+    "world_8_8_2": ReliabilityProfile(
+        goal_id="world_8_8_2",
+        preset="fceux_world_8_8_2",
+        final_event=WORLD_8_8_2_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={
+            "world_number": 7,
+            "object_set": 0,
+            "map_page": 2,
+            "map_cursor_x": 64,
+            "map_cursor_y": 144,
+        },
+        focused_events=(
+            "post_probe_world_8_jet_post_clear",
+            "post_probe_world_8_1_entered",
+            "post_probe_world_8_1_gameplay",
+            "post_probe_world_8_1_goal_card",
+            "post_probe_world_8_1_post_clear",
+            "post_probe_world_8_2_entered",
+            "post_probe_world_8_2_gameplay",
+            "post_probe_world_8_2_goal_card",
+            "post_probe_world_8_2_post_clear",
         ),
         require_byte_identical_logs=True,
     ),

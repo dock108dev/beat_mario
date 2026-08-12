@@ -196,6 +196,56 @@ artifacts/reliability/world_8_big_tanks/20260811T061936.683562Z_reliability/    
 artifacts/reliability/world_8_battleships/20260811T062230.086277Z_reliability/   # 3/3
 ```
 
+## World 8-1 and World 8-2 cumulative goal
+
+`world_8_8_2` preserves the accepted 21-segment Hand-Traps-and-Jet prefix and
+adds two ordered normal-gameplay segments. It resolves to exactly 23 segments
+and zero bridges; the 15-, 16-, 17-, and 21-segment endpoints remain separate.
+
+World 8-1 enters normally at object set `1`, entry id `0`, `(0,384,air=0)`.
+The route uses the normally awarded Super Leaf, traverses Bill Blasters,
+Bullet Bills, plants, Koopas, pits, and the Boo, and proves goal object `65`
+state `4` at `(2680,308)`. Its card inventory changes `2,0,0 -> 2,3,0`; the
+game returns to map page 2 cursor `(64,112)` and remains stable for 180 frames
+before 8-2 entry.
+
+World 8-2 is distinct: object set `14`, entry id `0`, `(0,112,air=0)`. Mario
+walks into the first sandfall, uses the chamber's right pipe and the normal
+bonus-room exit, suppressing the Angry Sun without a map bypass. The route then
+handles the remaining Venus Fire Traps and slopes, lands on the final chasm's
+jump block at `(3035,368)`, and proves its own object `65` state `4` at
+`(3709,329)`. The card set changes `2,3,0 -> 2,3,1`, then the game converts the
+completed set to `0,0,0` on map return.
+
+After 180 stable frames at the 8-2 return cursor `(32,144)`, normal Right input
+reaches the Fortress node `(64,144)`. Another 180 stable frames prove access;
+no A input occurs and the Fortress remains unentered.
+
+The authoritative aggregate passed 3/3 with all 23 milestones, exactly nine
+focused screenshots per run, `success_rate=1.0`, `overall_pass=true`, and
+byte-identical log SHA-256
+`f6d4ff8ba659b46496b9ed2e20413903073d6da9bab71ee2abf8388af91bafcb`:
+
+```text
+artifacts/reliability/world_8_8_2/20260811T221626.293001Z_reliability/
+```
+
+The independent `0.001`-second review passed with nine focused frames, an
+823-line tick trace, and a contact sheet. It is review-only and non-promotable:
+
+```text
+artifacts/review/world_8_8_2/20260811T221806.076219Z_watchable/
+```
+
+Final regressions passed at:
+
+```text
+artifacts/reliability/world_8_double_whistle/20260811T222531.669742Z_reliability/  # 5/5
+artifacts/reliability/world_8_big_tanks/20260811T222645.167671Z_reliability/      # 3/3
+artifacts/reliability/world_8_battleships/20260811T222747.028266Z_reliability/   # 3/3
+artifacts/reliability/world_8_hand_traps_jet/20260811T222848.457322Z_reliability/ # 3/3
+```
+
 ## Rank 27 reliability evidence
 
 The authoritative command passed 5/5:
@@ -270,11 +320,13 @@ observed in the accepted batch.
 | 19 | World 8 center Hand Trap clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; lava/Podoboo traversal, Super Leaf awarded |
 | 20 | World 8 left Hand Trap clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; paused broken-bridge traversal, Super Leaf awarded |
 | 21 | World 8-Jet clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; flying Boom Boom defeated, 8-1 accessible |
+| 22 | World 8-1 clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; distinct goal object 65 state 4, 8-2 accessible |
+| 23 | World 8-2 clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; distinct goal object 65 state 4, Fortress accessible and unentered |
 
-Rows 18-21 belong only to `world_8_hand_traps_jet`; its first 17 rows are the
-unchanged Battleships prefix. The default contract still ends at row 15. World
-1-4 is absent. World 7 is not entered; it is only one of the labels on the
-expected first Warp Zone tier.
+Rows 18-21 belong to `world_8_hand_traps_jet`; rows 22-23 are added only by
+`world_8_8_2`. Its first 21 rows are the unchanged prefix. The default contract
+still ends at row 15. World 1-4 is absent. World 7 is not entered; it is only
+one of the labels on the expected first Warp Zone tier.
 
 ## Fresh live investigation
 
@@ -376,10 +428,10 @@ a World 8 success marker and is rejected by the active goal metrics.
 
 ## Current boundary
 
-The accepted cumulative boundary is World 8 map page 2 cursor `(64,112)` after
-Jet, with World 8-1 accessible and unentered. The default Rank 27, Rank 28, and
-Battleships goals remain unchanged at their earlier boundaries. World 8-1 and
-all later stages were not entered by this work.
+The accepted cumulative boundary is World 8 map page 2 cursor `(64,144)` after
+World 8-2, with the Fortress accessible and unentered. The default Rank 27,
+Rank 28, Battleships, and Hand-Traps-and-Jet goals remain unchanged at their
+earlier boundaries. Fortress gameplay and all later stages were not entered.
 
 ## Roaming placement note
 

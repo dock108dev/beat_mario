@@ -194,6 +194,25 @@ by the game-owned return-map flag. The final contract traverses the normal dark
 pipe tunnel and stops at World 8 map page 2 cursor `(64,112)`, with World 8-1
 accessible and unentered.
 
+## World 8-1 and World 8-2 composed contract
+
+`world_8_8_2` declares `world_8_hand_traps_jet` as its unchanged prefix and
+adds exactly two ordered objective segments: `world_8_1_clear` and
+`world_8_2_clear`. Resolution is exactly 23 segments and zero bridges; the
+15-, 16-, 17-, and 21-segment goals remain unchanged.
+
+The typed goal-card observer catalog keeps a separate ordered state machine for
+each stage. World 8-1 requires object set `1`, entry id `0`, entry `(0,384)`,
+representative dark-level gameplay, object `65` state `4`, the card transition
+`2,0,0 -> 2,3,0`, genuine map return, and 180 stable frames at `(64,112)`.
+Only then may World 8-2 enter as object set `14`, entry id `0`, at `(0,112)`.
+Its distinct object `65` state `4` advances `2,3,0 -> 2,3,1`; the game then
+converts the completed three-card set to `0,0,0` during map return.
+
+The final proof is normal Right input from the 8-2 return cursor `(32,144)` to
+the Fortress node `(64,144)`, followed by 180 stable map frames with no A input
+and no Fortress stage entry.
+
 ## Legacy diagnostic
 
 `data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its
@@ -218,9 +237,12 @@ explicitly selected, and its king marker remains local to that diagnostic.
 .venv/bin/python -m smb3_agent goal validate \
   data/goals/world_8_hand_traps_jet.yaml
 .venv/bin/python -m smb3_agent goal status world_8_hand_traps_jet
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_8_2.yaml
+.venv/bin/python -m smb3_agent goal status world_8_8_2
 ```
 
 `goal run world_8_double_whistle` executes the product preset directly and
 never routes to `world_1_king`. The Big Tanks and Battleships presets are
 selected only by their separate goals. The Hand-Traps-and-Jet preset follows
-the same no-fallback rule.
+the same no-fallback rule, as does the dedicated `fceux_world_8_8_2` preset.

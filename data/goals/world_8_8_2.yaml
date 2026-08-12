@@ -1,0 +1,86 @@
+id: world_8_8_2
+game: smb3
+goal_type: product_goal
+execution_status: executable
+user_directive: From fresh power-on, complete the accepted Hand Traps and Jet route, clear World 8-1 and World 8-2 through normal gameplay and their distinct game-owned goal cards, then stop on the stable World 8 map with the Fortress accessible but unentered.
+
+objective:
+  type: route_completion
+  target: world_8_2_post_clear
+
+runner:
+  backend: fceux
+  preset: fceux_world_8_8_2
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_8_8_2
+  require_perfect: true
+  executable: true
+
+route:
+  catalog: data/segments/world_8_double_whistle.yaml
+  prefix_goal: world_8_hand_traps_jet
+  segments:
+    - id: world_8_1_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-11_world_8_1_goal_card_and_map_return]
+    - id: world_8_2_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-11_world_8_2_goal_card_and_fortress_access]
+
+bridged_segments: []
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: false
+  preserve_attempt_artifacts: true
+  explain_failures: true
+  start_from_power_on: true
+  require_distinct_goal_cards: true
+  stop_before_world_8_fortress_gameplay: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: false
+  savestate: false
+  runtime_search: false
+  blind_state_mutation: false
+  in_level_quicksand_pipe_shortcut: true
+
+success_metrics:
+  - {id: accepted_hand_traps_jet_prefix, type: event_present, value: post_probe_world_8_jet_post_clear}
+  - {id: exact_world_8_1_entry, type: event_present, value: post_probe_world_8_1_entered}
+  - {id: world_8_1_gameplay, type: event_present, value: post_probe_world_8_1_gameplay}
+  - {id: world_8_1_goal_card, type: event_present, value: post_probe_world_8_1_goal_card}
+  - {id: world_8_1_course_clear, type: event_present, value: post_probe_world_8_1_course_clear}
+  - {id: world_8_1_post_clear, type: event_present, value: post_probe_world_8_1_post_clear}
+  - {id: exact_world_8_2_entry, type: event_present, value: post_probe_world_8_2_entered}
+  - {id: world_8_2_gameplay, type: event_present, value: post_probe_world_8_2_gameplay}
+  - {id: world_8_2_goal_card, type: event_present, value: post_probe_world_8_2_goal_card}
+  - {id: world_8_2_course_clear, type: event_present, value: post_probe_world_8_2_course_clear}
+  - {id: stable_fortress_boundary, type: final_event, value: post_probe_world_8_2_post_clear}
+  - {id: no_fortress_gameplay, type: event_absent, value: post_probe_world_8_fortress_entered}
+  - {id: accepted_observer_trace, type: summary_field, field: post_probe_clear, equals: true}
+
+recovery_policy:
+  wrong_map: {action: stop_and_review}
+  wrong_stage: {action: stop_and_review}
+  wrong_entry_state: {action: stop_and_review}
+  premature_world_8_2_entry: {action: stop_and_review}
+  death: {action: stop_and_review}
+  gameplay_stall: {action: stop_and_review}
+  timeout: {action: stop_and_review}
+  missing_gameplay: {action: stop_and_review}
+  missing_goal_card: {action: stop_and_review}
+  stale_goal_card: {action: stop_and_review}
+  duplicate_goal_card: {action: stop_and_review}
+  false_clear: {action: stop_and_review}
+  unexplained_card_transition: {action: stop_and_review}
+  missing_post_clear: {action: stop_and_review}
+  fortress_inaccessible: {action: stop_and_review}
+  fortress_entered: {action: stop_and_review}
+  event_reordering: {action: stop_and_review}
+  screenshot_integrity: {action: stop_and_review}
+  ambiguous_state: {action: capture_artifacts_and_stop}

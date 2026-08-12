@@ -344,3 +344,42 @@ segments:
     acceptance_event: post_probe_world_8_jet_post_clear
     evidence: [bounded_live_fceux_2026-08-10_jet_flying_boom_boom_and_map_return]
     notes: Alternates bounded advances with deliberate waits for Rocket Engine flames and newly exposed footing, enters the final pipe normally, observes object 76 become defeated object 74, traverses the post-Jet dark pipe tunnel, then stops on accessible World 8-1 at page 2 cursor (64,112) without pressing A.
+
+  - id: world_8_1_clear
+    name: Clear World 8-1 through its goal card
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, stage: world_8_1, object_set: 1, map_enter_via_id: 0, x: 0, y: 384, air: 0}
+        - {type: representative_gameplay, event: post_probe_world_8_1_gameplay}
+        - {type: goal_card_touch, object_id: 65, internal_state: 4, proof: game_owned_object_state}
+        - {type: genuine_course_clear, event: post_probe_world_8_1_course_clear}
+        - {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 112}
+        - {type: next_node_accessible, target: world_8_2, enter_gameplay: false}
+    failure_conditions: [{type: wrong_stage}, {type: death}, {type: missing_gameplay}, {type: missing_goal_card}, {type: false_clear}, {type: unexplained_card_transition}, {type: world_8_2_entered_early}, {type: timeout, seconds: 360}]
+    current_method: {type: observed_hazard_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_1_post_clear
+    evidence: [bounded_live_fceux_2026-08-11_world_8_1_goal_card_and_map_return]
+    notes: Uses the normally awarded Super Leaf through map inventory input, traverses the dark stage and its launchers, plants, enemies, Boo, pits, and low passage, proves goal object 65 state 4, then stabilizes on the map before entering 8-2.
+
+  - id: world_8_2_clear
+    name: Clear World 8-2 and expose the Fortress
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 112}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, stage: world_8_2, object_set: 14, map_enter_via_id: 0, x: 0, y: 112, air: 0}
+        - {type: normal_in_level_shortcut, entry: first_sandfall, exit: right_bonus_pipe}
+        - {type: representative_gameplay, event: post_probe_world_8_2_gameplay}
+        - {type: goal_card_touch, object_id: 65, internal_state: 4, proof: game_owned_object_state}
+        - {type: genuine_course_clear, event: post_probe_world_8_2_course_clear}
+        - {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 144}
+        - {type: next_node_accessible, target: world_8_fortress, enter_gameplay: false}
+    failure_conditions: [{type: wrong_stage}, {type: death}, {type: missing_gameplay}, {type: missing_goal_card}, {type: stale_goal_card}, {type: false_clear}, {type: unexplained_card_transition}, {type: fortress_inaccessible}, {type: fortress_entered}, {type: timeout, seconds: 360}]
+    current_method: {type: observed_hazard_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_2_post_clear
+    evidence: [bounded_live_fceux_2026-08-11_world_8_2_goal_card_and_fortress_access]
+    notes: Enters normally, walks into the first sandfall, uses the chamber's right pipe and bonus-room exit to suppress the Angry Sun, crosses the remaining Venus Fire Traps, slopes, spawned enemies, pits, and final jump-block chasm, proves its distinct goal object 65 state 4, then reaches the accessible Fortress node by normal right input without pressing A.

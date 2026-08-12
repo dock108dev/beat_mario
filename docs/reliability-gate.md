@@ -169,6 +169,12 @@ The Hand-Traps-and-Jet roots are
 `artifacts/review/world_8_hand_traps_jet/`; every authoritative run contains
 exactly 17 ordered `evidence/png/` files.
 
+The World-8-1-and-8-2 roots are
+`artifacts/reliability/world_8_8_2/` and
+`artifacts/review/world_8_8_2/`. Every authoritative run contains exactly nine
+ordered `evidence/png/` files: Jet post-clear; 8-1 entry, gameplay, goal card,
+and post-clear; then 8-2 entry, gameplay, goal card, and Fortress-access map.
+
 Each aggregate records goal and route-catalog hashes, source commit and dirty
 state, start/finish/elapsed time, run count, artifact paths, contract metrics,
 final events, structured-log SHA-256 values, success rate, and overall result.
@@ -199,6 +205,13 @@ three-fresh-success minimum.
 Hand-Traps-and-Jet additionally reports and enforces the final accepted map
 page/cursor boundary, rejects duplicate focused captures, and distinguishes the
 last good segment from the first missing milestone.
+
+World 8-1/8-2 additionally rejects visible-but-untouched goal objects, stale or
+cross-satisfied goal-card events, goal touch without course clear, map return
+without prior touch, death coincident with goal disappearance, unexplained card
+transitions, premature 8-2 entry, an inaccessible or entered Fortress, and any
+missing, duplicate, or corrupt member of the nine-image evidence set. Its
+profile requires at least three fresh successes and byte-identical logs.
 
 Every run report includes the last accepted product event and segment, the first
 missing milestone, the first violated event when available, the final observable
