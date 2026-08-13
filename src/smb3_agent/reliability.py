@@ -37,6 +37,7 @@ BIG_TANKS_FINAL_EVENT = "post_probe_world_8_big_tanks_post_clear"
 BATTLESHIPS_FINAL_EVENT = "post_probe_world_8_battleships_post_clear"
 HAND_TRAPS_JET_FINAL_EVENT = "post_probe_world_8_jet_post_clear"
 WORLD_8_8_2_FINAL_EVENT = "post_probe_world_8_2_post_clear"
+WORLD_8_SUPER_TANKS_FINAL_EVENT = "post_probe_world_8_super_tanks_post_clear"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -94,6 +95,7 @@ class ReliabilityProfile:
     accepted_boundary: dict[str, int]
     focused_events: tuple[str, ...] = ()
     require_byte_identical_logs: bool = False
+    default_timeout_seconds: int = 180
 
 
 RELIABILITY_PROFILES = {
@@ -201,6 +203,34 @@ RELIABILITY_PROFILES = {
         ),
         require_byte_identical_logs=True,
     ),
+    "world_8_super_tanks": ReliabilityProfile(
+        goal_id="world_8_super_tanks",
+        preset="fceux_world_8_super_tanks",
+        final_event=WORLD_8_SUPER_TANKS_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={
+            "world_number": 7,
+            "object_set": 0,
+            "map_page": 2,
+            "map_cursor_x": 96,
+            "map_cursor_y": 144,
+        },
+        focused_events=(
+            "post_probe_world_8_2_post_clear",
+            "post_probe_world_8_fortress_entered",
+            "post_probe_world_8_fortress_gameplay",
+            "post_probe_world_8_fortress_switch_activated",
+            "post_probe_world_8_fortress_boss_defeated",
+            "post_probe_world_8_fortress_post_clear",
+            "post_probe_world_8_super_tanks_entered",
+            "post_probe_world_8_super_tanks_gameplay",
+            "post_probe_world_8_super_tanks_final_pipe",
+            "post_probe_world_8_super_tanks_boss_defeated",
+            "post_probe_world_8_super_tanks_post_clear",
+        ),
+        require_byte_identical_logs=True,
+        default_timeout_seconds=600,
+    ),
 }
 
 
@@ -276,13 +306,14 @@ def run_reliability_gate(
     game_path: Path,
     requested_runs: int | None = None,
     artifacts_root: Path | None = None,
-    timeout_seconds: int = 180,
+    timeout_seconds: int | None = None,
     goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
     goal_runner: Callable[..., GoalRunResult] = run_goal_contract,
     emulator_resolver: Callable[[str], str | None] = shutil.which,
     progress: Callable[[str], None] | None = None,
 ) -> ReliabilityResult:
     profile = _reliability_profile(goal_id)
+    effective_timeout_seconds = timeout_seconds or profile.default_timeout_seconds
     capture_images = bool(profile.focused_events)
     if requested_runs is None:
         requested_runs = profile.minimum_authoritative_runs
@@ -346,7 +377,7 @@ def run_reliability_gate(
             run_index=run_index,
             mode="reliability",
             run_dir=run_dir,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=effective_timeout_seconds,
             capture_images=capture_images,
             capture_ticks=False,
             frame_sleep_seconds=0.0,
@@ -369,7 +400,7 @@ def run_reliability_gate(
                 capture_ticks=False,
                 clean_product_env=True,
                 frame_sleep_seconds=0.0,
-                timeout_seconds=timeout_seconds,
+                timeout_seconds=effective_timeout_seconds,
             )
         except Exception as exc:
             run_exception = exc

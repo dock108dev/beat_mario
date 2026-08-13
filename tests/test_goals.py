@@ -395,6 +395,112 @@ def test_world_8_8_2_uses_its_exact_product_preset_without_fallback(
     assert captured["allow_bridges"] is False
 
 
+def test_world_8_super_tanks_is_exact_25_segment_zero_bridge_extension() -> None:
+    goal_ids = (
+        "world_8_double_whistle",
+        "world_8_big_tanks",
+        "world_8_battleships",
+        "world_8_hand_traps_jet",
+        "world_8_8_2",
+        "world_8_super_tanks",
+    )
+    contracts = tuple(
+        load_goal_contract(Path(f"data/goals/{goal_id}.yaml"))
+        for goal_id in goal_ids
+    )
+    prefix = contracts[-2]
+    goal = contracts[-1]
+
+    assert tuple(len(contract.segments) for contract in contracts) == (
+        15, 16, 17, 21, 23, 25
+    )
+    assert goal.prefix_goal == prefix.id
+    assert goal.segments[:23] == prefix.segments
+    assert goal.segments[23:] == (
+        "world_8_fortress_clear",
+        "world_8_super_tanks_clear",
+    )
+    assert goal.bridged_segments == ()
+    assert goal.preset == "fceux_world_8_super_tanks"
+    assert goal.constraints["start_from_power_on"] is True
+    assert goal.constraints["stop_before_bowser_castle_gameplay"] is True
+    assert goal.allowed_tactics["runtime_search"] is False
+    assert goal.allowed_tactics["savestate"] is False
+
+
+def test_world_8_super_tanks_metrics_require_both_magic_balls_and_reject_castle() -> None:
+    contract = load_goal_contract(Path("data/goals/world_8_super_tanks.yaml"))
+    required = tuple(
+        metric["value"]
+        for metric in contract.success_metrics
+        if metric["type"] == "event_present"
+    )
+    attempts = (AttemptSummary(1, True, False, True, True, 3709),)
+    accepted = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_super_tanks_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required,
+    )
+    missing_fortress_ball = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_super_tanks_post_clear",
+        post_probe_clear=True,
+        post_probe_events=tuple(
+            event
+            for event in required
+            if event != "post_probe_world_8_fortress_magic_ball"
+        ),
+    )
+    castle_entered = BatchSummary(
+        attempts=attempts,
+        post_probe_last_event="post_probe_world_8_super_tanks_post_clear",
+        post_probe_clear=True,
+        post_probe_events=required + ("post_probe_world_8_bowser_castle_entered",),
+    )
+
+    assert resolve_goal_path("world_8_super_tanks") == Path(
+        "data/goals/world_8_super_tanks.yaml"
+    )
+    assert evaluate_success_metrics(contract, accepted) is True
+    assert evaluate_success_metrics(contract, missing_fortress_ball) is False
+    assert evaluate_success_metrics(contract, castle_entered) is False
+
+
+def test_world_8_super_tanks_uses_exact_product_preset_without_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_fceux_1_1(**kwargs):
+        captured.update(kwargs)
+        return BatchSummary(
+            attempts=(AttemptSummary(1, True, False, True, True, 3709),),
+            post_probe_last_event="post_probe_world_8_super_tanks_post_clear",
+            post_probe_clear=True,
+            post_probe_events=(),
+        )
+
+    monkeypatch.setattr("smb3_agent.goals.run_fceux_1_1", fake_run_fceux_1_1)
+    contract = load_goal_contract(Path("data/goals/world_8_super_tanks.yaml"))
+    game_path = tmp_path / "local-game.nes"
+    game_path.write_bytes(b"local")
+
+    run_goal_contract(
+        contract,
+        game_path=game_path,
+        attempts=1,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+
+    assert captured["env_overrides"] == (
+        "SMB3_WORLD_8_EXTENSION_MODE=world_8_super_tanks",
+        "SMB3_WORLD_8_FOCUSED_CAPTURE=1",
+        "SMB3_FCEUX_TIMEOUT_SECONDS=600",
+    )
+    assert captured["allow_bridges"] is False
+
+
 def test_battleships_goal_cannot_pass_on_prefix_or_entry_alone() -> None:
     contract = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
     attempts = (

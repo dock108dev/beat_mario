@@ -328,7 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     reliability_run.add_argument(
         "--artifacts-root", default=None
     )
-    reliability_run.add_argument("--timeout-seconds", type=int, default=180)
+    reliability_run.add_argument("--timeout-seconds", type=int, default=None)
 
     reliability_watch = reliability_subparsers.add_parser(
         "watch", help="Run one throttled review-only product-route playback"

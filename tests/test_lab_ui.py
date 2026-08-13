@@ -233,6 +233,25 @@ def test_route_lab_renders_and_switches_to_exactly_23_world_8_8_2_locations() ->
     assert 'href="/?goal=world_8_8_2&amp;location=world_8_2"' in html
 
 
+def test_route_lab_renders_exactly_25_world_8_super_tanks_locations() -> None:
+    summary = build_control_panel_summary("world_8_super_tanks")
+    html = render_lab_ui(goal_id="world_8_super_tanks")
+
+    assert summary["goal_id"] == "world_8_super_tanks"
+    assert len(summary["locations"]) == 25
+    assert [location["id"] for location in summary["locations"][-2:]] == [
+        "world_8_fortress",
+        "world_8_super_tanks",
+    ]
+    assert "World 8-Fortress" in html
+    assert "World 8-Super Tanks" in html
+    assert "through Super Tanks and Bowser&#x27;s Castle access" in html
+    assert (
+        'href="/?goal=world_8_super_tanks&amp;location=world_8_super_tanks"'
+        in html
+    )
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

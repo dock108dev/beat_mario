@@ -370,6 +370,62 @@ def _world_8_8_2_lines() -> list[str]:
     ]
 
 
+def _world_8_super_tanks_lines() -> list[str]:
+    return _world_8_8_2_lines() + [
+        "frame=251 event=post_probe_world_8_super_tanks_started world_number=7 "
+        "object_set=0 map_page=2 map_cursor_x=64 map_cursor_y=144 "
+        "fortress_accessible=1 fortress_entered=0 "
+        "evidence=accepted_23_segment_world_8_2_post_clear_boundary",
+        "frame=252 event=post_probe_world_8_fortress_entered "
+        "stage_identity=world_8_fortress source_cursor_x=64 source_cursor_y=144 "
+        "mario_alive=1 player_is_dying=0 "
+        "evidence=normal_A_input_from_accessible_world_8_fortress_node",
+        "frame=253 event=post_probe_world_8_fortress_gameplay "
+        "room_transitions_observed=1 hazards=doors_conveyors_lava_spikes_roto_discs "
+        "evidence=normal_fortress_door_and_hazard_traversal",
+        "frame=254 event=post_probe_world_8_fortress_switch_activated "
+        "hidden_boss_door_exposed=1 evidence=game_owned_switch_block_activation",
+        "frame=255 event=post_probe_world_8_fortress_boss_room_entered "
+        "boss_form=grounded boom_boom_active=1 mario_alive=1 "
+        "evidence=normal_hidden_boss_door_entry",
+        "frame=256 event=post_probe_world_8_fortress_boss_defeated "
+        "boss_form=grounded magic_ball_available=1 mario_alive=1 player_is_dying=0 "
+        "evidence=game_owned_boom_boom_defeated_transition",
+        "frame=257 event=post_probe_world_8_fortress_magic_ball "
+        "magic_ball_touched=1 mario_alive=1 "
+        "evidence=normal_input_touched_game_owned_magic_ball",
+        "frame=258 event=post_probe_world_8_fortress_clear return_map=1 "
+        "mario_alive=1 player_is_dying=0 "
+        "evidence=game_owned_fortress_destruction_and_return_map_transition",
+        "frame=259 event=post_probe_world_8_fortress_post_clear "
+        "world_number=7 object_set=0 map_page=2 fortress_cleared=1 "
+        "super_tanks_accessible=1 super_tanks_entered=0 stable_frames=180 "
+        "evidence=stable_world_8_map_with_super_tanks_accessible",
+        "frame=260 event=post_probe_world_8_super_tanks_entered "
+        "stage_identity=world_8_super_tanks distinct_vehicle_identity=1 "
+        "mario_alive=1 player_is_dying=0 "
+        "evidence=game_owned_automatic_entry_after_fortress_clear",
+        "frame=261 event=post_probe_world_8_super_tanks_gameplay "
+        "moving_tank_geometry_observed=1 overhead_airships_observed=1 "
+        "evidence=normal_super_tanks_convoy_progression",
+        "frame=262 event=post_probe_world_8_super_tanks_final_pipe "
+        "boss_room_transition=1 evidence=normal_input_entered_final_warp_pipe",
+        "frame=263 event=post_probe_world_8_super_tanks_boss_defeated "
+        "boss_form=flying magic_ball_available=1 mario_alive=1 player_is_dying=0 "
+        "evidence=game_owned_boom_boom_defeated_transition",
+        "frame=264 event=post_probe_world_8_super_tanks_magic_ball "
+        "magic_ball_touched=1 mario_alive=1 "
+        "evidence=normal_input_touched_game_owned_magic_ball",
+        "frame=265 event=post_probe_world_8_super_tanks_clear return_map=1 "
+        "mario_alive=1 player_is_dying=0 "
+        "evidence=game_owned_super_tanks_return_map_transition",
+        "frame=266 event=post_probe_world_8_super_tanks_post_clear "
+        "world_number=7 object_set=0 map_page=2 map_cursor_x=96 map_cursor_y=144 "
+        "bowser_castle_accessible=1 bowser_castle_entered=0 stable_frames=180 "
+        "evidence=stable_world_8_map_with_bowser_castle_accessible",
+    ]
+
+
 def _parse_lines(tmp_path: Path, lines: list[str]):
     log_path = tmp_path / "fceux.log"
     log_path.write_text("\n".join(lines) + "\n")
@@ -392,6 +448,47 @@ def test_parse_fceux_log_accepts_distinct_world_8_1_and_8_2_goal_cards(
 
     assert summary.post_probe_clear is True
     assert summary.post_probe_last_event == "post_probe_world_8_2_post_clear"
+
+
+def test_parse_fceux_log_accepts_ordered_fortress_and_super_tanks_boss_proofs(
+    tmp_path: Path,
+) -> None:
+    summary = _parse_lines(tmp_path, _world_8_super_tanks_lines())
+
+    assert summary.post_probe_clear is True
+    assert summary.post_probe_last_event == "post_probe_world_8_super_tanks_post_clear"
+
+
+@pytest.mark.parametrize(
+    "event_to_remove",
+    [
+        "post_probe_world_8_fortress_switch_activated",
+        "post_probe_world_8_fortress_magic_ball",
+        "post_probe_world_8_fortress_post_clear",
+        "post_probe_world_8_super_tanks_gameplay",
+        "post_probe_world_8_super_tanks_final_pipe",
+        "post_probe_world_8_super_tanks_magic_ball",
+    ],
+)
+def test_parse_fceux_log_rejects_missing_fortress_or_super_tanks_proof(
+    tmp_path: Path, event_to_remove: str
+) -> None:
+    lines = [line for line in _world_8_super_tanks_lines() if f"event={event_to_remove} " not in line]
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_cross_level_boss_or_death_proof(tmp_path: Path) -> None:
+    lines = _world_8_super_tanks_lines()
+    lines = [
+        line.replace("boss_form=flying", "boss_form=grounded")
+        .replace("mario_alive=1 player_is_dying=0", "mario_alive=0 player_is_dying=1")
+        if "event=post_probe_world_8_super_tanks_boss_defeated " in line
+        else line
+        for line in lines
+    ]
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
 
 
 @pytest.mark.parametrize(

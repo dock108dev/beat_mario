@@ -80,6 +80,12 @@ class GoalCardObserverContract:
     post_clear_tokens: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class BossMagicBallObserverContract:
+    level: str
+    ordered_events: tuple[tuple[str, tuple[str, ...]], ...]
+
+
 GOAL_CARD_OBSERVER_CONTRACTS = (
     GoalCardObserverContract(
         level="world_8_1",
@@ -158,6 +164,158 @@ GOAL_CARD_OBSERVER_CONTRACTS = (
 )
 
 
+BOSS_MAGIC_BALL_OBSERVER_CONTRACTS = (
+    BossMagicBallObserverContract(
+        level="world_8_fortress",
+        ordered_events=(
+            (
+                "entered",
+                (
+                    "evidence=normal_A_input_from_accessible_world_8_fortress_node",
+                    "stage_identity=world_8_fortress",
+                    "source_cursor_x=64",
+                    "source_cursor_y=144",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "gameplay",
+                (
+                    "evidence=normal_fortress_door_and_hazard_traversal",
+                    "room_transitions_observed=1",
+                ),
+            ),
+            (
+                "switch_activated",
+                (
+                    "evidence=game_owned_switch_block_activation",
+                    "hidden_boss_door_exposed=1",
+                ),
+            ),
+            (
+                "boss_room_entered",
+                (
+                    "evidence=normal_hidden_boss_door_entry",
+                    "boss_form=grounded",
+                    "boom_boom_active=1",
+                    "mario_alive=1",
+                ),
+            ),
+            (
+                "boss_defeated",
+                (
+                    "evidence=game_owned_boom_boom_defeated_transition",
+                    "boss_form=grounded",
+                    "magic_ball_available=1",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "magic_ball",
+                (
+                    "evidence=normal_input_touched_game_owned_magic_ball",
+                    "magic_ball_touched=1",
+                    "mario_alive=1",
+                ),
+            ),
+            (
+                "clear",
+                (
+                    "evidence=game_owned_fortress_destruction_and_return_map_transition",
+                    "return_map=1",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "post_clear",
+                (
+                    "evidence=stable_world_8_map_with_super_tanks_accessible",
+                    "world_number=7",
+                    "object_set=0",
+                    "map_page=2",
+                    "fortress_cleared=1",
+                    "super_tanks_accessible=1",
+                    "super_tanks_entered=0",
+                    "stable_frames=180",
+                ),
+            ),
+        ),
+    ),
+    BossMagicBallObserverContract(
+        level="world_8_super_tanks",
+        ordered_events=(
+            (
+                "entered",
+                (
+                    "evidence=game_owned_automatic_entry_after_fortress_clear",
+                    "stage_identity=world_8_super_tanks",
+                    "distinct_vehicle_identity=1",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "gameplay",
+                (
+                    "evidence=normal_super_tanks_convoy_progression",
+                    "moving_tank_geometry_observed=1",
+                    "overhead_airships_observed=1",
+                ),
+            ),
+            (
+                "final_pipe",
+                (
+                    "evidence=normal_input_entered_final_warp_pipe",
+                    "boss_room_transition=1",
+                ),
+            ),
+            (
+                "boss_defeated",
+                (
+                    "evidence=game_owned_boom_boom_defeated_transition",
+                    "boss_form=flying",
+                    "magic_ball_available=1",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "magic_ball",
+                (
+                    "evidence=normal_input_touched_game_owned_magic_ball",
+                    "magic_ball_touched=1",
+                    "mario_alive=1",
+                ),
+            ),
+            (
+                "clear",
+                (
+                    "evidence=game_owned_super_tanks_return_map_transition",
+                    "return_map=1",
+                    "mario_alive=1",
+                    "player_is_dying=0",
+                ),
+            ),
+            (
+                "post_clear",
+                (
+                    "evidence=stable_world_8_map_with_bowser_castle_accessible",
+                    "world_number=7",
+                    "object_set=0",
+                    "map_page=2",
+                    "bowser_castle_accessible=1",
+                    "bowser_castle_entered=0",
+                    "stable_frames=180",
+                ),
+            ),
+        ),
+    ),
+)
+
+
 def _line_fields(line: str) -> dict[str, str]:
     return {match.group("key"): match.group("value") for match in FIELD_RE.finditer(line)}
 
@@ -214,6 +372,10 @@ def parse_fceux_log(
     valid_world_8_jet_post_clear = False
     world_8_8_2_started = False
     goal_card_states = {contract.level: 0 for contract in GOAL_CARD_OBSERVER_CONTRACTS}
+    world_8_super_tanks_started = False
+    boss_magic_ball_states = {
+        contract.level: 0 for contract in BOSS_MAGIC_BALL_OBSERVER_CONTRACTS
+    }
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -720,12 +882,28 @@ def parse_fceux_log(
                     and not playback_contaminated
                 )
                 post_probe_clear = False
+            if event == "post_probe_world_8_jet_leaf_used":
+                valid_world_8_jet_p_wing_used = (
+                    hand_trap_sequence_index == 3
+                    and not hand_trap_sequence_failed
+                    and valid_world_8_battleships_stern_wait
+                    and "evidence=owner_directed_normal_inventory_use" in line
+                    and "awarded_by_left_hand_trap" in line
+                    and "leaf_remaining=0" in line
+                    and not playback_contaminated
+                )
+                post_probe_clear = False
             if event == "post_probe_world_8_jet_gameplay":
                 valid_world_8_jet_gameplay = (
                     valid_world_8_jet_entry
                     and "evidence=observed_pause_and_advance_autoscroller_controller" in line
                     and "pacing=hazard_wait_opening_wait_controlled_advance" in line
                     and "object_set=10" in line
+                    and (
+                        "powerup_active=leaf" in line
+                        or "powerup_active=p_wing" in line
+                        or "p_wing_active=1" in line
+                    )
                     and not playback_contaminated
                 )
                 post_probe_clear = False
@@ -854,8 +1032,85 @@ def parse_fceux_log(
                 ):
                     goal_card_states[contract.level] = -1
                     post_probe_clear = False
-            if event.startswith("post_probe_world_8_fortress_"):
+            if event == "post_probe_world_8_super_tanks_started":
+                world_8_super_tanks_started = (
+                    goal_card_states["world_8_2"] == 5
+                    and "evidence=accepted_23_segment_world_8_2_post_clear_boundary" in line
+                    and "world_number=7" in line
+                    and "object_set=0" in line
+                    and "map_page=2" in line
+                    and "map_cursor_x=64" in line
+                    and "map_cursor_y=144" in line
+                    and "fortress_accessible=1" in line
+                    and "fortress_entered=0" in line
+                    and not playback_contaminated
+                )
+                boss_magic_ball_states = {
+                    contract.level: 0
+                    for contract in BOSS_MAGIC_BALL_OBSERVER_CONTRACTS
+                }
                 post_probe_clear = False
+            for contract_index, contract in enumerate(
+                BOSS_MAGIC_BALL_OBSERVER_CONTRACTS
+            ):
+                prefix = f"post_probe_{contract.level}_"
+                if event is None or not event.startswith(prefix):
+                    continue
+                suffix = event.removeprefix(prefix)
+                if suffix == "started":
+                    continue
+                state = boss_magic_ball_states[contract.level]
+                expected_index = state if state >= 0 else -1
+                expected_suffix = (
+                    contract.ordered_events[expected_index][0]
+                    if 0 <= expected_index < len(contract.ordered_events)
+                    else None
+                )
+                prior_complete = (
+                    goal_card_states["world_8_2"] == 5
+                    if contract_index == 0
+                    else boss_magic_ball_states[
+                        BOSS_MAGIC_BALL_OBSERVER_CONTRACTS[
+                            contract_index - 1
+                        ].level
+                    ]
+                    == len(
+                        BOSS_MAGIC_BALL_OBSERVER_CONTRACTS[
+                            contract_index - 1
+                        ].ordered_events
+                    )
+                )
+                is_failure = any(
+                    token in suffix
+                    for token in (
+                        "wrong", "death", "invalid", "missed", "stall",
+                        "timeout", "false", "missing", "unstable", "premature",
+                        "unexpected", "loop", "stale", "locked",
+                    )
+                )
+                if is_failure:
+                    boss_magic_ball_states[contract.level] = -1
+                    post_probe_clear = False
+                    continue
+                if suffix != expected_suffix:
+                    boss_magic_ball_states[contract.level] = -1
+                    post_probe_clear = False
+                    continue
+                required_tokens = contract.ordered_events[expected_index][1]
+                valid = (
+                    world_8_super_tanks_started
+                    and prior_complete
+                    and all(token in line for token in required_tokens)
+                    and not playback_contaminated
+                )
+                boss_magic_ball_states[contract.level] = (
+                    state + 1 if valid else -1
+                )
+                post_probe_clear = (
+                    valid
+                    and contract_index == len(BOSS_MAGIC_BALL_OBSERVER_CONTRACTS) - 1
+                    and suffix == "post_clear"
+                )
             if event.startswith("post_probe_world_8_jet_") and any(
                 token in event
                 for token in (

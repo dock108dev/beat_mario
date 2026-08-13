@@ -383,3 +383,44 @@ segments:
     acceptance_event: post_probe_world_8_2_post_clear
     evidence: [bounded_live_fceux_2026-08-11_world_8_2_goal_card_and_fortress_access]
     notes: Enters normally, walks into the first sandfall, uses the chamber's right pipe and bonus-room exit to suppress the Angry Sun, crosses the remaining Venus Fire Traps, slopes, spawned enemies, pits, and final jump-block chasm, proves its distinct goal object 65 state 4, then reaches the accessible Fortress node by normal right input without pressing A.
+
+  - id: world_8_fortress_clear
+    name: Clear World 8-Fortress and expose Super Tanks
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, map_page: 2, cursor_x: 64, cursor_y: 144}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: exact_stage_entry, stage: world_8_fortress, object_set: 8, map_enter_via_id: 0, alive: true}
+        - {type: ordered_room_route, proof: observed_door_and_room_transitions}
+        - {type: game_owned_switch_activation, event: post_probe_world_8_fortress_switch_activated}
+        - {type: game_owned_hidden_door_exposure, proof: observed_route_change}
+        - {type: boss_defeat, boss: grounded_boom_boom, proof: game_owned_defeated_transition}
+        - {type: magic_ball_touch, proof: normal_controller_input}
+        - {type: stable_map_state, world: 8, map_page: 2}
+        - {type: next_node_accessible, target: world_8_super_tanks, enter_gameplay: false}
+    failure_conditions: [{type: wrong_stage}, {type: wrong_door}, {type: stale_room}, {type: room_loop}, {type: missing_switch}, {type: hidden_door_missing}, {type: death}, {type: missing_boss_defeat}, {type: missing_magic_ball}, {type: false_clear}, {type: super_tanks_entered_early}, {type: timeout, seconds: 420}]
+    current_method: {type: observed_hazard_and_door_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_fortress_post_clear
+    evidence: [bounded_live_fceux_2026-08-12_world_8_fortress_boom_boom_magic_ball_and_map_return]
+    notes: Consumes the World 1 Toad House Super Mushroom, breaks the large-Mario brick gate, follows the researched fifth-door and Switch Block route, defeats grounded Boom Boom, collects its Magic Ball, and stabilizes on the map before Super Tanks begins.
+
+  - id: world_8_super_tanks_clear
+    name: Clear World 8-Super Tanks and expose Bowser's Castle
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, map_page: 2, next_node: world_8_super_tanks}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: automatic_stage_entry, stage: world_8_super_tanks, proof: game_owned_map_transition}
+        - {type: representative_gameplay, event: post_probe_world_8_super_tanks_gameplay}
+        - {type: normal_pipe_entry, event: post_probe_world_8_super_tanks_final_pipe}
+        - {type: boss_defeat, boss: flying_boom_boom, proof: game_owned_defeated_transition}
+        - {type: magic_ball_touch, proof: normal_controller_input}
+        - {type: stable_map_state, world: 8, map_page: 2}
+        - {type: next_node_accessible, target: world_8_bowser_castle, enter_gameplay: false}
+    failure_conditions: [{type: premature_entry}, {type: wrong_vehicle_stage}, {type: death}, {type: scroll_failure}, {type: gameplay_stall}, {type: missing_boss_defeat}, {type: missing_magic_ball}, {type: false_clear}, {type: bowser_castle_locked}, {type: bowser_castle_entered}, {type: timeout, seconds: 420}]
+    current_method: {type: observed_autoscroll_vehicle_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_super_tanks_post_clear
+    evidence: [bounded_live_fceux_2026-08-12_world_8_super_tanks_boom_boom_magic_ball_and_bowser_castle_access]
+    notes: Observes the automatic convoy entry, advances with the moving tank geometry, crosses the overhead-airship section, enters the final pipe, defeats flying Boom Boom, collects its Magic Ball, and stops with Bowser's Castle accessible but unentered.

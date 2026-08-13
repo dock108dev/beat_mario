@@ -15,6 +15,7 @@ from smb3_agent.reliability import (
     FINAL_EVENT,
     HAND_TRAPS_JET_FINAL_EVENT,
     WORLD_8_8_2_FINAL_EVENT,
+    WORLD_8_SUPER_TANKS_FINAL_EVENT,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -125,6 +126,13 @@ def _write_log(
                 " world_number=7 object_set=0 map_page=2 map_cursor_x=64 "
                 "map_cursor_y=144 fortress_accessible=1 fortress_entered=0 "
                 "evidence=normal_right_input_reached_accessible_world_8_fortress_node"
+            )
+        elif event == WORLD_8_SUPER_TANKS_FINAL_EVENT:
+            suffix = (
+                " world_number=7 object_set=0 map_page=2 map_cursor_x=96 "
+                "map_cursor_y=144 bowser_castle_accessible=1 "
+                "bowser_castle_entered=0 stable_frames=180 "
+                "evidence=stable_world_8_map_with_bowser_castle_accessible"
             )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
@@ -246,6 +254,20 @@ def _fake_runner_factory(
                     WORLD_8_8_2_FINAL_EVENT,
                 ]
                 if goal_id == "world_8_8_2"
+                else [
+                    "post_probe_world_8_2_post_clear",
+                    "post_probe_world_8_fortress_entered",
+                    "post_probe_world_8_fortress_gameplay",
+                    "post_probe_world_8_fortress_switch_activated",
+                    "post_probe_world_8_fortress_boss_defeated",
+                    "post_probe_world_8_fortress_post_clear",
+                    "post_probe_world_8_super_tanks_entered",
+                    "post_probe_world_8_super_tanks_gameplay",
+                    "post_probe_world_8_super_tanks_final_pipe",
+                    "post_probe_world_8_super_tanks_boss_defeated",
+                    WORLD_8_SUPER_TANKS_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_super_tanks"
                 else []
             )
             image_events = focused_events or ["review"]
@@ -602,6 +624,106 @@ def test_two_world_8_8_2_successes_are_not_authoritative(tmp_path: Path) -> None
     assert result.report["successful_runs"] == 2
     assert result.report["success_rate"] == 1.0
     assert result.passed is False
+
+
+def test_world_8_super_tanks_requires_three_fresh_successes_and_eleven_images(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_super_tanks",
+        artifacts_root=tmp_path / "world-8-super-tanks",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_super_tanks", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["route_segment_count"] == 25
+    assert result.report["bridged_segment_count"] == 0
+    assert result.report["required_final_event"] == WORLD_8_SUPER_TANKS_FINAL_EVENT
+    assert result.report["byte_identical_logs"] is True
+    assert all(len(run["focused_screenshots"]) == 11 for run in result.report["runs"])
+    assert all(call["attempts"] == 1 for call in calls)
+    assert all(call["timeout_seconds"] == 600 for call in calls)
+
+
+@pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])
+def test_world_8_super_tanks_rejects_invalid_focused_screenshot_sets(
+    tmp_path: Path, mode: str
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_super_tanks", write_image=True
+    )
+
+    def damaged_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        image_dir = kwargs["artifacts_dir"] / "images"
+        target = next(
+            image_dir.glob("*_post_probe_world_8_super_tanks_boss_defeated.gd")
+        )
+        if mode == "missing":
+            target.unlink()
+        elif mode == "duplicate":
+            image_dir.joinpath(
+                "999999_post_probe_world_8_super_tanks_boss_defeated.gd"
+            ).write_bytes(target.read_bytes())
+        else:
+            target.write_bytes(b"corrupt")
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_super_tanks",
+        requested_runs=1,
+        artifacts_root=tmp_path / mode,
+        goal_runner=damaged_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["failure_classification"] == "artifact-integrity"
+
+
+def test_world_8_super_tanks_failure_reports_last_good_and_first_missing(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_super_tanks",
+        requested_runs=1,
+        artifacts_root=tmp_path / "failure",
+        goal_runner=_fake_runner_factory(
+            calls,
+            goal_id="world_8_super_tanks",
+            failing_run=1,
+            partial_count=24,
+            extra_line="frame=999 event=post_probe_world_8_super_tanks_timeout",
+            write_image=True,
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["failure_classification"] == "timeout"
+    assert run["last_accepted_segment"] == "world_8_fortress_clear"
+    assert run["first_missing_milestone"] == {
+        "segment_id": "world_8_super_tanks_clear",
+        "event": WORLD_8_SUPER_TANKS_FINAL_EVENT,
+    }
 
 
 @pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])

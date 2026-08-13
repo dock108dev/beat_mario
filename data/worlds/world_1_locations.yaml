@@ -282,3 +282,29 @@ locations:
       - Venus Fire Traps
       - jump-block chasm
       - Fortress boundary
+  - id: world_8_fortress
+    segment_id: world_8_fortress_clear
+    label: World 8-Fortress
+    type: level
+    default_status: works
+    objective: Use the stored Super Mushroom to open the brick route, follow the ordered doors to the Switch Block and hidden boss door, defeat Boom Boom, collect the Magic Ball, and expose Super Tanks.
+    guide_terms:
+      - Super Mushroom
+      - fifth door
+      - Switch Block
+      - hidden boss door
+      - grounded Boom Boom
+      - Magic Ball
+  - id: world_8_super_tanks
+    segment_id: world_8_super_tanks_clear
+    label: World 8-Super Tanks
+    type: level
+    default_status: works
+    objective: Traverse the moving convoy and overhead airships, enter the final pipe, defeat flying Boom Boom, collect the Magic Ball, and stop before Bowser's Castle.
+    guide_terms:
+      - autoscrolling tanks
+      - cannonballs and Bob-ombs
+      - Rocky Wrenches
+      - overhead airships
+      - final Warp Pipe
+      - Bowser's Castle boundary

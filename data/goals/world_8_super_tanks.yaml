@@ -1,0 +1,98 @@
+id: world_8_super_tanks
+game: smb3
+goal_type: product_goal
+execution_status: executable
+user_directive: From fresh power-on, complete the accepted World 8-1 and World 8-2 route, clear World 8-Fortress and World 8-Super Tanks through normal gameplay with their distinct Boom Boom and Magic Ball transitions, then stop on the stable World 8 map with Bowser's Castle accessible but unentered.
+
+objective:
+  type: route_completion
+  target: world_8_super_tanks_post_clear
+
+runner:
+  backend: fceux
+  preset: fceux_world_8_super_tanks
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_8_super_tanks
+  require_perfect: true
+  executable: true
+
+route:
+  catalog: data/segments/world_8_double_whistle.yaml
+  prefix_goal: world_8_8_2
+  segments:
+    - id: world_8_fortress_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-12_world_8_fortress_boom_boom_magic_ball_and_map_return]
+    - id: world_8_super_tanks_clear
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [bounded_live_fceux_2026-08-12_world_8_super_tanks_boom_boom_magic_ball_and_bowser_castle_access]
+
+bridged_segments: []
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: false
+  preserve_attempt_artifacts: true
+  explain_failures: true
+  start_from_power_on: true
+  require_distinct_boss_and_magic_ball_proofs: true
+  require_super_tanks_after_fortress_post_clear: true
+  stop_before_bowser_castle_gameplay: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: false
+  savestate: false
+  runtime_search: false
+  blind_state_mutation: false
+  in_level_quicksand_pipe_shortcut: true
+
+success_metrics:
+  - {id: accepted_world_8_8_2_prefix, type: event_present, value: post_probe_world_8_2_post_clear}
+  - {id: exact_fortress_entry, type: event_present, value: post_probe_world_8_fortress_entered}
+  - {id: fortress_gameplay, type: event_present, value: post_probe_world_8_fortress_gameplay}
+  - {id: fortress_switch, type: event_present, value: post_probe_world_8_fortress_switch_activated}
+  - {id: fortress_boss_room, type: event_present, value: post_probe_world_8_fortress_boss_room_entered}
+  - {id: fortress_boss_defeated, type: event_present, value: post_probe_world_8_fortress_boss_defeated}
+  - {id: fortress_magic_ball, type: event_present, value: post_probe_world_8_fortress_magic_ball}
+  - {id: fortress_clear, type: event_present, value: post_probe_world_8_fortress_clear}
+  - {id: fortress_post_clear, type: event_present, value: post_probe_world_8_fortress_post_clear}
+  - {id: exact_super_tanks_entry, type: event_present, value: post_probe_world_8_super_tanks_entered}
+  - {id: super_tanks_gameplay, type: event_present, value: post_probe_world_8_super_tanks_gameplay}
+  - {id: super_tanks_final_pipe, type: event_present, value: post_probe_world_8_super_tanks_final_pipe}
+  - {id: super_tanks_boss_defeated, type: event_present, value: post_probe_world_8_super_tanks_boss_defeated}
+  - {id: super_tanks_magic_ball, type: event_present, value: post_probe_world_8_super_tanks_magic_ball}
+  - {id: super_tanks_clear, type: event_present, value: post_probe_world_8_super_tanks_clear}
+  - {id: stable_bowser_castle_boundary, type: final_event, value: post_probe_world_8_super_tanks_post_clear}
+  - {id: no_bowser_castle_gameplay, type: event_absent, value: post_probe_world_8_bowser_castle_entered}
+  - {id: accepted_observer_trace, type: summary_field, field: post_probe_clear, equals: true}
+
+recovery_policy:
+  wrong_map: {action: stop_and_review}
+  wrong_stage: {action: stop_and_review}
+  wrong_entry_state: {action: stop_and_review}
+  wrong_door: {action: stop_and_review}
+  stale_room: {action: stop_and_review}
+  room_loop: {action: stop_and_review}
+  missing_switch: {action: stop_and_review}
+  hidden_door_missing: {action: stop_and_review}
+  premature_super_tanks: {action: stop_and_review}
+  wrong_vehicle: {action: stop_and_review}
+  death: {action: stop_and_review}
+  gameplay_stall: {action: stop_and_review}
+  timeout: {action: stop_and_review}
+  missing_gameplay: {action: stop_and_review}
+  missing_boss: {action: stop_and_review}
+  missing_boss_defeat: {action: stop_and_review}
+  missing_magic_ball: {action: stop_and_review}
+  false_clear: {action: stop_and_review}
+  missing_post_clear: {action: stop_and_review}
+  super_tanks_inaccessible: {action: stop_and_review}
+  bowser_castle_locked: {action: stop_and_review}
+  bowser_castle_entered: {action: stop_and_review}
+  event_reordering: {action: stop_and_review}
+  screenshot_integrity: {action: stop_and_review}
+  ambiguous_state: {action: capture_artifacts_and_stop}
