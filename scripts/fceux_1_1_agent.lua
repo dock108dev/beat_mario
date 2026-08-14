@@ -160,6 +160,24 @@ if world_8_extension_mode == "world_8_super_tanks" then
     post_probe_world_8_super_tanks_post_clear = true,
   }
 end
+local world_8_super_tanks_production_events = {
+  post_probe_world_8_super_tanks_started = true,
+  post_probe_world_8_fortress_entered = true,
+  post_probe_world_8_fortress_gameplay = true,
+  post_probe_world_8_fortress_switch_activated = true,
+  post_probe_world_8_fortress_boss_room_entered = true,
+  post_probe_world_8_fortress_boss_defeated = true,
+  post_probe_world_8_fortress_magic_ball = true,
+  post_probe_world_8_fortress_clear = true,
+  post_probe_world_8_fortress_post_clear = true,
+  post_probe_world_8_super_tanks_entered = true,
+  post_probe_world_8_super_tanks_gameplay = true,
+  post_probe_world_8_super_tanks_final_pipe = true,
+  post_probe_world_8_super_tanks_boss_defeated = true,
+  post_probe_world_8_super_tanks_magic_ball = true,
+  post_probe_world_8_super_tanks_clear = true,
+  post_probe_world_8_super_tanks_post_clear = true,
+}
 local world_8_discovery_sequence = os.getenv("SMB3_WORLD_8_DISCOVERY_SEQUENCE") or "right,A"
 local world_8_big_tanks_jump_period =
   tonumber(os.getenv("SMB3_WORLD_8_BIG_TANKS_JUMP_PERIOD") or "72")
@@ -1141,6 +1159,25 @@ local function nearest_enemy_between(m, min_dx, max_dx)
   return best
 end
 
+local function nearest_enemy_id_between(m, target_id, min_dx, max_dx)
+  local best = nil
+  for i = 1, 9 do
+    local active = memory.readbytesigned(0x660 + i) ~= 0
+    local object_id = memory.readbytesigned(0x670 + i)
+    if active and object_id == target_id then
+      local ex = memory.readbyte(0x90 + i) + memory.readbyte(0x75 + i) * 256
+      local ey = memory.readbyte(0xA2 + i) + memory.readbyte(0x87 + i) * 256
+      local dx = ex - m.x
+      if dx >= min_dx and dx <= max_dx and math.abs(ey - m.y) < 160 then
+        if best == nil or math.abs(dx) < math.abs(best.dx) then
+          best = {slot = i, x = ex, y = ey, dx = dx, dy = ey - m.y, id = object_id}
+        end
+      end
+    end
+  end
+  return best
+end
+
 local function nearest_negative_id_enemy_between(m, min_dx, max_dx)
   local best = nil
   for i = 1, 9 do
@@ -1177,6 +1214,19 @@ local function object_internal_state(target_id)
       -- Objects_DetStat is $D9-$E0 for object slots 0-7. The end-level
       -- card deliberately reuses this byte as its 0-7 lifecycle state.
       return memory.readbyte(0xD8 + i), i
+    end
+  end
+  return nil, nil
+end
+
+-- Boom Boom's actual attack/damage lifecycle is Objects_Var5 ($9A-$A1),
+-- not Objects_DetStat.  It advances 2 -> 3 -> 4 -> 5 on the three valid
+-- stomps; state 5 is the timed death state that becomes object $4A.
+local function boom_boom_state(target_id)
+  for i = 1, 7 do
+    local active = memory.readbytesigned(0x660 + i) ~= 0
+    if active and memory.readbytesigned(0x670 + i) == target_id then
+      return memory.readbyte(0x99 + i), i
     end
   end
   return nil, nil
@@ -1261,6 +1311,7 @@ function object_summary_between(m, min_dx, max_dx, max_abs_dy)
           .. ":dy" .. tostring(dy)
           .. ":x" .. tostring(ex)
           .. ":y" .. tostring(ey)
+          .. ":vy" .. tostring(memory.readbytesigned(0xCF + i))
       end
     end
   end
@@ -1270,6 +1321,55 @@ function object_summary_between(m, min_dx, max_dx, max_abs_dy)
   return "objects=" .. table.concat(objects, ",")
 end
 
+local function special_object_summary(m)
+  local objects = {}
+  local player_x_lo = m.x % 256
+  for i = 0, 7 do
+    local object_id = memory.readbyte(0x7FC6 + i)
+    if object_id ~= 0 then
+      local object_x_lo = memory.readbyte(0x5C9 + i)
+      local object_y = memory.readbyte(0x5BF + i)
+        + memory.readbyte(0x7FD5 + i) * 256
+      local dx = object_x_lo - player_x_lo
+      if dx > 127 then dx = dx - 256 end
+      if dx < -128 then dx = dx + 256 end
+      objects[#objects + 1] = "ss" .. tostring(i)
+        .. ":id" .. tostring(object_id)
+        .. ":dx" .. tostring(dx)
+        .. ":dy" .. tostring(object_y - m.y)
+        .. ":xlo" .. tostring(object_x_lo)
+        .. ":y" .. tostring(object_y)
+    end
+  end
+  if #objects == 0 then return "specials=none" end
+  return "specials=" .. table.concat(objects, ",")
+end
+
+local function nearest_special_object(m, target_id)
+  local best = nil
+  local player_x_lo = m.x % 256
+  for i = 0, 7 do
+    if memory.readbyte(0x7FC6 + i) == target_id then
+      local object_x_lo = memory.readbyte(0x5C9 + i)
+      local object_y = memory.readbyte(0x5BF + i)
+        + memory.readbyte(0x7FD5 + i) * 256
+      local dx = object_x_lo - player_x_lo
+      if dx > 127 then dx = dx - 256 end
+      if dx < -128 then dx = dx + 256 end
+      local candidate = {
+        slot = i,
+        id = target_id,
+        dx = dx,
+        dy = object_y - m.y,
+      }
+      if best == nil or math.abs(dx) < math.abs(best.dx) then
+        best = candidate
+      end
+    end
+  end
+  return best
+end
+
 local function has_flight_form()
   local form = memory.readbyte(0xED)
   return form == 3 or form == 5
@@ -1277,9 +1377,29 @@ end
 
 
 local function log_state(event, extra)
-  if world_8_extension_mode == "world_8_8_2"
+  if (world_8_extension_mode == "world_8_8_2"
+        or world_8_extension_mode == "world_8_super_tanks")
       and string.find(event, "_discovery_", 1, true) ~= nil then
     return
+  end
+  if world_8_extension_mode == "world_8_super_tanks"
+      and (string.find(event, "post_probe_world_8_fortress_", 1, true) == 1
+        or string.find(
+          event, "post_probe_world_8_super_tanks_", 1, true
+        ) == 1)
+      and not world_8_super_tanks_production_events[event] then
+    local failure_event = false
+    for _, token in ipairs({
+      "wrong", "death", "invalid", "missed", "stall", "timeout",
+      "false", "failed", "missing", "unstable", "premature", "unexpected",
+      "loop", "stale", "locked", "unobserved",
+    }) do
+      if string.find(event, token, 1, true) ~= nil then
+        failure_event = true
+        break
+      end
+    end
+    if not failure_event then return end
   end
   local m = mario()
   local enemy = nearest_enemy_ahead(m)
@@ -1304,6 +1424,10 @@ local function log_state(event, extra)
     "change_form=" .. tostring(memory.readbyte(0x578)),
     "object_set=" .. tostring(memory.readbyte(0x70A)),
     "world_number=" .. tostring(memory.readbyte(0x727)),
+    "map_operation=" .. tostring(memory.readbyte(0x729)),
+    "map_clear_fx=" .. tostring(memory.readbyte(0x20)),
+    "map_intro_tick=" .. tostring(memory.readbyte(0x711)),
+    "map_fortress_fx=" .. tostring(memory.readbyte(0x745)),
     "map_cursor_x=" .. tostring(memory.readbyte(0x79)),
     "map_cursor_y=" .. tostring(memory.readbyte(0x75)),
     "map_page=" .. tostring(memory.readbyte(0x77)),
@@ -3561,7 +3685,7 @@ local function run_1_fortress_second_lava_search()
             apply()
 
             for i = 1, wait_frames do
-              held.A = false
+              held.A = main_after_A_frames % 60 < 42
               held.B = false
               held.right = false
               held.left = false
@@ -8022,7 +8146,7 @@ local function run_world_8_hand_traps_jet_extension()
       for sledge_frame = 1, 360 do
         if not alive() then
           log_state("post_probe_world_8_hand_trap_right_death")
-          return
+          if memory.readbyte(0x727) == 7 then return end
         end
         local stomp_mario = mario()
         local sledge = nearest_object_id_between(stomp_mario, -122, -240, 240, 240)
@@ -11478,7 +11602,9 @@ local function run_world_8_hand_traps_jet_extension()
         )
       end
     end
-    if goal ~= nil and not world_8_1_goal_touched then
+    if goal ~= nil and not world_8_1_goal_touched
+        and not (world_8_fortress_super_tanks_mode
+          and world_8_1_final_gap_state >= 7 and m.x >= 2400) then
       world_8_1_goal_jump_cycle = (world_8_1_goal_jump_cycle + 1) % 60
       held.up = false
       held.down = false
@@ -11494,10 +11620,38 @@ local function run_world_8_hand_traps_jet_extension()
         and not world_8_1_goal_touched then
       held.up = false
       held.down = false
-      held.left = m.x > 2676
-      held.right = m.x < 2672
-      held.B = true
-      held.A = frame % 72 >= 8 and frame % 72 <= 55
+      if world_8_1_goal_jump_cycle < 100 then
+        -- The cumulative World 8 contract enters 8-1 with two cards and must
+        -- preserve the established Star-card clear.  Settle directly beneath
+        -- the roulette, observe its real animation frame, and start the
+        -- vertical jump late in the Star phase instead of depending on a
+        -- global-frame delay.
+        held.left = memory.readbytesigned(0xBD) > 4 and m.x >= 2580
+          or (math.abs(memory.readbytesigned(0xBD)) <= 4 and m.x > 2686)
+        held.right = memory.readbytesigned(0xBD) < -4
+          or (math.abs(memory.readbytesigned(0xBD)) <= 4 and m.x < 2680)
+        held.B = false
+        held.A = false
+        if goal ~= nil and m.x >= 2680 and m.x <= 2686
+            and math.abs(memory.readbytesigned(0xBD)) <= 4
+            and memory.readbyte(0x668 + goal.slot) == 2 then
+          world_8_1_goal_jump_cycle = world_8_1_goal_jump_cycle + 1
+        else
+          world_8_1_goal_jump_cycle = 0
+        end
+        if world_8_1_goal_jump_cycle >= 5 then
+          world_8_1_goal_jump_cycle = 100
+        end
+      else
+        world_8_1_goal_jump_cycle = world_8_1_goal_jump_cycle + 1
+        held.left = m.x > 2686
+        held.right = m.x < 2680
+        held.B = false
+        held.A = world_8_1_goal_jump_cycle <= 145
+        if world_8_1_goal_jump_cycle > 145 and m.air == 0 then
+          world_8_1_goal_jump_cycle = 0
+        end
+      end
     end
     apply()
     advance_frame()
@@ -12043,398 +12197,18 @@ local function run_world_8_hand_traps_jet_extension()
   end
 end
 
--- Diagnostic-only first contact with the accepted post-8-2 Fortress boundary.
--- This controller records its exclusion from reliability and uses normal input
--- only. It learns game-owned room, door, object, and transition identities
--- before a product controller is promoted.
+-- Observer-backed Fortress and Super Tanks extension from the accepted post-8-2
+-- boundary. Discovery mode may run bounded savestate-assisted diagnostics;
+-- production uses only normal controller input and game-owned transitions.
 run_world_8_fortress_super_tanks_extension = function(discovery_mode)
-  if not discovery_mode then
-    local function neutral()
-      held.A = false
-      held.B = false
-      held.right = false
-      held.left = false
-      held.down = false
-      held.up = false
-      apply()
+  local function extension_evidence(detail)
+    if discovery_mode then
+      return "review_only=1 promotable=0 counts_toward_reliability=0 "
+        .. detail
     end
-
-    local function verify_stable_map(cursor_x, cursor_y, failure_event)
-      neutral()
-      for _ = 1, 180 do
-        if memory.readbyte(0x727) ~= 7
-            or memory.readbyte(0x70A) ~= 0
-            or memory.readbyte(0x77) ~= 2
-            or memory.readbyte(0x79) ~= cursor_x
-            or memory.readbyte(0x75) ~= cursor_y then
-          log_state(
-            failure_event,
-            "failure_classification=unstable_post_clear"
-          )
-          return false
-        end
-        advance_frame()
-      end
-      return true
-    end
-
-    if memory.readbyte(0x727) ~= 7
-        or memory.readbyte(0x70A) ~= 0
-        or memory.readbyte(0x77) ~= 2
-        or memory.readbyte(0x79) ~= 64
-        or memory.readbyte(0x75) ~= 144 then
-      log_state(
-        "post_probe_world_8_fortress_wrong_map",
-        "failure_classification=wrong_map expected_world_number=7 expected_object_set=0 expected_map_page=2 expected_cursor_x=64 expected_cursor_y=144"
-      )
-      return
-    end
-
-    local fortress_leaf_count = inventory_item_count(3)
-    if fortress_leaf_count ~= 1 then
-      log_state(
-        "post_probe_world_8_fortress_wrong_inventory",
-        "failure_classification=wrong_entry_state expected_leaf_count=1 observed_leaf_count="
-          .. tostring(fortress_leaf_count)
-      )
-      return
-    end
-
-    for slot = 0, 27 do
-      local item = memory.readbyte(0x7D80 + slot)
-      if item ~= 0 and item ~= 3 then
-        log_state(
-          "post_probe_world_8_fortress_wrong_inventory",
-          "failure_classification=wrong_entry_state expected_only_leaf slot="
-            .. tostring(slot)
-            .. " observed_item=" .. tostring(item)
-        )
-        return
-      end
-    end
-
-    log_state(
-      "post_probe_world_8_super_tanks_started",
-      "world_number=7 object_set=0 map_page=2 map_cursor_x=64 map_cursor_y=144 "
-        .. "fortress_accessible=1 fortress_entered=0 "
-        .. "evidence=accepted_23_segment_world_8_2_post_clear_boundary"
-    )
-
-    if not use_inventory_item_from_map(3, "post_probe_world_8_fortress_leaf") then
-      return
-    end
-    if not verify_stable_map(64, 144, "post_probe_world_8_fortress_unstable_entry") then
-      return
-    end
-
-    press("A", 18, "post_probe_world_8_fortress_entry_A")
-    local entered = nil
-    for _ = 1, 360 do
-      local candidate = mario()
-      if memory.readbyte(0x70A) == 8 and candidate.x < 8192 and candidate.y ~= 0 then
-        entered = candidate
-        break
-      end
-      held.right = true
-      held.B = true
-      held.A = _ % 2 == 0
-      held.up = false
-      held.left = false
-      held.down = false
-      apply()
-      advance_frame()
-    end
-    neutral()
-
-    if entered == nil then
-      log_state(
-        "post_probe_world_8_fortress_wrong_stage",
-        "failure_classification=failed_entry expected_object_set=8"
-      )
-      return
-    end
-
-    log_state(
-      "post_probe_world_8_fortress_entered",
-      "evidence=normal_A_input_from_accessible_world_8_fortress_node "
-        .. "stage_identity=world_8_fortress source_cursor_x=64 source_cursor_y=144 "
-        .. "mario_alive=1 player_is_dying=0"
-    )
-
-    local entered_stage = true
-    local starting_lives = memory.readbyte(0x736)
-    local game_max_x = entered.x
-    local fortress_gameplay = false
-    local switch_activated = false
-    local boss_room_entered = false
-    local boss_defeated = false
-    local fortress_magic_ball = false
-    local fortress_clear = false
-    local room_signature = tostring(memory.readbyte(0x1E))
-      .. ":" .. tostring(math.floor(mario().y / 16))
-    local room_transitions = 0
-    local last_x = entered.x
-    local stuck_frames = 0
-    local stage_alive = true
-
-    for frame = 1, 5400 do
-      local m = mario()
-      if memory.readbyte(0xF1) ~= 0 or memory.readbyte(0x736) < starting_lives then
-        log_state(
-          "post_probe_world_8_fortress_death",
-          "failure_classification=death"
-        )
-        return
-      end
-      if memory.readbyte(0x70A) == 0 and memory.readbyte(0x727) == 7 then
-        stage_alive = false
-        break
-      end
-      if memory.readbyte(0x70A) ~= 8 or m.y == 0 then
-        held.A = false
-        held.B = false
-        held.right = false
-        held.left = false
-        held.down = false
-        held.up = false
-        apply()
-        advance_frame()
-      else
-        if m.x < 8192 then
-          game_max_x = math.max(game_max_x, m.x)
-        end
-        if math.abs(m.x - last_x) <= 1 and m.air == 0 then
-          stuck_frames = stuck_frames + 1
-        else
-          stuck_frames = 0
-          last_x = m.x
-        end
-        local current_signature = tostring(memory.readbyte(0x1E))
-          .. ":" .. tostring(math.floor(m.y / 16))
-          .. ":" .. tostring(m.scroll_x)
-        if current_signature ~= room_signature then
-          room_signature = current_signature
-          room_transitions = room_transitions + 1
-        end
-        held.B = true
-        held.right = true
-        held.left = false
-        held.down = false
-        held.up = frame % 210 >= 190 and frame % 210 < 215
-        held.A = m.air == 0 and (frame % 48 < 20 or stuck_frames >= 40)
-        if not fortress_gameplay and game_max_x >= 640 then
-          fortress_gameplay = true
-          log_state(
-            "post_probe_world_8_fortress_gameplay",
-            "evidence=normal_fortress_door_and_hazard_traversal room_transitions_observed=1"
-          )
-        end
-        if not switch_activated and room_transitions >= 1 and game_max_x >= 980 then
-          switch_activated = true
-          log_state(
-            "post_probe_world_8_fortress_switch_activated",
-            "evidence=game_owned_switch_block_activation hidden_boss_door_exposed=1"
-          )
-        end
-        if not boss_room_entered and switch_activated and game_max_x >= 1700 then
-          boss_room_entered = true
-          log_state(
-            "post_probe_world_8_fortress_boss_room_entered",
-            "evidence=normal_hidden_boss_door_entry boss_form=grounded boom_boom_active=1 mario_alive=1"
-          )
-        end
-        if boss_room_entered and not boss_defeated and game_max_x >= 2400 then
-          local live_boss = has_active_enemy_id(75)
-          local defeated_boss = has_active_enemy_id(74)
-          if (not live_boss and defeated_boss) or game_max_x >= 3200 then
-            boss_defeated = true
-            log_state(
-              "post_probe_world_8_fortress_boss_defeated",
-              "evidence=game_owned_boom_boom_defeated_transition "
-                .. "boss_form=grounded magic_ball_available=1 mario_alive=1 player_is_dying=0"
-            )
-          end
-        end
-        if boss_defeated and not fortress_magic_ball then
-          fortress_magic_ball = true
-          log_state(
-            "post_probe_world_8_fortress_magic_ball",
-            "magic_ball_touched=1 mario_alive=1 evidence=normal_input_touched_game_owned_magic_ball"
-          )
-        end
-      end
-      if boss_defeated and not fortress_clear and memory.readbyte(0x14) == 1 then
-        fortress_clear = true
-        log_state(
-          "post_probe_world_8_fortress_clear",
-          "return_map=1 mario_alive=1 player_is_dying=0 evidence=game_owned_fortress_destruction_and_return_map_transition"
-        )
-      end
-      if stage_alive and memory.readbyte(0x70A) == 0 then
-        break
-      end
-      apply()
-      advance_frame()
-    end
-
-    if not entered_stage or not fortress_gameplay then
-      log_state(
-        "post_probe_world_8_fortress_false_entered",
-        "failure_classification=missing_gameplay"
-      )
-      return
-    end
-
-    if not fortress_magic_ball then
-      log_state(
-        "post_probe_world_8_fortress_missing_magic_ball",
-        "failure_classification=missing_gameplay"
-      )
-      return
-    end
-
-    if not verify_stable_map(64, 144, "post_probe_world_8_fortress_unstable_post_clear") then
-      return
-    end
-    log_state(
-      "post_probe_world_8_fortress_post_clear",
-      "world_number=7 object_set=0 map_page=2 "
-        .. "fortress_cleared=1 super_tanks_accessible=1 super_tanks_entered=0 "
-        .. "stable_frames=180 evidence=stable_world_8_map_with_super_tanks_accessible"
-    )
-
-    local super_tanks_max_x = 0
-    local super_tanks_gameplay = false
-    local super_tanks_final_pipe = false
-    local super_tanks_boss_defeated = false
-    local super_tanks_magic_ball = false
-    local super_tanks_clear = false
-    local entered_super_tanks = false
-
-    if memory.readbyte(0x70A) == 0 and memory.readbyte(0x79) == 64 and memory.readbyte(0x75) == 144 then
-      press("A", 18, "post_probe_world_8_super_tanks_map_enter")
-      advance(30, "post_probe_world_8_super_tanks_map_enter_settle")
-    end
-
-    for frame = 1, 900 do
-      if memory.readbyte(0x70A) ~= 0 and memory.readbyte(0x727) == 7 then
-        entered_super_tanks = true
-        break
-      end
-      held.right = frame % 4 < 2
-      held.left = not held.right
-      held.B = frame % 6 < 4
-      held.A = frame % 30 < 10
-      held.up = frame % 60 < 6
-      held.down = false
-      apply()
-      advance_frame()
-    end
-
-    if not entered_super_tanks then
-      if memory.readbyte(0x70A) == 0 then
-        log_state(
-          "post_probe_world_8_super_tanks_wrong_stage",
-          "failure_classification=failed_entry expected_object_set=1"
-        )
-        return
-      end
-    end
-
-    log_state(
-      "post_probe_world_8_super_tanks_entered",
-      "stage_identity=world_8_super_tanks distinct_vehicle_identity=1 "
-        .. "mario_alive=1 player_is_dying=0 "
-        .. "evidence=game_owned_automatic_entry_after_fortress_clear"
-    )
-
-    for frame = 1, 9000 do
-      local m = mario()
-      if memory.readbyte(0xF1) ~= 0 or memory.readbyte(0x736) < starting_lives then
-        log_state("post_probe_world_8_super_tanks_death", "failure_classification=death")
-        return
-      end
-      if memory.readbyte(0x70A) == 0 then
-        if super_tanks_boss_defeated and not super_tanks_clear then
-          super_tanks_clear = true
-          log_state(
-            "post_probe_world_8_super_tanks_clear",
-            "return_map=1 mario_alive=1 player_is_dying=0 "
-              .. "evidence=game_owned_super_tanks_return_map_transition"
-          )
-        else
-          log_state(
-            "post_probe_world_8_super_tanks_false_clear",
-            "failure_classification=missing_boss_defeat"
-          )
-          return
-        end
-        break
-      end
-      if m.x < 8192 and m.y ~= 0 then
-        super_tanks_max_x = math.max(super_tanks_max_x, m.x)
-      end
-      if not super_tanks_gameplay and super_tanks_max_x >= 800 then
-        super_tanks_gameplay = true
-        log_state(
-          "post_probe_world_8_super_tanks_gameplay",
-          "evidence=normal_super_tanks_convoy_progression "
-            .. "moving_tank_geometry_observed=1 overhead_airships_observed=1"
-        )
-      end
-      if not super_tanks_final_pipe and super_tanks_max_x >= 2500 then
-        super_tanks_final_pipe = true
-        log_state(
-          "post_probe_world_8_super_tanks_final_pipe",
-          "boss_room_transition=1 evidence=normal_input_entered_final_warp_pipe"
-        )
-      end
-      if super_tanks_final_pipe and not super_tanks_boss_defeated and super_tanks_max_x >= 2800 then
-        super_tanks_boss_defeated = true
-        log_state(
-          "post_probe_world_8_super_tanks_boss_defeated",
-          "evidence=game_owned_boom_boom_defeated_transition "
-            .. "boss_form=flying magic_ball_available=1 mario_alive=1 player_is_dying=0"
-        )
-      end
-      if super_tanks_boss_defeated and not super_tanks_magic_ball then
-        super_tanks_magic_ball = true
-        log_state(
-          "post_probe_world_8_super_tanks_magic_ball",
-          "magic_ball_touched=1 mario_alive=1 evidence=normal_input_touched_game_owned_magic_ball"
-        )
-      end
-      held.B = true
-      held.right = m.x < 1200 or not super_tanks_final_pipe
-      held.left = not held.right and m.x > 40
-      held.A = m.air == 0 or frame % 4 < 2
-      held.up = m.x > 2400 and m.air == 0 and frame % 5 == 0
-      held.down = false
-      apply()
-      if super_tanks_clear then
-        break
-      end
-      advance_frame()
-    end
-
-    if not super_tanks_clear then
-      log_state(
-        "post_probe_world_8_super_tanks_false_clear",
-        "failure_classification=missing_post_clear"
-      )
-      return
-    end
-    if not verify_stable_map(96, 144, "post_probe_world_8_super_tanks_unstable_post_clear") then
-      return
-    end
-    log_state(
-      "post_probe_world_8_super_tanks_post_clear",
-      "world_number=7 object_set=0 map_page=2 map_cursor_x=96 map_cursor_y=144 "
-        .. "bowser_castle_accessible=1 bowser_castle_entered=0 stable_frames=180 "
-        .. "evidence=stable_world_8_map_with_bowser_castle_accessible"
-    )
-    return
+    return detail
   end
+
   if memory.readbyte(0x727) ~= 7
       or memory.readbyte(0x70A) ~= 0
       or memory.readbyte(0x77) ~= 2
@@ -12481,11 +12255,154 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
     )
   end
   local starting_lives = memory.readbyte(0x736)
+  if not discovery_mode then
+    -- The accepted boundary-resume discovery begins nine frames after the
+    -- stable post-8-2 snapshot.  Preserve that game-owned hazard phase with a
+    -- normal neutral wait in the fresh cumulative replay.
+    advance(9, "post_probe_world_8_fortress_route_phase_alignment")
+  end
+  log_state(
+    "post_probe_world_8_super_tanks_started",
+    extension_evidence(
+      "evidence=accepted_23_segment_world_8_2_post_clear_boundary world_number=7 object_set=0 map_page=2 map_cursor_x=64 map_cursor_y=144 fortress_accessible=1 fortress_entered=0"
+    )
+  )
   log_state(
     "post_probe_world_8_fortress_discovery_boundary",
     "review_only=1 promotable=0 counts_toward_reliability=0 evidence=accepted_23_segment_post_8_2_boundary leaf_count=1 starting_lives="
       .. tostring(starting_lives)
   )
+  local pre_damaged_in_world_8_2 = false
+  if discovery_mode
+      and os.getenv("SMB3_WORLD_8_PRE_DAMAGE_8_2") == "1" then
+    if not use_inventory_item_from_map(
+        3,
+        "post_probe_world_8_fortress_discovery_pre_damage_leaf"
+      ) then
+      return
+    end
+    press("left", 18, "post_probe_world_8_fortress_discovery_pre_damage_map_left")
+    advance(60, "post_probe_world_8_fortress_discovery_pre_damage_map_left_settle")
+    if memory.readbyte(0x70A) ~= 0
+        or memory.readbyte(0x79) ~= 32
+        or memory.readbyte(0x75) ~= 144
+        or memory.readbyte(0x77) ~= 2 then
+      log_state(
+        "post_probe_world_8_fortress_discovery_pre_damage_wrong_8_2_node",
+        "failure_classification=wrong_map expected_cursor_x=32 expected_cursor_y=144 expected_map_page=2"
+      )
+      return
+    end
+    press("A", 18, "post_probe_world_8_fortress_discovery_pre_damage_8_2_entry_A")
+    local pre_damage_entry = nil
+    for _ = 1, 420 do
+      local candidate = mario()
+      if memory.readbyte(0x70A) ~= 0
+          and candidate.x < 8192 and candidate.y ~= 0 then
+        pre_damage_entry = candidate
+        break
+      end
+      advance_frame()
+    end
+    if pre_damage_entry == nil or memory.readbyte(0xED) ~= 3 then
+      log_state(
+        "post_probe_world_8_fortress_discovery_pre_damage_wrong_entry",
+        "failure_classification=wrong_stage_or_form object_set="
+          .. tostring(memory.readbyte(0x70A))
+          .. " form=" .. tostring(memory.readbyte(0xED))
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_fortress_discovery_pre_damage_8_2_entered",
+      "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_A_input_reentered_game_owned_completed_8_2 form=3"
+    )
+    local pre_damage_max_x = pre_damage_entry.x
+    for pre_damage_frame = 1, 1800 do
+      local pre_damage_m = mario()
+      pre_damage_max_x = math.max(pre_damage_max_x, pre_damage_m.x)
+      if memory.readbyte(0xED) == 1 then
+        pre_damaged_in_world_8_2 = true
+        log_state(
+          "post_probe_world_8_fortress_discovery_pre_damage_taken",
+          "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_enemy_collision form_before=3 form_after=1 x="
+            .. tostring(pre_damage_m.x)
+            .. " y=" .. tostring(pre_damage_m.y)
+        )
+        break
+      end
+      if memory.readbyte(0xED) == 0
+          or memory.readbyte(0x736) < starting_lives
+          or memory.readbyte(0xF1) ~= 0 then
+        break
+      end
+      held.left = false
+      held.right = true
+      held.B = pre_damage_m.x < 360
+      held.A = false
+      held.up = false
+      held.down = false
+      apply()
+      if pre_damage_frame % 60 == 0 then
+        log_state(
+          "post_probe_world_8_fortress_discovery_pre_damage_tick",
+          "review_only=1 promotable=0 counts_toward_reliability=0 max_x="
+            .. tostring(pre_damage_max_x)
+            .. " form=" .. tostring(memory.readbyte(0xED))
+            .. " " .. object_summary_between(pre_damage_m, -160, 240, 240)
+        )
+      end
+      advance_frame()
+    end
+    held.A = false; held.B = false; held.right = false; held.left = false
+    held.down = false; held.up = false; apply()
+    if not pre_damaged_in_world_8_2 then
+      log_state(
+        "post_probe_world_8_fortress_discovery_pre_damage_failed",
+        "failure_classification=failed_to_take_single_damage max_x="
+          .. tostring(pre_damage_max_x)
+          .. " form=" .. tostring(memory.readbyte(0xED))
+      )
+      return
+    end
+    advance(90, "post_probe_world_8_fortress_discovery_pre_damage_recovery")
+    press("start", 1, "post_probe_world_8_fortress_discovery_pre_damage_pause")
+    advance(12, "post_probe_world_8_fortress_discovery_pre_damage_pause_settle")
+    press("select", 1, "post_probe_world_8_fortress_discovery_pre_damage_exit")
+    for _ = 1, 420 do
+      if memory.readbyte(0x70A) == 0 then break end
+      advance_frame()
+    end
+    advance(90, "post_probe_world_8_fortress_discovery_pre_damage_map_settle")
+    if memory.readbyte(0x70A) ~= 0
+        or memory.readbyte(0x79) ~= 32
+        or memory.readbyte(0x75) ~= 144
+        or memory.readbyte(0xED) ~= 1
+        or memory.readbyte(0x736) ~= starting_lives then
+      log_state(
+        "post_probe_world_8_fortress_discovery_pre_damage_exit_failed",
+        "failure_classification=completed_level_exit_failed object_set="
+          .. tostring(memory.readbyte(0x70A))
+          .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+          .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+          .. " form=" .. tostring(memory.readbyte(0xED))
+      )
+      return
+    end
+    log_state(
+      "post_probe_world_8_fortress_discovery_pre_damage_complete",
+      "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_start_then_select_exit_from_previously_completed_level form=1 lives_unchanged=1"
+    )
+    press("right", 18, "post_probe_world_8_fortress_discovery_pre_damage_map_right")
+    advance(60, "post_probe_world_8_fortress_discovery_pre_damage_map_right_settle")
+    if memory.readbyte(0x79) ~= 64 or memory.readbyte(0x75) ~= 144 then
+      log_state(
+        "post_probe_world_8_fortress_discovery_pre_damage_wrong_boundary_return",
+        "failure_classification=wrong_map expected_cursor_x=64 expected_cursor_y=144"
+      )
+      return
+    end
+  end
   press("A", 18, "post_probe_world_8_fortress_discovery_entry_A")
   local entry = nil
   for _ = 1, 420 do
@@ -12544,11 +12461,13 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           .. " lives_unchanged="
           .. tostring(memory.readbyte(0x736) == starting_lives and 1 or 0)
       )
-      if not use_inventory_item_from_map(
-          3,
-          "post_probe_world_8_fortress_discovery_leaf"
-        ) then
-        return
+      if not pre_damaged_in_world_8_2 then
+        if not use_inventory_item_from_map(
+            3,
+            "post_probe_world_8_fortress_discovery_leaf"
+          ) then
+          return
+        end
       end
       if inventory_item_count(3) ~= 0 then
         log_state(
@@ -12576,6 +12495,15 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         )
         return
       end
+      if not discovery_mode then
+        -- Map transitions may consume a different number of frames after the
+        -- observer-based 8-1 Star-card clear.  Normalize the actual Fortress
+        -- A press to the accepted game-owned hazard phase on the safe map.
+        advance(
+          (143 - (movie.framecount() % 256) + 256) % 256,
+          "post_probe_world_8_fortress_actual_entry_phase_alignment"
+        )
+      end
       press("A", 18, "post_probe_world_8_fortress_discovery_actual_entry_A")
       local actual_entry = nil
       for _ = 1, 420 do
@@ -12602,6 +12530,12 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           .. " entry_y=" .. tostring(actual_entry.y)
           .. " entry_air=" .. tostring(actual_entry.air)
           .. " entry_form=" .. tostring(memory.readbyte(0xED))
+      )
+      log_state(
+        "post_probe_world_8_fortress_entered",
+        extension_evidence(
+          "evidence=normal_A_input_from_accessible_world_8_fortress_node stage_identity=world_8_fortress source_cursor_x=64 source_cursor_y=144 approach_tunnel_object_set=14 actual_stage_object_set=2 actual_stage_source_page=2 actual_stage_source_x=128 actual_stage_source_y=112 mario_alive=1 player_is_dying=0"
+        )
       )
       advance(90, "post_probe_world_8_fortress_discovery_actual_entry_settle")
       local actual_max_x = actual_entry.x
@@ -13196,6 +13130,53 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local A_brick_jump_elapsed = -1
         local A_door_alignment_search_done = false
         local reached_A_ledge = false
+        local A_ledge_trace_frames = 0
+        local A_door_triggered = false
+        local A_bonus_phase = 0
+        local A_bonus_jump_frames = 0
+        local A_bonus_block_phase = 0
+        local A_bonus_block_frames = 0
+        local A_bonus_block_centered_frames = 0
+        local A_bonus_return_phase = 0
+        local A_bonus_return_frames = 0
+        local A_bonus_exit_triggered = false
+        local A_bonus_exit_frames = 0
+        local A_bonus_jump_hold = tonumber(
+          os.getenv("SMB3_WORLD_8_A_BONUS_JUMP_HOLD") or "12"
+        ) or 12
+        local A_door_centered_frames = 0
+        local A_door_trigger_wait = tonumber(
+          os.getenv("SMB3_WORLD_8_A_DOOR_TRIGGER_WAIT") or "0"
+        ) or 0
+        local A_door_trigger_grid_done = false
+        local main_route_climb_phase = 0
+        local main_after_A_frames = 0
+        local D_left_brick_cycles = 0
+        local D_left_strike_armed = false
+        local D_room_launched = false
+        local D_first_pillar_cleared = false
+        local D_lava_reset_target = 1600
+        local D_thwomp_triggered = false
+        local D_thwomp_bypassed = false
+        local D_final_switch_count = memory.readbyte(0x567)
+        local D_final_switch_activated = false
+        local D_switch_activation_count = 0
+        local D_boss_switch_activated = false
+        local fortress_boss_jump_frames = 0
+        local fortress_boss_last_state = nil
+        local fortress_boss_stomp_transitions = 0
+        local fortress_boss_third_stomp_setup = false
+        local fortress_boss_post_third_jump_frames = 0
+        local fortress_boss_post_third_landed = false
+        local fortress_boss_post_third_survival_frames = 0
+        local fortress_boss_seen = false
+        local fortress_boss_room_logged = false
+        local fortress_boss_defeated = false
+        local fortress_clear_logged = false
+        local fortress_magic_ball = false
+        local fortress_returned_to_map = false
+        local C_door_triggered = false
+        local C_door_transition_frames = 0
         local dropped_from_A_ledge = false
         local attempting_A_door = false
         local lower_roto_launch_ready = false
@@ -13206,12 +13187,78 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local A_approach_phase = 0
         local leaf_buffer_phase = 0
         local leaf_restart_frame = 0
+        local leaf_route_grid_done = false
         local leaf_restart_wait = tonumber(
-          os.getenv("SMB3_WORLD_8_LEAF_RESTART_WAIT") or "0"
+          os.getenv("SMB3_WORLD_8_LEAF_RESTART_WAIT")
+            or (discovery_mode and "0" or "45")
         ) or 0
-        for h_frame = 1, 1500 do
+        local leaf_route_offset = tonumber(
+          os.getenv("SMB3_WORLD_8_LEAF_ROUTE_OFFSET")
+            or "0"
+        ) or 0
+        for h_frame = 1, 12000 do
           local h_m = mario()
-          if leaf_buffer_phase == 0 and memory.readbyte(0xED) == 3
+          local h_object_set = memory.readbyte(0x70A)
+          if h_object_set == 0 and memory.readbyte(0x727) == 7 then
+            if memory.readbyte(0x736) < starting_lives then
+              log_state(
+                "post_probe_world_8_fortress_death",
+                "failure_classification=death lives_before="
+                  .. tostring(starting_lives)
+                  .. " lives_after=" .. tostring(memory.readbyte(0x736))
+              )
+              return
+            end
+            fortress_returned_to_map = true
+            break
+          end
+          if h_object_set == 2 and memory.readbyte(0x14) == 1
+              and fortress_boss_defeated then
+            if not fortress_magic_ball then
+              fortress_magic_ball = true
+              log_state(
+                "post_probe_world_8_fortress_magic_ball",
+                extension_evidence(
+                  "magic_ball_touched=1 mario_alive=1 player_is_dying=0 evidence=normal_input_touched_game_owned_magic_ball observer=return_map_transition_after_object_75_became_object_74"
+                )
+              )
+            end
+            if not fortress_clear_logged then
+              fortress_clear_logged = true
+              log_state(
+                "post_probe_world_8_fortress_clear",
+                extension_evidence(
+                  "return_map=1 mario_alive=1 player_is_dying=0 evidence=game_owned_fortress_destruction_and_return_map_transition boss_state_transitions=3 defeated_transition_object_id_74_observed=1"
+                )
+              )
+            end
+          end
+          local D_current_switch_count = memory.readbyte(0x567)
+          if D_final_switch_count == 0 and D_current_switch_count > 0 then
+            D_switch_activation_count = D_switch_activation_count + 1
+            if D_switch_activation_count == 1 then
+              D_final_switch_activated = true
+            else
+              D_boss_switch_activated = true
+            end
+            log_state(
+              D_switch_activation_count == 2
+                  and "post_probe_world_8_fortress_switch_activated"
+                or "post_probe_world_8_fortress_temporary_coin_switch_activated",
+              extension_evidence(
+                "evidence=game_owned_switch_block_activation hidden_boss_door_exposed="
+                  .. tostring(D_switch_activation_count == 2 and 1 or 0)
+                  .. " observer=Level_PSwitchCnt_ram_0x567 transition_to="
+                  .. tostring(D_current_switch_count)
+                  .. " activation_index="
+                  .. tostring(D_switch_activation_count)
+              )
+            )
+          end
+          D_final_switch_count = D_current_switch_count
+          if (not discovery_mode
+                or os.getenv("SMB3_WORLD_8_LEAF_BUFFER") == "1")
+              and leaf_buffer_phase == 0 and memory.readbyte(0xED) == 3
               and h_m.air == 0 and h_m.y == 304
               and h_m.x >= 140 and h_m.x <= 180 then
             leaf_buffer_phase = 1
@@ -13223,7 +13270,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             leaf_restart_frame = leaf_restart_frame + 1
           end
           local A_route_clock = leaf_buffer_phase == 3
-            and leaf_restart_frame or h_frame
+            and leaf_restart_frame + leaf_route_offset or h_frame
           if memory.readbyte(0xED) == 0 and not h_small_seen then
             h_small_seen = true
             h_damage_recovery = 60
@@ -13382,6 +13429,20 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             end
             return
           end
+          -- A pending map-item form change can briefly hide Mario immediately
+          -- after the fortress entry.  That is not a door transition: wait for
+          -- the game-owned sprite to reappear before evaluating the junction
+          -- observer used later in the route.
+          if h_m.y == 0 and h_door_max_x <= 64 and h_frame <= 180 then
+            held.A = false; held.B = false; held.left = false
+            held.right = false; held.down = false; held.up = false
+            apply()
+            for _ = 1, 180 do
+              advance_frame()
+              if mario().y ~= 0 then break end
+            end
+            h_m = mario()
+          end
           if h_m.y == 0 then
             held.A = false; held.B = false; held.left = false
             held.right = false; held.down = false; held.up = false
@@ -13435,6 +13496,168 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           if reached_A_ledge and h_m.y >= 320 then
             dropped_from_A_ledge = true
           end
+          if reached_A_ledge and not dropped_from_A_ledge then
+            A_ledge_trace_frames = A_ledge_trace_frames + 1
+          end
+          if reached_A_ledge and not A_door_triggered
+              and memory.readbyte(0x3DE) ~= 0 then
+            A_door_triggered = true
+            log_state(
+              "post_probe_world_8_fortress_A_door_triggered",
+              "evidence=normal_new_up_input_set_game_owned_level_junction_control junction_control="
+                .. tostring(memory.readbyte(0x3DE))
+            )
+          end
+          if A_door_triggered and A_bonus_phase == 0
+              and memory.readbyte(0x3DE) == 0 and h_m.x < 440 then
+            A_bonus_phase = 1
+            log_state(
+              "post_probe_world_8_fortress_A_bonus_room_entered",
+              "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_A_room_transition"
+            )
+          end
+          if A_bonus_phase == 6 and A_bonus_return_phase >= 5 then
+            if not A_bonus_exit_triggered and memory.readbyte(0x3DE) ~= 0 then
+              A_bonus_exit_triggered = true
+              A_bonus_exit_frames = 0
+              log_state(
+                "post_probe_world_8_fortress_A_bonus_exit_triggered",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_new_up_input_set_game_owned_level_junction_control"
+              )
+            elseif A_bonus_exit_triggered then
+              A_bonus_exit_frames = A_bonus_exit_frames + 1
+              if A_bonus_exit_frames > 30 and memory.readbyte(0x3DE) == 0 then
+                A_bonus_phase = 7
+                main_route_climb_phase = -1
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_A_bonus_main_room_return",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_optional_room_return_transition leaf_preserved=1"
+                )
+                if os.getenv("SMB3_WORLD_8_AFTER_A_SEARCH") == "1" then
+                  local after_A_checkpoint = savestate.create()
+                  savestate.save(after_A_checkpoint)
+                  local after_A_found = nil
+                  for after_A_wait = 0, 180, 15 do
+                    if after_A_found == nil then
+                      for _, after_A_target in ipairs({320, 340, 360, 380, 400}) do
+                        if after_A_found == nil then
+                          for after_A_ground_wait = 0, 90, 15 do
+                            if after_A_found == nil then
+                              for _, after_A_jump_x in ipairs({420, 450, 480, 510, 540, 570}) do
+                                if after_A_found == nil then
+                                  savestate.load(after_A_checkpoint)
+                                  held.A = false; held.B = false
+                                  held.left = false; held.right = false
+                                  held.up = false; held.down = false
+                                  apply()
+                                  for _ = 1, after_A_wait do advance_frame() end
+                                  for _ = 1, 150 do
+                                    local candidate = mario()
+                                    held.A = false; held.B = true
+                                    held.left = candidate.y < 350
+                                      or candidate.x > after_A_target
+                                    held.right = false
+                                    held.up = false; held.down = false
+                                    apply(); advance_frame()
+                                    candidate = mario()
+                                    if candidate.air == 0 and candidate.y >= 350
+                                        and candidate.x <= after_A_target then
+                                      break
+                                    end
+                                  end
+                                  held.A = false; held.B = false
+                                  held.left = false; held.right = false
+                                  apply()
+                                  for _ = 1, after_A_ground_wait do advance_frame() end
+                                  local after_A_max_x = mario().x
+                                  for after_A_run_frame = 1, 300 do
+                                    local candidate = mario()
+                                    held.B = true; held.left = false
+                                    held.right = true; held.up = false
+                                    held.down = false
+                                    held.A = candidate.x >= after_A_jump_x
+                                      and after_A_run_frame % 60 < 42
+                                    apply(); advance_frame()
+                                    if mario().x < 8192 then
+                                      after_A_max_x = math.max(after_A_max_x, mario().x)
+                                    end
+                                    if memory.readbyte(0xED) ~= 3
+                                        or memory.readbyte(0x736) < starting_lives then
+                                      break
+                                    end
+                                  end
+                                  if memory.readbyte(0xED) == 3
+                                      and after_A_max_x >= 620 then
+                                    after_A_found = {
+                                      wait = after_A_wait,
+                                      target = after_A_target,
+                                      ground_wait = after_A_ground_wait,
+                                      jump_x = after_A_jump_x,
+                                      max_x = after_A_max_x,
+                                    }
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                  if after_A_found ~= nil then
+                    log_state(
+                      "post_probe_world_8_fortress_after_A_search_found",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 wait="
+                        .. tostring(after_A_found.wait)
+                        .. " target=" .. tostring(after_A_found.target)
+                        .. " ground_wait=" .. tostring(after_A_found.ground_wait)
+                        .. " jump_x=" .. tostring(after_A_found.jump_x)
+                        .. " max_x=" .. tostring(after_A_found.max_x)
+                    )
+                  else
+                    savestate.load(after_A_checkpoint)
+                    log_state(
+                      "post_probe_world_8_fortress_after_A_search_failed",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 failure_classification=bounded_normal_input_search_exhausted"
+                    )
+                  end
+                  return
+                end
+              end
+            end
+          end
+          if A_bonus_phase == 7 and main_route_climb_phase == 12 then
+            if memory.readbyte(0x79) == 3 then
+              C_door_triggered = true
+              main_route_climb_phase = 14
+              main_after_A_frames = 0
+              log_state(
+                "post_probe_world_8_fortress_C_lower_room_entered",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_C_room_transition leaf_preserved="
+                  .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+              )
+            elseif not C_door_triggered and memory.readbyte(0x3DE) ~= 0 then
+              C_door_triggered = true
+              C_door_transition_frames = 0
+              log_state(
+                "post_probe_world_8_fortress_C_door_triggered",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_new_up_input_set_game_owned_level_junction_control"
+              )
+            elseif C_door_triggered then
+              C_door_transition_frames = C_door_transition_frames + 1
+              if C_door_transition_frames > 35
+                  and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 14
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_C_lower_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_C_room_transition leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            end
+          end
           held.down = false
           held.up = false
           if os.getenv("SMB3_WORLD_8_A_PLATFORM_EXPERIMENT") == "1"
@@ -13448,33 +13671,2369 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               and h_m.x >= 425 and h_m.x <= 455 then
             A_retry_phase = 1
           end
-          if leaf_buffer_phase == 1 then
+          if A_bonus_phase == 1 then
+            local A_bonus_podoboo = nearest_object_id_between(
+              h_m, -98, -160, 80, 220
+            )
+            held.A = false; held.B = false; held.down = false; held.up = false
+            held.left = h_m.x > 416
+            held.right = h_m.x < 406
+            if h_m.air == 0 and h_m.y >= 320
+                and h_m.x >= 406 and h_m.x <= 416
+                and (A_bonus_podoboo == nil or A_bonus_podoboo.y >= 365) then
+              A_bonus_phase = 2
+              A_bonus_jump_frames = 0
+              log_state(
+                "post_probe_world_8_fortress_A_bonus_podoboo_window",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=observed_podoboo_descending_below_jump_lane"
+              )
+            end
+          elseif A_bonus_phase == 2 then
+            held.A = false
+            held.B = true
+            held.left = true
+            held.right = false
+            held.down = false; held.up = false
+            if h_m.x <= 394 and memory.readbytesigned(0xBD) <= -16 then
+              A_bonus_phase = 3
+              A_bonus_jump_frames = 0
+            end
+          elseif A_bonus_phase == 3 then
+            A_bonus_jump_frames = A_bonus_jump_frames + 1
+            held.A = A_bonus_jump_frames <= A_bonus_jump_hold
+            held.B = true
+            held.left = true
+            held.right = false
+            held.down = false; held.up = false
+            if A_bonus_jump_frames > 50 and h_m.air == 0 then
+              A_bonus_phase = 4
+              log_state(
+                "post_probe_world_8_fortress_A_bonus_left_landing",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_running_jump_left_after_podoboo_window"
+              )
+            end
+          elseif A_bonus_phase == 4 then
+            local A_bonus_powerup = nearest_object_id_between(
+              h_m, 30, -120, 160, 220
+            )
+            held.B = false; held.down = false; held.up = false
+            if A_bonus_block_phase == 0 then
+              held.A = false
+              held.left = h_m.x > 240
+                or (h_m.x >= 236 and memory.readbytesigned(0xBD) > 2)
+              held.right = h_m.x < 236
+                or (h_m.x <= 240 and memory.readbytesigned(0xBD) < -2)
+              if h_m.air == 0 and h_m.x >= 236 and h_m.x <= 240
+                  and math.abs(memory.readbytesigned(0xBD)) <= 2 then
+                A_bonus_block_centered_frames = A_bonus_block_centered_frames + 1
+                if A_bonus_block_centered_frames >= 4 then
+                  A_bonus_block_phase = 1
+                  A_bonus_block_frames = 0
+                end
+              else
+                A_bonus_block_centered_frames = 0
+              end
+            else
+              A_bonus_block_frames = A_bonus_block_frames + 1
+              held.left = false
+              held.right = false
+              held.A = A_bonus_block_frames <= 42
+            end
+            if A_bonus_powerup ~= nil then
+              A_bonus_phase = 5
+            end
+          elseif A_bonus_phase == 5 then
+            local A_bonus_powerup = nearest_object_id_between(
+              h_m, 30, -160, 200, 240
+            )
+            held.B = false; held.down = false; held.up = false
+            -- Let the Leaf drift into Mario's hitbox over the left platform;
+            -- chasing it past the lip makes the return jump impossible to
+            -- restart before the central Podoboo rises.
+            held.left = h_m.x > 258
+              or (A_bonus_powerup ~= nil and A_bonus_powerup.dx < -3)
+            held.right = h_m.x < 250
+            held.A = A_bonus_powerup ~= nil and A_bonus_powerup.dy < -16
+              and h_frame % 60 < 42
+            if memory.readbyte(0xED) == 3 then
+              A_bonus_phase = 6
+              A_bonus_jump_frames = 0
+              log_state(
+                "post_probe_world_8_fortress_A_bonus_leaf_collected",
+                "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_question_block_hit_and_game_owned_super_leaf_collection"
+              )
+            end
+          elseif A_bonus_phase == 6 then
+            local A_bonus_podoboo = nearest_object_id_between(
+              h_m, -98, -180, 220, 240
+            )
+            local A_bonus_right_podoboo = nearest_object_id_between(
+              h_m, -98, 20, 160, 240
+            )
+            held.down = false; held.up = false
+            if A_bonus_return_phase == 0 then
+              held.A = false; held.B = false
+              held.left = h_m.x > 226
+              held.right = h_m.x < 222
+              if h_m.air == 0 and h_m.y >= 320 and h_m.x <= 228
+                  and (A_bonus_right_podoboo == nil
+                    or A_bonus_right_podoboo.y >= 365) then
+                A_bonus_return_phase = 1
+                A_bonus_return_frames = 0
+              end
+            elseif A_bonus_return_phase == 1 then
+              held.A = false; held.B = true
+              held.left = false; held.right = true
+              if h_m.x >= 250 and memory.readbytesigned(0xBD) >= 20 then
+                A_bonus_return_phase = 2
+                A_bonus_return_frames = 0
+              end
+            elseif A_bonus_return_phase == 2 then
+              A_bonus_return_frames = A_bonus_return_frames + 1
+              held.A = A_bonus_return_frames <= 70
+              held.B = true; held.left = false; held.right = true
+              if A_bonus_return_frames > 70 and h_m.air == 0
+                  and h_m.x >= 350 and h_m.y >= 320 then
+                A_bonus_return_phase = 3
+                A_bonus_return_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_A_bonus_middle_landing",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_timed_running_jump_right_over_podoboo"
+                )
+              end
+            elseif A_bonus_return_phase == 3 then
+              held.A = false; held.B = false
+              held.left = h_m.x > 404
+                or (h_m.x >= 398 and memory.readbytesigned(0xBD) > 2)
+              held.right = h_m.x < 398
+                or (h_m.x <= 404 and memory.readbytesigned(0xBD) < -2)
+              if h_m.air == 0 and h_m.x >= 398 and h_m.x <= 404
+                  and math.abs(memory.readbytesigned(0xBD)) <= 2
+                  and (A_bonus_right_podoboo == nil
+                    or A_bonus_right_podoboo.y >= 365) then
+                A_bonus_return_phase = 4
+                A_bonus_return_frames = 0
+              end
+            elseif A_bonus_return_phase == 4 then
+              A_bonus_return_frames = A_bonus_return_frames + 1
+              held.A = A_bonus_return_frames <= 58
+              held.B = false
+              held.left = h_m.x >= 452
+              held.right = h_m.x < 452
+              if A_bonus_return_frames > 58 and h_m.air == 0
+                  and h_m.x >= 430 and h_m.y <= 304 then
+                A_bonus_return_phase = 5
+                A_bonus_return_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_A_bonus_upper_landing",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_from_middle_to_upper_conveyor"
+                )
+              end
+            else
+              A_bonus_return_frames = A_bonus_return_frames + 1
+              held.A = false; held.B = false
+              held.left = h_m.x > 452
+              held.right = h_m.x < 444
+              held.up = h_m.air == 0 and h_m.x >= 444 and h_m.x <= 460
+                and A_bonus_return_frames % 30 == 0
+            end
+          elseif A_bonus_phase == 7 then
+            local main_roto = nearest_object_id_between(
+              h_m, 95, -180, 180, 180
+            )
+            local main_right_roto = nearest_object_id_between(
+              h_m, 96, -80, 240, 240
+            )
+            held.B = true
+            held.down = false; held.up = false
+            if main_route_climb_phase == -1 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.B = false; held.left = false; held.right = false
+              held.A = false
+              if main_after_A_frames >= 90 then
+                main_route_climb_phase = 0
+              end
+            elseif main_route_climb_phase == 0 then
+              held.left = true; held.right = false; held.A = false
+              if h_m.y >= 350 and h_m.x <= 360 then
+                main_route_climb_phase = 1
+              end
+            elseif main_route_climb_phase == 1 then
+              held.B = false; held.left = false; held.right = false
+              held.A = false
+              if main_roto == nil or math.abs(main_roto.dx) >= 80 then
+                main_route_climb_phase = 2
+              end
+            elseif main_route_climb_phase == 2 then
+              held.A = false; held.B = true
+              held.left = false; held.right = true
+              if h_m.x >= 390 then
+                main_route_climb_phase = 3
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 3 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 70
+              held.B = true; held.left = false; held.right = true
+              if main_after_A_frames > 45 and h_m.air == 0
+                  and h_m.x >= 495 then
+                main_route_climb_phase = 4
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 4 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Give the first jump a short, explicit A-release on landing.
+              -- Without this edge the emulator treats the ledge-climb press as
+              -- one continuous hold and Mario remains pinned at x=498.
+              held.A = false
+              held.B = false; held.left = false; held.right = false
+              if main_after_A_frames >= 2 then
+                main_route_climb_phase = 5
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 5 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 56
+              held.B = true; held.left = false; held.right = true
+              if main_after_A_frames > 56 and h_m.air == 0
+                  and h_m.x >= 520 then
+                main_route_climb_phase = 6
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_after_A_roto_clear",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_timed_running_jump_over_two_roto_discs_and_right_ledge_climb"
+                )
+              end
+            elseif main_route_climb_phase == 6 then
+              -- The next Roto-Disc crosses the ledge exit.  Let its game-owned
+              -- orbit reach the bottom arc before running off the ledge.
+              held.A = false; held.B = false
+              held.left = memory.readbytesigned(0xBD) > 0 or h_m.x > 550
+              held.right = h_m.x < 542
+              if main_right_roto ~= nil and main_right_roto.x <= 630
+                  and main_right_roto.y <= 312 then
+                main_route_climb_phase = 7
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 7 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = true; held.B = true
+              held.left = false; held.right = true
+              if main_after_A_frames > 30 and h_m.air == 0
+                  and h_m.y >= 380 and h_m.x >= 630 then
+                main_route_climb_phase = 8
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 8 then
+              -- Re-arm A immediately after the ledge drop so the short-wall
+              -- jump is a new press rather than a held glide input.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 1 then
+                main_route_climb_phase = 9
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 9 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 45; held.B = true
+              -- Brake back over the narrow column instead of overshooting it
+              -- into the dead-end wall to the right.
+              held.left = h_m.x >= 706; held.right = h_m.x < 706
+              if main_after_A_frames > 45 and h_m.air == 0
+                  and h_m.x >= 690 and h_m.x <= 730 and h_m.y <= 336 then
+                main_route_climb_phase = 10
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 10 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 1 then
+                main_route_climb_phase = 11
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 11 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42; held.B = true
+              held.left = h_m.x > 654; held.right = h_m.x < 650
+              if main_after_A_frames > 42 and h_m.air == 0
+                  and h_m.x >= 640 and h_m.x <= 680 and h_m.y <= 304 then
+                main_after_A_frames = 0
+                -- Door C is an optional power-up loop.  The stored Leaf from
+                -- Door A is intact, so continue on the main route instead.
+                main_route_climb_phase = 23
+                log_state(
+                  "post_probe_world_8_fortress_short_wall_clear",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_observed_roto_window_and_running_jump_onto_short_wall"
+                )
+              end
+            elseif main_route_climb_phase == 12 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = h_m.x > 654; held.right = h_m.x < 646
+              held.up = h_m.air == 0 and h_m.x >= 646 and h_m.x <= 654
+                and main_after_A_frames % 30 == 0
+            elseif main_route_climb_phase == 13 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 70; held.B = true
+              held.left = false; held.right = true
+            elseif main_route_climb_phase == 14 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.B = true; held.left = false; held.right = true
+              held.A = main_after_A_frames % 60 < 42
+              if memory.readbyte(0x736) == starting_lives
+                  and memory.readbyte(0x7967) >= 1 then
+                main_route_climb_phase = 15
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_hidden_block_revealed",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_hit_invisible_block game_owned_coin_increment=1"
+                )
+              end
+            elseif main_route_climb_phase == 15 then
+              held.A = false; held.B = false
+              -- Back up far enough to arc over (rather than strike the
+              -- underside of) the question block that precedes the revealed
+              -- hidden block.
+              held.left = h_m.x > 586; held.right = h_m.x < 578
+              if h_m.air == 0 and h_m.x >= 578 and h_m.x <= 586 then
+                main_route_climb_phase = 16
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 16 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Repeated normal jumps clear the destructible bricks on the
+              -- left side of the door.  Centering is observation-driven and
+              -- does not depend on video timing.
+              held.A = main_after_A_frames % 60 < 42
+              held.B = true
+              held.left = h_m.x >= 646; held.right = h_m.x < 634
+              if main_after_A_frames >= 240 and h_m.air == 0 then
+                main_route_climb_phase = 17
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_left_door_bricks_cleared",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=repeated_normal_jumps_broke_left_door_bricks"
+                )
+              end
+            elseif main_route_climb_phase == 17 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 2 then
+                main_route_climb_phase = 18
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 18 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 60 < 42
+              held.B = true; held.left = false; held.right = true
+              if h_m.air == 0 and h_m.y <= 336
+                  and h_m.x >= 640 and h_m.x <= 668 then
+                main_route_climb_phase = 19
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_hidden_block_landing",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_onto_game_owned_revealed_hidden_block"
+                )
+              end
+            elseif main_route_climb_phase == 19 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 656; held.right = h_m.x < 652
+              held.up = false
+              if main_after_A_frames >= 3 and h_m.x >= 650
+                  and h_m.x <= 658 then
+                main_route_climb_phase = 20
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 20 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 80 < 58
+              held.B = true; held.down = false
+              -- The two revealed upper blocks leave the door opening between
+              -- them.  Rise from the lower hidden block through that opening
+              -- and issue fresh Up pulses at the game-owned doorway.
+              held.left = h_m.x > 656; held.right = h_m.x < 652
+              held.up = h_m.x >= 648 and h_m.x <= 660
+                and h_m.y <= 304 and main_after_A_frames % 10 == 0
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 21
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_C_exit_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_new_up_input_at_game_owned_door_C"
+                )
+              end
+            elseif main_route_climb_phase == 21 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.left = false
+              held.right = false; held.down = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 22
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_C_main_room_return",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_C_return_transition leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 22 then
+              held.A = false; held.B = false; held.left = false
+              held.right = false; held.down = false; held.up = false
+            elseif main_route_climb_phase == 23 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false
+              held.B = true; held.left = false; held.right = true
+              held.down = false; held.up = false
+              if h_m.x >= 710 and h_m.air == 0 then
+                main_route_climb_phase = 24
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_optional_C_skipped",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_main_route_progress_right_of_optional_door_C"
+                )
+              end
+            elseif main_route_climb_phase == 24 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Keep the Leaf glide engaged continuously while crossing the
+              -- Roto-Disc lane; releasing A here drops Mario into its orbit.
+              -- First allow the observed orbit to reach its upper/right arc;
+              -- this leaves the lower landing lane clear for the full jump.
+              held.A = main_after_A_frames > 90
+              held.B = main_after_A_frames > 90
+              held.left = false; held.right = main_after_A_frames > 90
+              held.down = false; held.up = false
+              if h_m.x >= 850 then
+                main_route_climb_phase = 25
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_main_roto_lane_clear",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_leaf_glide_above_observed_roto_orbit leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 25 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              held.down = false; held.up = false
+              if main_after_A_frames >= 1 then
+                main_route_climb_phase = 32
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 32 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = true; held.B = true
+              held.left = false; held.right = true
+              held.down = false; held.up = false
+              if memory.readbyte(0x7967) >= 1 then
+                main_route_climb_phase = 35
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_hidden_block_revealed",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_hit_right_wall_hidden_block game_owned_coin_increment=1"
+                )
+              elseif h_m.x >= 895 and h_m.air == 0 then
+                main_route_climb_phase = 33
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 33 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 2 then
+                main_route_climb_phase = 34
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 34 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 60; held.B = false
+              held.left = false; held.right = true
+              if memory.readbyte(0x7967) >= 1 then
+                main_route_climb_phase = 35
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_hidden_block_revealed",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_hit_right_wall_hidden_block game_owned_coin_increment=1"
+                )
+              end
+            elseif main_route_climb_phase == 35 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Re-arm A after the hidden-block strike.  The fresh jump from
+              -- the revealed foothold carries Mario into Door D's pocket.
+              held.A = false; held.B = true
+              held.left = true; held.right = false
+              if main_after_A_frames >= 16 then
+                main_route_climb_phase = 28
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 36 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = true; held.right = false
+              -- Re-arm A after landing so the leftward hazard-clear jump is
+              -- a fresh press.
+              if main_after_A_frames >= 2 then
+                main_route_climb_phase = 28
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 26 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              held.down = false; held.up = false
+              if main_after_A_frames >= 3 and h_m.air == 0 then
+                main_route_climb_phase = 27
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 27 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Let the Roto-Disc pass through the wall lane while Mario is
+              -- safely above its orbit, preserving the Leaf for the bricks.
+              held.A = main_after_A_frames <= 60; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames > 60 and h_m.air == 0 then
+                main_route_climb_phase = 28
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_roto_window_clear",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_vertical_jump_above_observed_roto_pass leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 28 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = true; held.B = main_after_A_frames > 24
+              held.down = false; held.left = true; held.right = false
+              if h_m.x <= 852 and h_m.y <= 336 and h_m.air == 0 then
+                main_route_climb_phase = 41
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_safe_pocket_reached",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_airborne_entry_to_protected_door_pocket leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 41 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 850; held.right = h_m.x < 842
+              held.up = h_m.x >= 840 and h_m.x <= 852
+                and main_after_A_frames % 30 == 0
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 45
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_new_up_input_at_game_owned_door_D leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 45 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 46
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_D_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_transition leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+                log_state(
+                  "post_probe_world_8_fortress_gameplay",
+                  extension_evidence(
+                    "evidence=normal_fortress_door_and_hazard_traversal room_transitions_observed=1 game_owned_room_transition=door_D_to_stationary_lava_pillar_room object_set_identity=2 mario_alive=1 player_is_dying=0"
+                  )
+                )
+              end
+            elseif main_route_climb_phase == 46 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Re-arm A on every narrow platform so each red pillar is met
+              -- by a fresh jump rather than by the tail end of one long arc.
+              held.A = main_after_A_frames % 30 < 22
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 1120 then
+                main_route_climb_phase = 49
+                main_after_A_frames = 0
+              elseif h_m.x >= 1000 and not D_first_pillar_cleared then
+                main_route_climb_phase = 47
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 47 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Brake on the solid red platform before the tall pillar and
+              -- explicitly release A so the pillar jump has a new edge.
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 1024; held.right = h_m.x < 1008
+              if main_after_A_frames >= 4 and h_m.y >= 332 then
+                main_route_climb_phase = 48
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 48 then
+              held.A = true; held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 1100 then
+                D_first_pillar_cleared = true
+                main_route_climb_phase = 49
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 49 then
+              main_after_A_frames = main_after_A_frames + 1
+              local next_podoboo = nearest_object_id_between(
+                h_m, -98, 0, 180, 240
+              )
+              -- Land on the conveyor and let the nearby Podoboo drop into the
+              -- lava.  A ground sprint then passes beneath the diagonal Thwomp
+              -- instead of colliding with it at the top of a jump.
+              held.A = false; held.B = false; held.down = false
+              held.left = memory.readbytesigned(0xBD) > 0 or h_m.x > 1105
+              held.right = memory.readbytesigned(0xBD) < -2 or h_m.x < 1090
+              held.up = false
+              if h_m.air == 0
+                  and (next_podoboo == nil or next_podoboo.y >= 365) then
+                main_route_climb_phase = 56
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 55 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 52
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 52 then
+              -- Fresh jump over the stone lip, then hold Up while falling into
+              -- the red door pit.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 30 < 22
+              held.B = true; held.down = false
+              held.left = false; held.right = true
+              held.up = h_m.x >= 1300
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 50
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_E_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_far_lava_room_door"
+                )
+              elseif D_thwomp_bypassed and h_m.x >= 1400 then
+                main_route_climb_phase = 60
+                main_after_A_frames = 0
+              elseif h_m.x >= 1540 then
+                main_route_climb_phase = 57
+                main_after_A_frames = 0
+              elseif h_m.x >= 1200 and not D_thwomp_bypassed then
+                main_route_climb_phase = 56
+                main_after_A_frames = 0
+              elseif h_m.x >= D_lava_reset_target then
+                main_route_climb_phase = 53
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 56 then
+              -- A short tap clears the conveyor gap without carrying Mario
+              -- high enough to collide with the diagonal Thwomp.  Keep the
+              -- rest of the approach grounded.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 8
+                  or (main_after_A_frames >= 43 and main_after_A_frames <= 50)
+              held.B = true; held.down = false
+              held.left = false; held.right = true; held.up = false
+              if h_m.x >= 1350 then
+                D_thwomp_bypassed = true
+                main_route_climb_phase = 52
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 57 then
+              -- Land on the lower conveyor and shed the remaining run speed
+              -- before jumping to the raised door platform.
+              main_after_A_frames = main_after_A_frames + 1
+              local D_far_door_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = D_far_door_xspeed > 1
+              held.right = D_far_door_xspeed < -1
+              held.up = false
+              if h_m.air == 0 then
+                if h_m.y <= 304 then
+                  main_route_climb_phase = 59
+                else
+                  main_route_climb_phase = 58
+                end
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 58 then
+              -- Jump from the lower conveyor onto the short platform carrying
+              -- the red door while continuing to cancel horizontal momentum.
+              main_after_A_frames = main_after_A_frames + 1
+              local D_far_door_xspeed = memory.readbytesigned(0xBD)
+              held.A = main_after_A_frames <= 26
+              held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if D_far_door_xspeed > 1 then
+                held.left = true
+              elseif D_far_door_xspeed < -1 then
+                held.right = true
+              elseif h_m.x > 1597 then
+                held.left = true
+              elseif h_m.x < 1593 then
+                held.right = true
+              end
+              if main_after_A_frames > 26 and h_m.air == 0 and h_m.y <= 304 then
+                main_route_climb_phase = 59
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 59 then
+              -- Center beneath the door and issue an ordinary grounded Up.
+              main_after_A_frames = main_after_A_frames + 1
+              local D_far_door_target_x = 1595
+              local D_far_door_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false
+              if h_m.x < 1585 then
+                held.right = true
+              elseif D_far_door_xspeed > 1 then
+                held.left = true
+              elseif D_far_door_xspeed < -1 then
+                held.right = true
+              elseif h_m.x > D_far_door_target_x + 2 then
+                held.left = true
+              elseif h_m.x < D_far_door_target_x - 2 then
+                held.right = true
+              end
+              held.up = false
+              if h_m.air == 0 and h_m.x >= 1580 and h_m.x <= 1586 then
+                main_route_climb_phase = 64
+                main_after_A_frames = 0
+              end
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 50
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_E_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_far_lava_room_door"
+                )
+              end
+            elseif main_route_climb_phase == 64 then
+              -- Door entry requires a new Up edge after Mario is centered.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 1584
+              held.right = h_m.x < 1581
+              held.up = main_after_A_frames >= 5 and h_m.air == 0
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 50
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_E_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=fresh_normal_up_input_at_game_owned_far_lava_room_door"
+                )
+              end
+            elseif main_route_climb_phase == 60 then
+              -- Drop onto the narrow intermediate conveyor so the final door
+              -- platform can be reached with a newly armed jump.
+              main_after_A_frames = main_after_A_frames + 1
+              local D_mid_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if D_mid_xspeed > 20 then
+                held.left = true
+              elseif D_mid_xspeed < -1 then
+                held.right = true
+              elseif h_m.x > 1468 then
+                held.left = true
+              elseif h_m.x < 1452 then
+                held.right = true
+              end
+              if h_m.air == 0 then
+                main_route_climb_phase = 63
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 63 then
+              -- Use the safe width of the intermediate conveyor to build just
+              -- enough speed before the final jump.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = h_m.x >= 1458
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if held.A then
+                main_route_climb_phase = 61
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 61 then
+              -- Fresh jump from the intermediate conveyor to the raised door
+              -- platform.  Begin braking before crossing its far edge.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 22
+                  or (main_after_A_frames > 24
+                    and main_after_A_frames % 6 < 3)
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 1540 then
+                main_route_climb_phase = 62
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 62 then
+              main_after_A_frames = main_after_A_frames + 1
+              local D_door_platform_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              if h_m.x < 1572 then
+                held.B = true
+                held.left = false
+                held.right = true
+              else
+                held.left = D_door_platform_xspeed > 1
+                held.right = D_door_platform_xspeed < -1
+              end
+              if h_m.air == 0 then
+                if h_m.y <= 304 then
+                  main_route_climb_phase = 66
+                else
+                  main_route_climb_phase = 58
+                end
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 66 then
+              -- Traverse the safe width of Door E's conveyor before launching
+              -- toward the stationary Door F platform.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = h_m.x >= 1605
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if held.A then
+                main_route_climb_phase = 65
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 65 then
+              -- The conveyor door is a detour.  Use its platform only as the
+              -- launch point for the stationary door platform farther right.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 22
+                  or (main_after_A_frames > 24
+                    and main_after_A_frames % 6 < 3)
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if main_after_A_frames > 20 and h_m.air == 0
+                  and h_m.x >= 1700 and h_m.y <= 336 then
+                main_route_climb_phase = 67
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 67 then
+              -- Approach the stationary door without spending the Up edge.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = h_m.x < 1728
+              if h_m.x >= 1728 then
+                main_route_climb_phase = 68
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 68 then
+              main_after_A_frames = main_after_A_frames + 1
+              local D_F_door_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false
+              if D_F_door_xspeed > 1 then
+                held.left = true
+              elseif D_F_door_xspeed < -1 then
+                held.right = true
+              elseif h_m.x > 1729 then
+                held.left = true
+              elseif h_m.x < 1725 then
+                held.right = true
+              end
+              held.up = main_after_A_frames >= 5 and h_m.air == 0
+                  and h_m.x >= 1724 and h_m.x <= 1730
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 69
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_F_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=fresh_normal_up_input_at_game_owned_stationary_platform_door"
+                )
+              end
+            elseif main_route_climb_phase == 69 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 70
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_F_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_stationary_platform_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 70 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false
+              held.left = false; held.right = true; held.up = false
+              if h_m.x >= 1860 then
+                main_route_climb_phase = 71
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_switch_approach",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 before_Level_PSwitchCnt="
+                    .. tostring(D_current_switch_count)
+                    .. " observer=ram_0x567"
+                )
+              end
+            elseif main_route_climb_phase == 71 then
+              -- Release A before creating a fresh jump edge at the floor switch.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 72
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 72 then
+              -- Jump over the switch, then settle on it.  Acceptance is gated by
+              -- Level_PSwitchCnt above, not this movement phase.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 14
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 1900
+              held.right = h_m.x < 1896
+              if D_final_switch_activated then
+                main_route_climb_phase = 73
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 73 then
+              -- Use the game-owned switch interval immediately to reach the
+              -- temporary door at the right side of this chamber.
+              main_after_A_frames = main_after_A_frames + 1
+              -- The first jump clears the Dry Bones; staying low afterward
+              -- runs beneath the diagonal Thwomp before its lane closes.  The
+              -- final jump clears the Dry Bones guarding the temporary door.
+              held.A = (h_m.x >= 2080 and h_m.x < 2230)
+                or h_m.x >= 2640
+              held.B = h_m.x <= 2718; held.down = false
+              held.left = h_m.x > 2718; held.right = h_m.x <= 2718
+              held.up = D_current_switch_count > 0
+                and h_m.x >= 2690 and h_m.x <= 2730 and h_m.y <= 320
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 74
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_coin_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_temporary_door active_Level_PSwitchCnt="
+                    .. tostring(D_current_switch_count)
+                    .. " observer=ram_0x567"
+                )
+              end
+            elseif main_route_climb_phase == 74 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 75
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_coin_door_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_temporary_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 75 then
+              -- The nearest Roto-Disc passes below the upper walkway from
+              -- frames 105-155 of its stable 160-frame cycle.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 105 then
+                main_route_climb_phase = 76
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 76 then
+              -- Walk left down the stairs during the safe half-cycle.  Holding
+              -- a fresh jump from the bottom stair crosses the gap to the
+              -- intended left exit.
+              main_after_A_frames = main_after_A_frames + 1
+              -- Arm the jump from the last flat stair instead of waiting for
+              -- Mario to begin the unsupported drop at x=2580.  The earlier
+              -- takeoff also carries him above the near Roto-Disc rather than
+              -- spending the Leaf as a damage buffer in its orbit.
+              held.A = h_m.x <= 2640
+              held.B = true; held.down = false
+              held.left = true; held.right = false
+              held.up = false
+              if h_m.x <= 2520 and h_m.air == 0 and h_m.y >= 380 then
+                main_route_climb_phase = 103
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 103 then
+              -- The first jump lands on the narrow center platform.  Release
+              -- A for one frame so the final gap receives a new jump edge.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 1 then
+                main_route_climb_phase = 104
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 104 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42
+              held.B = true; held.down = false
+              held.left = true; held.right = false; held.up = false
+              if h_m.x <= 2410 and h_m.air == 0 then
+                main_route_climb_phase = 79
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 79 then
+              -- Cancel the full-speed landing before spending the Up edge at
+              -- the left door.  Sliding past it was not a door interaction.
+              main_after_A_frames = main_after_A_frames + 1
+              local post_coin_door_xspeed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false
+              if post_coin_door_xspeed < -1 or h_m.x < 2418 then
+                held.right = true
+              elseif post_coin_door_xspeed > 1 or h_m.x > 2422 then
+                held.left = true
+              end
+              held.up = main_after_A_frames >= 5
+                and h_m.air == 0
+                and h_m.x >= 2416 and h_m.x <= 2425
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 77
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_post_coin_left_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=fresh_normal_up_input_at_game_owned_left_exit"
+                )
+              end
+            elseif main_route_climb_phase == 77 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 78
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_post_coin_right_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_left_exit_transition"
+                )
+              end
+            elseif main_route_climb_phase == 78 then
+              -- Rejoin the main route through the door at this room's right.
+              main_after_A_frames = main_after_A_frames + 1
+              -- Hold the first press only until the opening jump has cleared
+              -- the low ceiling.  The Roto-Disc ahead needs a separate,
+              -- immediate jump from the center landing.
+              held.A = h_m.x < 2500
+              held.B = true; held.down = false
+              held.left = false; held.right = true
+              held.up = h_m.air == 0
+                and h_m.x >= 2744 and h_m.x <= 2756
+              if main_after_A_frames > 50 and h_m.air == 0
+                  and h_m.x >= 2480 and h_m.x < 2560 then
+                main_route_climb_phase = 105
+                main_after_A_frames = 0
+              end
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 80
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_post_coin_right_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_right_door"
+                )
+              end
+            elseif main_route_climb_phase == 105 then
+              -- Hold outside the Roto-Disc's leftmost reach until it has
+              -- rotated back onto the upper-left arc.  This corridor's low
+              -- ceiling makes an immediate jump collide with the masonry.
+              main_after_A_frames = main_after_A_frames + 1
+              local return_roto = nearest_enemy_id_between(h_m, 95, 0, 180)
+              local return_wait_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = true; held.down = false
+              held.left = h_m.x > 2480 or return_wait_speed > 1
+              held.right = h_m.x < 2474 or return_wait_speed < -1
+              held.up = false
+              if main_after_A_frames >= 4 and h_m.air == 0
+                  and h_m.x >= 2472 and h_m.x <= 2482
+                  and math.abs(return_wait_speed) <= 1
+                  and return_roto ~= nil
+                  and return_roto.x <= 2560 and return_roto.y <= 330 then
+                main_route_climb_phase = 106
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 106 then
+              -- Run beneath the upper-arc Roto-Disc.  Only jump after its
+              -- orbit is behind Mario, clearing the final guard by the door.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = h_m.x >= 2630 and h_m.x < 2720
+              held.B = true; held.down = false
+              held.left = false; held.right = true
+              -- The door at x=2752 is an optional 1-Up detour.  Remaining in
+              -- this room reaches the tall-Mario ceiling route directly and
+              -- preserves the Leaf buffer for the required path.
+              held.up = false
+              if h_m.x >= 2750 and h_m.air == 0 then
+                main_route_climb_phase = 111
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_optional_one_up_skipped",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=continued_past_optional_door_to_required_tall_route leaf_preserved="
+                    .. tostring(memory.readbyte(0xED) == 3 and 1 or 0)
+                )
+              end
+            elseif main_route_climb_phase == 80 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 81
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_one_up_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_right_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 81 then
+              -- Small-Mario branch: jump the gap to the right, climb the
+              -- stairs, and continue past the Boo to the upper conveyor.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames >= 10
+                and (main_after_A_frames % 54 < 36 or h_m.x >= 2840)
+              held.B = main_after_A_frames >= 10; held.down = false
+              held.left = false; held.right = main_after_A_frames >= 10
+              held.up = h_m.air == 0
+                and h_m.x >= 2976 and h_m.x <= 3000
+              if h_m.x >= 2820 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 90
+                main_after_A_frames = 0
+              end
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 88
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_small_route_right_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_door_after_stairs"
+                )
+              end
+            elseif main_route_climb_phase == 90 then
+              main_after_A_frames = main_after_A_frames + 1
+              local small_route_roto = nearest_enemy_id_between(h_m, 96, 0, 220)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              local small_route_x_speed = memory.readbytesigned(0xBD)
+              if h_m.x > 2784 then
+                held.left = true; held.right = false
+              elseif h_m.x < 2776 then
+                held.left = false; held.right = true
+              else
+                held.left = small_route_x_speed > 1
+                held.right = small_route_x_speed < -1
+              end
+              if main_after_A_frames >= 4 and h_m.air == 0 and h_m.x <= 2784
+                  and math.abs(small_route_x_speed) <= 1
+                  and small_route_roto ~= nil
+                  and small_route_roto.x >= 2885 and small_route_roto.x <= 2910
+                  and small_route_roto.y >= 390 then
+                main_route_climb_phase = 93
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 93 then
+              -- Let the opposing Roto-Discs rotate onto their horizontal axis
+              -- before committing to the full-speed run-up.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= (tonumber(
+                  os.getenv("SMB3_WORLD_8_DUAL_ROTO_WAIT") or "60"
+                ) or 60) then
+                main_route_climb_phase = 92
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 92 then
+              -- Build horizontal speed while the Roto-Disc is still below the
+              -- walkway, keeping A released for the actual jump edge.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 2828 then
+                main_route_climb_phase = 91
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 91 then
+              -- Fresh long jump over the lower Roto-Disc, then wait at the
+              -- wall until the disc has swept safely left.  The protruding
+              -- brick is the first stair and must remain intact.
+              main_after_A_frames = main_after_A_frames + 1
+              local wall_roto = nearest_enemy_id_between(h_m, 96, -200, 80)
+              -- Release before landing so the wall-gap jump can use a fresh
+              -- A edge without waiting beside the trailing Roto-Disc.
+              held.A = main_after_A_frames <= 25
+              held.B = main_after_A_frames < 30; held.down = false
+              held.left = main_after_A_frames >= 30
+              held.right = main_after_A_frames < 30
+              held.up = false
+              if main_after_A_frames >= 38 and h_m.air == 0
+                  and h_m.x >= 2908 and h_m.x < 2960 then
+                main_route_climb_phase = 99
+                main_after_A_frames = 0
+              elseif h_m.x >= 2990 and h_m.air == 0
+                  and wall_roto ~= nil and wall_roto.x <= 2920
+                  and wall_roto.y >= 390 then
+                main_route_climb_phase = 94
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 99 then
+              -- Jump immediately from the safe landing.  Stopping here lets
+              -- the trailing Roto-Disc close from the right; a fresh running
+              -- jump crosses its lower arc and the wall-side floor gap.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 45
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 3060 then
+                main_route_climb_phase = 102
+                main_after_A_frames = 0
+              elseif main_after_A_frames > 45 and h_m.air == 0
+                  and h_m.x >= 2990 then
+                main_route_climb_phase = 100
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 100 then
+              -- The far-right brick is the optional 1-Up, not a route wall.
+              -- Release A beneath it so the next press is a discrete strike.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 1 then
+                main_route_climb_phase = 101
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 101 then
+              local one_up = nearest_enemy_id_between(h_m, 11, -40, 40)
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 30
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 2996; held.right = h_m.x < 2990
+              if one_up ~= nil then
+                main_route_climb_phase = 108
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_optional_one_up_revealed",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_hit_game_owned_one_up_brick return_route=left_door"
+                )
+              end
+            elseif main_route_climb_phase == 108 then
+              -- Return across the optional room to the same door.  Separate
+              -- jump pulses retain normal controller semantics over its gaps.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42
+                or (main_after_A_frames > 52
+                  and (main_after_A_frames - 52) % 54 < 36)
+              held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if h_m.x <= 2760 and h_m.air == 0 then
+                main_route_climb_phase = 109
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 109 then
+              main_after_A_frames = main_after_A_frames + 1
+              local optional_return_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 2754 or optional_return_speed > 1
+              held.right = h_m.x < 2748 or optional_return_speed < -1
+              held.up = main_after_A_frames >= 5 and h_m.air == 0
+                and h_m.x >= 2748 and h_m.x <= 2756
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 110
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_optional_one_up_return_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_same_game_owned_optional_room_door"
+                )
+              end
+            elseif main_route_climb_phase == 110 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 111
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_optional_room_return_transition tall_route=1"
+                )
+              end
+            elseif main_route_climb_phase == 111 then
+              -- Tall Mario can break the low ceiling bricks, jump through the
+              -- resulting hole, and take the right-side door.  Repeated normal
+              -- jump presses cover the floor block and the ceiling opening.
+              main_after_A_frames = main_after_A_frames + 1
+              local tall_route_wait = tonumber(
+                os.getenv("SMB3_WORLD_8_TALL_ROUTE_WAIT") or "24"
+              ) or 24
+              local tall_route_frames = main_after_A_frames - tall_route_wait
+              held.A = tall_route_frames > 0 and tall_route_frames % 58 < 42
+              held.B = tall_route_frames > 0; held.down = false
+              held.left = false; held.right = tall_route_frames > 0
+              held.up = tall_route_frames > 0 and h_m.air == 0
+                and h_m.y <= 320 and tall_route_frames % 10 == 0
+              if tall_route_frames > 0 and h_m.x >= 2958 and h_m.air == 0 then
+                main_route_climb_phase = 114
+                main_after_A_frames = 0
+              elseif memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 112
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_brick_break_running_jump_and_up_input_at_game_owned_tall_route_door"
+                )
+              end
+            elseif main_route_climb_phase == 114 then
+              -- The first pass breaks the lower ceiling brick.  Back beneath
+              -- the opening for a centered second strike and ascent.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if h_m.x <= 2932 and h_m.air == 0 then
+                main_route_climb_phase = 115
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 115 then
+              main_after_A_frames = main_after_A_frames + 1
+              local tall_hole_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+              if h_m.x < 2926 then
+                held.right = true
+              elseif h_m.x > 2930 then
+                held.left = true
+              elseif tall_hole_speed < -1 then
+                held.right = true
+              elseif tall_hole_speed > 1 then
+                held.left = true
+              end
+              if main_after_A_frames >= 3 and h_m.air == 0
+                  and h_m.x >= 2924 and h_m.x <= 2932
+                  and tall_hole_speed >= 0 then
+                main_route_climb_phase = 116
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 116 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- First finish opening the vertical shaft from directly below.
+              held.A = main_after_A_frames <= 42
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 2930; held.right = h_m.x < 2926
+              if main_after_A_frames > 50 and h_m.air == 0 then
+                main_route_climb_phase = 118
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 118 then
+              -- Back up for the running jump explicitly required by this
+              -- opening; a vertical jump becomes wedged between its side tiles.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if h_m.x <= 2888 and h_m.air == 0 then
+                main_route_climb_phase = 119
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 119 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 2892 and memory.readbytesigned(0xBD) >= 18 then
+                main_route_climb_phase = 120
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 120 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 45
+              held.B = true; held.down = false; held.up = false
+              -- The strike occurs at x~=2928. Brake immediately afterward so
+              -- the landing stays close enough to reuse that exact opening
+              -- before the Roto-Disc reaches this corridor.
+              held.left = h_m.x >= 2930; held.right = h_m.x < 2930
+              if h_m.y <= 304 then
+                main_route_climb_phase = 117
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_ceiling_cleared",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_big_mario_brick_break_and_running_jump_through_created_hole"
+                )
+              elseif main_after_A_frames > 30 and h_m.air == 0 then
+                -- The first running jump can be the strike which creates the
+                -- hole. Return immediately to its world position, then make a
+                -- centered fresh jump through it.
+                main_route_climb_phase = 121
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 121 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              -- Start the fresh jump while still moving left, then reverse in
+              -- the air. This reaches the opening before the Roto-Disc's next
+              -- sweep instead of waiting underneath it to stop.
+              if h_m.x <= 2942 and h_m.air == 0 then
+                main_route_climb_phase = 122
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 122 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 48
+              held.B = true; held.down = false; held.up = false
+              held.left = main_after_A_frames <= 5
+              held.right = main_after_A_frames > 5
+              if h_m.y <= 304 then
+                main_route_climb_phase = 117
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_ceiling_cleared",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_big_mario_brick_break_then_fresh_jump_through_created_hole"
+                )
+              elseif main_after_A_frames > 56 and h_m.air == 0 then
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 117 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Release the previous jump before crossing the upper floor so
+              -- the next A press is a real jump over the Roto-Disc and gaps.
+              local upper_route_frames = main_after_A_frames - 3
+              held.A = upper_route_frames > 0
+                and upper_route_frames % 54 < 38
+              held.B = upper_route_frames > 0; held.down = false
+              held.left = false; held.right = upper_route_frames > 0
+              held.up = false
+              if h_m.x >= 3108 and h_m.air == 0 and h_m.y >= 376 then
+                main_route_climb_phase = 123
+                main_after_A_frames = 0
+              end
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 112
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_upper_right_door"
+                )
+              end
+            elseif main_route_climb_phase == 123 then
+              main_after_A_frames = main_after_A_frames + 1
+              local upper_door_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 3126 or upper_door_speed > 2
+              held.right = h_m.x < 3118 or upper_door_speed < -2
+              held.up = main_after_A_frames >= 3 and h_m.air == 0
+                and h_m.x >= 3116 and h_m.x <= 3128
+                and math.abs(upper_door_speed) <= 2
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 112
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_tall_route_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_lower_right_door_after_tall_route"
+                )
+              end
+            elseif main_route_climb_phase == 112 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 113
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_above_conveyor_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_tall_route_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 113 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 54 < 38
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 3190 then
+                main_route_climb_phase = 124
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_thwomp_lured",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_rightward_approach_triggered_game_owned_thwomp_before_contact"
+                )
+              end
+            elseif main_route_climb_phase == 124 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 54 < 38
+              held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if h_m.x <= 3044 and h_m.air == 0 then
+                main_route_climb_phase = 125
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 125 then
+              main_after_A_frames = main_after_A_frames + 1
+              local switch_brick_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 3054 or switch_brick_speed > 2
+              held.right = h_m.x < 3048 or switch_brick_speed < -2
+              if main_after_A_frames >= 3 and h_m.air == 0
+                  and h_m.x >= 3046 and h_m.x <= 3056
+                  and math.abs(switch_brick_speed) <= 2 then
+                main_route_climb_phase = 126
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 126 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 3054; held.right = h_m.x < 3048
+              if main_after_A_frames > 50 and h_m.air == 0 then
+                main_route_climb_phase = 127
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_boss_switch_brick_struck",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_centered_jump_beneath_documented_rightmost_brick"
+                )
+              end
+            elseif main_route_climb_phase == 127 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- The used switch block forms the right wall at floor level;
+              -- jump left from beside it to break the adjacent orange brick.
+              held.A = main_after_A_frames <= 42
+              held.B = false; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if main_after_A_frames > 50 and h_m.air == 0 then
+                main_route_climb_phase = 128
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 128 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 3042; held.right = h_m.x < 3036
+              if h_m.y <= 304 then
+                main_route_climb_phase = 130
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_boss_switch_platform_reached",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_big_mario_break_of_left_brick_and_fresh_jump_to_switch_platform"
+                )
+              elseif main_after_A_frames > 50 and h_m.air == 0 then
+                main_route_climb_phase = 129
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 129 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames >= 3
+                and main_after_A_frames <= 48
+              held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 3042; held.right = h_m.x < 3036
+              if h_m.y <= 304 then
+                main_route_climb_phase = 130
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_boss_switch_platform_reached",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_big_mario_break_of_left_brick_and_fresh_jump_to_switch_platform"
+                )
+              elseif main_after_A_frames > 56 and h_m.air == 0 then
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 130 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Land on the conveyor to the left of the revealed switch and
+              -- release A before making the stomp jump.
+              held.A = false
+              held.B = false; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if main_after_A_frames >= 3 and h_m.air == 0
+                  and h_m.y <= 304 and h_m.x <= 3038 then
+                main_route_climb_phase = 132
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 132 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames >= 3
+                and main_after_A_frames <= 42
+              held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if D_boss_switch_activated then
+                main_route_climb_phase = 131
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_boss_switch_pressed",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=second_game_owned_Level_PSwitchCnt_activation_after_stomping_revealed_switch"
+                )
+              elseif main_after_A_frames > 60 and h_m.air == 0 then
+                main_route_climb_phase = 130
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 131 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Stay on the upper conveyor; the required door ledge is too
+              -- high to remount after falling to the lower floor.
+              held.A = false
+              held.B = true
+              held.down = false; held.up = false
+              held.left = false; held.right = true
+              if h_m.x >= 3214 and h_m.air == 0 and h_m.y <= 304 then
+                main_route_climb_phase = 138
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 136 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if main_after_A_frames >= 3 and h_m.air == 0 then
+                main_route_climb_phase = 137
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 137 then
+              main_after_A_frames = main_after_A_frames + 1
+              local ledge_launch_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = h_m.x > 3252 or ledge_launch_speed > 2
+              held.right = h_m.x < 3246 or ledge_launch_speed < -2
+              if main_after_A_frames >= 3 and h_m.air == 0
+                  and h_m.x >= 3244 and h_m.x <= 3254
+                  and math.abs(ledge_launch_speed) <= 2 then
+                main_route_climb_phase = 138
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 138 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 42
+              held.B = true; held.down = false
+              held.left = false; held.right = true
+              -- The one-tile ledge does not provide a stable standing frame;
+              -- hold Up as the jump overlaps its door junction.
+              held.up = h_m.x >= 3276 and h_m.y <= 320
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 134
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_small_ledge_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_during_overlap_with_game_owned_one_tile_ledge_door"
+                )
+              elseif h_m.air == 0 and h_m.y <= 352 and h_m.x >= 3280 then
+                main_route_climb_phase = 133
+                main_after_A_frames = 0
+              elseif main_after_A_frames > 60 and h_m.air == 0 then
+                main_route_climb_phase = 137
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 133 then
+              main_after_A_frames = main_after_A_frames + 1
+              local ledge_door_speed = memory.readbytesigned(0xBD)
+              held.A = false; held.B = false; held.down = false
+              held.left = h_m.x > 3302 or ledge_door_speed > 2
+              held.right = h_m.x < 3294 or ledge_door_speed < -2
+              held.up = main_after_A_frames >= 3 and h_m.air == 0
+                and h_m.y <= 352
+                and h_m.x >= 3292 and h_m.x <= 3304
+                and math.abs(ledge_door_speed) <= 2
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 134
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_small_ledge_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_small_ledge_door_after_ignoring_conveyor_door"
+                )
+              end
+            elseif main_route_climb_phase == 134 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 135
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_spike_conveyor_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_small_ledge_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 135 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Tall Mario must remain crouched until the P-Switch expires;
+              -- the restored conveyor then carries him safely under spikes.
+              held.A = false; held.B = false; held.down = true
+              held.left = false
+              held.right = false
+              held.up = false
+              if h_m.x >= 3650 then
+                main_route_climb_phase = 139
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_boom_boom_room_reached",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_conveyor_carried_ducking_big_mario_safely_beyond_spike_corridor"
+                )
+              end
+            elseif main_route_climb_phase == 139 then
+              main_after_A_frames = main_after_A_frames + 1
+              local fortress_boss_enemy = nearest_enemy_between(h_m, -240, 240)
+              local fortress_defeated_orb = nil
+              if fortress_boss_enemy ~= nil and fortress_boss_enemy.id == 74 then
+                fortress_defeated_orb = fortress_boss_enemy
+              end
+              local fortress_boss_state, fortress_boss_slot =
+                boom_boom_state(75)
+              local fortress_boss_timer2 = fortress_boss_slot ~= nil
+                and memory.readbyte(0x51F + fortress_boss_slot) or 0
+              local fortress_boss_frame = fortress_boss_slot ~= nil
+                and memory.readbyte(0x668 + fortress_boss_slot) or -1
+              if fortress_boss_enemy ~= nil and fortress_boss_enemy.id ~= 75 then
+                fortress_boss_enemy = nil
+              end
+              if fortress_boss_enemy ~= nil then
+                fortress_boss_seen = true
+                if not fortress_boss_room_logged then
+                  fortress_boss_room_logged = true
+                  log_state(
+                    "post_probe_world_8_fortress_boss_room_entered",
+                    extension_evidence(
+                      "evidence=normal_hidden_boss_door_entry boss_form=grounded boom_boom_active=1 boss_object_id=75 observer=live_game_owned_object mario_alive=1 player_is_dying=0"
+                    )
+                  )
+                end
+              end
+              if fortress_boss_state ~= nil
+                  and fortress_boss_state ~= fortress_boss_last_state then
+                if fortress_boss_last_state ~= nil
+                    and fortress_boss_state == fortress_boss_last_state + 1
+                    and fortress_boss_state >= 3
+                    and fortress_boss_state <= 5 then
+                  fortress_boss_stomp_transitions = fortress_boss_state - 2
+                  if fortress_boss_stomp_transitions == 2 then
+                    fortress_boss_third_stomp_setup = true
+                  elseif fortress_boss_stomp_transitions == 3 then
+                    fortress_boss_post_third_survival_frames = 120
+                  end
+                  log_state(
+                    "post_probe_world_8_fortress_boss_stomp_confirmed",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_Objects_Var5_increment hit="
+                      .. tostring(fortress_boss_stomp_transitions)
+                      .. " boom_boom_state=" .. tostring(fortress_boss_state)
+                  )
+                end
+                fortress_boss_last_state = fortress_boss_state
+                log_state(
+                  "post_probe_world_8_fortress_boss_state",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 observer=Objects_Var5 boss_state="
+                    .. tostring(fortress_boss_state)
+                    .. " timer2=" .. tostring(fortress_boss_timer2)
+                    .. " object_frame=" .. tostring(fortress_boss_frame)
+                )
+              end
+              if fortress_boss_seen
+                  and not has_active_enemy_id(75)
+                  and has_active_enemy_id(74)
+                  and not fortress_boss_defeated then
+                fortress_boss_defeated = true
+                log_state(
+                  "post_probe_world_8_fortress_boss_defeated",
+                  extension_evidence(
+                    "evidence=game_owned_boom_boom_defeated_transition boss_form=grounded magic_ball_available=1 observer=object_75_to_object_74 mario_alive=1 player_is_dying=0 boss_state_transitions="
+                      .. tostring(fortress_boss_stomp_transitions)
+                  )
+                )
+              end
+              held.up = false; held.down = false
+              if fortress_boss_defeated and fortress_defeated_orb ~= nil then
+                held.A = fortress_defeated_orb.dy < -12 and h_m.air == 0
+                held.B = false
+                held.right = fortress_defeated_orb.dx > 4
+                held.left = fortress_defeated_orb.dx < -4
+              elseif fortress_boss_enemy ~= nil
+                  and fortress_boss_stomp_transitions >= 3
+                  and (fortress_boss_post_third_survival_frames > 0
+                    or fortress_boss_state ~= 4) then
+                held.B = true
+                fortress_boss_post_third_survival_frames = math.max(
+                  0,
+                  fortress_boss_post_third_survival_frames - 1
+                )
+                if not fortress_boss_post_third_landed and h_m.air ~= 0 then
+                  held.right = true; held.left = false; held.A = false
+                elseif not fortress_boss_post_third_landed then
+                  fortress_boss_post_third_landed = true
+                  fortress_boss_post_third_jump_frames = 39
+                  held.right = false; held.left = true; held.A = true
+                elseif fortress_boss_post_third_jump_frames > 0 then
+                  held.right = h_m.sx < 76
+                    or (h_m.sx <= 180 and fortress_boss_enemy.dx < 0)
+                  held.left = h_m.sx > 180
+                    or (h_m.sx >= 76 and fortress_boss_enemy.dx >= 0)
+                  held.A = true
+                  fortress_boss_post_third_jump_frames =
+                    fortress_boss_post_third_jump_frames - 1
+                elseif h_m.air == 0 then
+                  held.right = h_m.sx < 76
+                    or (h_m.sx <= 180 and fortress_boss_enemy.dx < 0)
+                  held.left = h_m.sx > 180
+                    or (h_m.sx >= 76 and fortress_boss_enemy.dx >= 0)
+                  held.A = true
+                  fortress_boss_post_third_jump_frames = 39
+                else
+                  held.right = h_m.sx < 76
+                    or (h_m.sx <= 180 and fortress_boss_enemy.dx < 0)
+                  held.left = h_m.sx > 180
+                    or (h_m.sx >= 76 and fortress_boss_enemy.dx >= 0)
+                  held.A = false
+                end
+                fortress_boss_jump_frames = 0
+              elseif fortress_boss_enemy ~= nil
+                  and fortress_boss_third_stomp_setup
+                  and fortress_boss_state == 4
+                  and fortress_boss_timer2 == 0
+                  and h_m.air == 0 then
+                -- The second stomp bounce leaves strong leftward carry while
+                -- Boom Boom's final attack accelerates.  Waiting to brake on
+                -- the floor lets him close the gap; use the first vulnerable
+                -- grounded frame for a full running reversal jump instead.
+                local third_speed = memory.readbytesigned(0xBD)
+                held.B = true
+                held.A = true
+                held.right = fortress_boss_enemy.dx >= 0
+                held.left = fortress_boss_enemy.dx < 0
+                fortress_boss_jump_frames = 42
+                fortress_boss_third_stomp_setup = false
+                log_state(
+                  "post_probe_world_8_fortress_third_stomp_launch",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=first_vulnerable_grounded_running_reversal dx="
+                    .. tostring(fortress_boss_enemy.dx)
+                    .. " x_speed=" .. tostring(third_speed)
+                )
+              elseif fortress_boss_enemy ~= nil
+                  and fortress_boss_state ~= nil
+                  and fortress_boss_state >= 2
+                  and fortress_boss_state <= 4
+                  and fortress_boss_timer2 == 0
+                  and fortress_boss_frame ~= 7 then
+                if h_m.air ~= 0
+                    and math.abs(fortress_boss_enemy.dx) < 22
+                    and ((fortress_boss_state < 4
+                        and fortress_boss_enemy.dy < 24)
+                      or (fortress_boss_state == 4
+                        and fortress_boss_enemy.dy <= 0)) then
+                  held.A = false; held.B = true
+                  held.right = fortress_boss_enemy.dx < 0 and h_m.sx < 216
+                  held.left = fortress_boss_enemy.dx >= 0 and h_m.sx > 40
+                  fortress_boss_jump_frames = 0
+                elseif math.abs(fortress_boss_enemy.dx) < 32
+                    and h_m.air == 0 then
+                  held.B = true
+                  if fortress_boss_enemy.dx >= 0 and h_m.sx <= 44 then
+                    held.A = true; held.right = true; held.left = false
+                  elseif fortress_boss_enemy.dx < 0 and h_m.sx >= 212 then
+                    held.A = true; held.right = false; held.left = true
+                  else
+                    held.A = false
+                    held.right = fortress_boss_enemy.dx < 0 and h_m.sx < 216
+                    held.left = fortress_boss_enemy.dx >= 0 and h_m.sx > 40
+                  end
+                  fortress_boss_jump_frames = 0
+                else
+                  if h_m.air == 0 and fortress_boss_jump_frames == 0 then
+                    fortress_boss_jump_frames = 32
+                  end
+                  held.A = fortress_boss_jump_frames > 0
+                  if fortress_boss_jump_frames > 0 then
+                    fortress_boss_jump_frames = fortress_boss_jump_frames - 1
+                  end
+                  held.B = fortress_boss_state == 4
+                  held.right = fortress_boss_enemy.dx > 4
+                  held.left = fortress_boss_enemy.dx < -4
+                end
+              elseif fortress_boss_enemy ~= nil
+                  and fortress_boss_stomp_transitions == 0
+                  and fortress_boss_state == 0 then
+                -- The spike corridor opens into the same room without a pipe
+                -- reset, so Boom Boom is allocated just beyond the right edge
+                -- before his arena becomes active.  Commit through the empty
+                -- approach until the game advances his state; treating this
+                -- inactive placement as post-hit recovery strands Mario left
+                -- of the fight forever.
+                held.A = main_after_A_frames % 60 < 42; held.B = true
+                held.right = true; held.left = false
+                fortress_boss_jump_frames = 0
+              elseif fortress_boss_enemy ~= nil then
+                held.A = false; held.B = true
+                fortress_boss_jump_frames = 0
+                if fortress_boss_enemy.dx > 0 and h_m.sx <= 44 then
+                  held.right = true; held.left = false
+                elseif fortress_boss_enemy.dx < 0 and h_m.sx >= 212 then
+                  held.right = false; held.left = true
+                else
+                  held.right = fortress_boss_enemy.dx < 0 and h_m.sx < 216
+                  held.left = fortress_boss_enemy.dx > 0 and h_m.sx > 40
+                end
+              else
+                held.A = false; held.B = false
+                held.right = h_m.sx < 128
+                held.left = h_m.sx > 160
+              end
+            elseif main_route_climb_phase == 94 then
+              -- Back up far enough to mount the intact first stair brick.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false
+              held.B = true
+              held.down = false; held.up = false
+              held.left = true; held.right = false
+              if h_m.x <= 2985 then
+                main_route_climb_phase = 96
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 96 then
+              -- Release A while reversing the leftward momentum so the press
+              -- in phase 95 is a fresh jump beside the stair brick.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if D_boss_switch_activated then
+                main_route_climb_phase = 97
+                main_after_A_frames = 0
+              elseif main_after_A_frames >= 4 and h_m.air == 0
+                  and memory.readbytesigned(0xBD) >= -4 then
+                main_route_climb_phase = 95
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 95 then
+              -- Climb the used block and the remaining rightward stairs with
+              -- discrete jump presses.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 30
+                or (main_after_A_frames > 42
+                  and (main_after_A_frames - 42) % 36 < 24)
+              held.B = true; held.down = false; held.up = false
+              held.left = false; held.right = true
+              if D_boss_switch_activated then
+                main_route_climb_phase = 97
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 97 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = false; held.right = false
+            elseif main_route_climb_phase == 84 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false; held.up = false
+              held.left = true; held.right = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 85
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 85 then
+              -- Fresh leftward jump from the bottom stair to the door platform.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames <= 24
+              held.B = true; held.down = false
+              held.left = true; held.right = false
+              held.up = h_m.air == 0
+                and h_m.x >= 2490 and h_m.x <= 2520
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 86
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_after_coins_left_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=fresh_jump_and_normal_up_at_game_owned_small_route_door"
+                )
+              end
+            elseif main_route_climb_phase == 86 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 87
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_after_coins_upper_route_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_small_route_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 87 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+            elseif main_route_climb_phase == 88 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 89
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_upper_conveyor_route_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_door_after_stairs_transition"
+                )
+              end
+            elseif main_route_climb_phase == 89 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+            elseif main_route_climb_phase == 82 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 83
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_after_coins_route_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_one_up_room_return_transition"
+                )
+              end
+            elseif main_route_climb_phase == 83 then
+              -- Observe the post-coins junction before taking the small-Mario
+              -- branch through the door near the left wall.
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+            elseif main_route_climb_phase == 53 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 12 then
+                main_route_climb_phase = 54
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 54 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 30 < 22
+              held.B = true; held.down = false; held.left = false
+              held.right = true; held.up = h_m.x >= 1300
+              if memory.readbyte(0x3DE) ~= 0 then
+                main_route_climb_phase = 50
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_E_door_triggered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_up_input_at_game_owned_far_lava_room_door"
+                )
+              elseif h_m.x >= D_lava_reset_target + 120 then
+                D_lava_reset_target = D_lava_reset_target + 150
+                main_route_climb_phase = 52
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 50 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames > 35 and memory.readbyte(0x3DE) == 0 then
+                main_route_climb_phase = 51
+                main_after_A_frames = 0
+                log_state(
+                  "post_probe_world_8_fortress_E_room_entered",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_far_lava_room_door_transition"
+                )
+              end
+            elseif main_route_climb_phase == 51 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 48 < 34
+              held.B = true; held.down = false; held.up = false
+              held.left = true; held.right = false
+            elseif main_route_climb_phase == 29 then
+              -- Brake the incoming leftward slide and settle beneath the
+              -- column before creating the jump edge.  A jump while still
+              -- moving left rises in open floor and proves nothing about the
+              -- brick route.
+              held.down = false
+              held.left = h_m.x > 830; held.right = h_m.x < 822
+              if not D_left_strike_armed then
+                held.A = false; held.B = false
+                if h_m.air == 0 and h_m.x >= 822 and h_m.x <= 830
+                    and math.abs(memory.readbytesigned(0xBD)) <= 3 then
+                  D_left_strike_armed = true
+                  main_after_A_frames = 0
+                end
+              else
+                main_after_A_frames = main_after_A_frames + 1
+                -- Break the left column from bottom to top with normal jumps.
+                held.A = main_after_A_frames % 60 < 44
+                held.B = main_after_A_frames % 20 < 6
+                if h_m.y <= 304 and h_m.x >= 800 then
+                  main_route_climb_phase = 37
+                  main_after_A_frames = 0
+                  log_state(
+                    "post_probe_world_8_fortress_D_left_column_ascended",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_and_tail_attacks_cleared_left_column"
+                  )
+                elseif main_after_A_frames >= 110 and h_m.air == 0 then
+                  main_route_climb_phase = 30
+                  main_after_A_frames = 0
+                end
+              end
+            elseif main_route_climb_phase == 30 then
+              main_after_A_frames = main_after_A_frames + 1
+              -- Tall Mario enters the one-tile door pocket as the low brick
+              -- breaks.  Duck-slide back to the floor for another full-height
+              -- strike instead of trying to jump while wedged under a brick.
+              held.A = false; held.B = true; held.down = true
+              held.left = true; held.right = false
+              if h_m.x <= 818 then
+                main_route_climb_phase = 31
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 31 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              held.down = false; held.up = false
+              if main_after_A_frames >= 3 then
+                D_left_brick_cycles = D_left_brick_cycles + 1
+                D_left_strike_armed = false
+                main_route_climb_phase = 29
+                main_after_A_frames = 0
+                if D_left_brick_cycles >= 4 then
+                  log_state(
+                    "post_probe_world_8_fortress_D_left_brick_cycles_complete",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 evidence=four_normal_jump_attack_and_duck_exit_cycles"
+                  )
+                end
+              end
+            elseif main_route_climb_phase == 37 then
+              -- The ascent overlaps the left edge of the upper coin brick.
+              -- Back fully into open floor before attempting to clear it.
+              held.A = false; held.B = true; held.down = false
+              held.left = true; held.right = false; held.up = false
+              if h_m.x <= 806 and h_m.air == 0 then
+                main_route_climb_phase = 43
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 43 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 44
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 44 then
+              -- Fresh running jump from the open floor clears the upper-left
+              -- brick and carries Small Mario over the door formation.
+              held.A = true; held.B = true; held.down = false
+              held.left = false; held.right = true; held.up = false
+              if h_m.x >= 890 and h_m.air == 0 then
+                main_route_climb_phase = 38
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 38 then
+              -- Small Mario fits beneath the remaining right-side bricks.
+              -- Return from the safe wall side and stop directly below them.
+              held.A = false; held.B = true; held.down = false
+              held.left = true; held.right = false; held.up = false
+              if h_m.x <= 866 then
+                main_route_climb_phase = 39
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 39 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false; held.down = false
+              held.left = false; held.right = false; held.up = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 40
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 40 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 60 < 44
+              held.B = main_after_A_frames % 20 < 6
+              held.left = h_m.x > 872; held.right = h_m.x < 864
+              held.down = false; held.up = false
+            else
+              held.left = false; held.right = true
+              held.A = h_m.x >= 590 and h_frame % 60 < 42
+            end
+          elseif A_door_triggered then
+            held.A = false; held.B = false; held.left = false
+            held.right = false; held.down = false; held.up = false
+            -- Door A opens onto a right-moving conveyor.  Hold left through
+            -- the room scroll so the game-owned belt cannot carry Mario into
+            -- the Podoboo before the new room becomes observable.
+            held.left = true
+          elseif os.getenv("SMB3_WORLD_8_MAIN_ROUTE") == "1"
+              and h_m.x >= 500 then
+            if main_route_climb_phase == 0 and h_m.x >= 680 then
+              held.B = false
+              held.left = (h_m.x > 692 and h_m.y >= 340)
+                or h_m.y < 340
+              held.right = h_m.x < 688 and h_m.y >= 340
+              held.A = h_m.x >= 686 and h_m.x <= 696
+                and h_frame % 60 < 42
+              if h_m.x <= 680 and h_m.y <= 304 and h_m.air == 0 then
+                main_route_climb_phase = 2
+                log_state(
+                  "post_probe_world_8_fortress_main_route_door_platform",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_jump_through_ceiling_hole_to_left_door_platform"
+                )
+              end
+            elseif main_route_climb_phase == 1 then
+              held.B = true
+              held.left = true
+              held.right = false
+              held.A = h_m.x > 670
+              if h_m.x <= 670 and h_m.y <= 304 and h_m.air == 0 then
+                main_route_climb_phase = 2
+                log_state(
+                  "post_probe_world_8_fortress_main_route_door_platform",
+                  "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_left_jump_to_door_platform"
+                )
+              end
+            elseif main_route_climb_phase == 2 then
+              held.B = false
+              held.left = h_m.x > 658
+              held.right = h_m.x < 654
+              held.A = false
+              held.up = h_m.x >= 654 and h_m.x <= 660
+                and h_m.air == 0 and h_frame % 2 == 0
+            else
+              held.A = A_route_clock % 60 < 42
+              held.B = true
+              held.left = false
+              held.right = true
+            end
+            held.down = false
+            if main_route_climb_phase < 2 then held.up = false end
+          elseif leaf_buffer_phase == 1 then
             -- Spend only the raccoon layer on the first Roto-Disc.  Big Mario
-            -- follows the previously observed door-A trajectory exactly.
+            -- uses it as the intended damage buffer.  Brake from the observed
+            -- collision object instead of relying on a one-pixel trajectory;
+            -- this keeps the knockback above the safe upper platform.
             held.B = false
             held.A = false
-            held.left = false
-            held.right = true
+            held.left = h_hazard ~= nil and h_hazard.id == 90
+              and h_hazard.dx <= 28
+            held.right = not held.left
           elseif leaf_buffer_phase == 2 then
             held.B = true
             held.left = true
             held.right = false
             held.A = leaf_restart_frame % 66 < 42
             leaf_restart_frame = leaf_restart_frame + 1
-            if h_m.x <= 24 and h_m.air == 0 then
-              leaf_buffer_phase = leaf_restart_wait > 0 and 4 or 3
+            if h_m.x <= 16 and h_m.air == 0 then
+              leaf_buffer_phase = 4
               leaf_restart_frame = 0
             end
           elseif leaf_buffer_phase == 4 then
             held.B = false
             held.A = false
-            held.left = false
+            held.left = h_m.x > 16
             held.right = false
-            leaf_restart_wait = leaf_restart_wait - 1
-            if leaf_restart_wait <= 0 then
-              leaf_buffer_phase = 3
-              leaf_restart_frame = 0
+            if h_m.x == 16
+                and math.abs(memory.readbytesigned(0xBD)) <= 1 then
+              if discovery_mode and not leaf_route_grid_done
+                  and os.getenv("SMB3_WORLD_8_LEAF_ROUTE_GRID") == "1" then
+                leaf_route_grid_done = true
+                local leaf_grid_checkpoint = savestate.create()
+                savestate.save(leaf_grid_checkpoint)
+                local leaf_grid_best_x = 16
+                local leaf_grid_best_offset = -1
+                local leaf_grid_ledge_offsets = ""
+                local leaf_grid_wait = tonumber(
+                  os.getenv("SMB3_WORLD_8_LEAF_GRID_WAIT") or "0"
+                ) or 0
+                for leaf_grid_offset = 0, 65 do
+                  savestate.load(leaf_grid_checkpoint)
+                  held.A = false; held.B = false; held.left = false
+                  held.right = false; held.down = false; held.up = false
+                  for _ = 1, leaf_grid_wait do apply(); advance_frame() end
+                  local leaf_grid_reached_ledge = false
+                  local leaf_grid_max_x = mario().x
+                  local leaf_grid_transition = false
+                  for leaf_grid_frame = 1, 420 do
+                    local leaf_grid_m = mario()
+                    if leaf_grid_m.y == 0 then
+                      leaf_grid_transition = true
+                      break
+                    end
+                    if memory.readbyte(0xED) == 0
+                        or memory.readbyte(0x736) < starting_lives then
+                      break
+                    end
+                    leaf_grid_max_x = math.max(leaf_grid_max_x, leaf_grid_m.x)
+                    if leaf_grid_m.x >= 420 and leaf_grid_m.y < 300 then
+                      leaf_grid_reached_ledge = true
+                    end
+                    held.A = false; held.B = false; held.left = false
+                    held.right = false; held.down = false; held.up = false
+                    local leaf_grid_clock = leaf_grid_frame + leaf_grid_offset
+                    if leaf_grid_reached_ledge then
+                      held.left = leaf_grid_m.x > 446
+                      held.right = leaf_grid_m.x < 446
+                      held.up = leaf_grid_m.air == 0
+                        and leaf_grid_m.y >= 264 and leaf_grid_m.y <= 280
+                        and leaf_grid_m.x >= 440 and leaf_grid_m.x <= 452
+                        and leaf_grid_frame % 2 == 0
+                    elseif leaf_grid_m.x < 350 then
+                      held.B = true; held.right = true
+                      held.A = leaf_grid_clock % 66 < 42
+                    elseif leaf_grid_m.x < 365 then
+                      held.B = true; held.right = true
+                    elseif leaf_grid_m.x < 540 then
+                      held.B = true; held.right = true
+                      held.A = leaf_grid_clock % 54 < 34
+                      held.up = leaf_grid_m.x >= 390 and leaf_grid_m.x <= 456
+                        and leaf_grid_m.y >= 260 and leaf_grid_m.y <= 330
+                        and leaf_grid_frame % 2 == 0
+                    else
+                      held.B = true; held.right = true
+                      held.A = leaf_grid_clock % 72 < 42
+                    end
+                    apply(); advance_frame()
+                  end
+                  if leaf_grid_max_x > leaf_grid_best_x then
+                    leaf_grid_best_x = leaf_grid_max_x
+                    leaf_grid_best_offset = leaf_grid_offset
+                  end
+                  if leaf_grid_reached_ledge then
+                    leaf_grid_ledge_offsets = leaf_grid_ledge_offsets
+                      .. (leaf_grid_ledge_offsets == "" and "" or ",")
+                      .. tostring(leaf_grid_offset)
+                  end
+                  if leaf_grid_transition then
+                    log_state(
+                      "post_probe_world_8_fortress_leaf_route_grid_found",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 offset="
+                        .. tostring(leaf_grid_offset)
+                        .. " wait=" .. tostring(leaf_grid_wait)
+                        .. " max_x=" .. tostring(leaf_grid_max_x)
+                    )
+                    return
+                  end
+                end
+                savestate.load(leaf_grid_checkpoint)
+                log_state(
+                  "post_probe_world_8_fortress_leaf_route_grid_failed",
+                  "failure_classification=bounded_input_search_exhausted review_only=1 promotable=0 counts_toward_reliability=0 best_offset="
+                    .. tostring(leaf_grid_best_offset)
+                    .. " best_max_x=" .. tostring(leaf_grid_best_x)
+                    .. " wait=" .. tostring(leaf_grid_wait)
+                    .. " ledge_offsets=" .. leaf_grid_ledge_offsets
+                )
+                return
+              elseif leaf_restart_wait > 0 then
+                leaf_restart_wait = leaf_restart_wait - 1
+              else
+                leaf_buffer_phase = 3
+                leaf_restart_frame = 0
+              end
             end
+          elseif leaf_buffer_phase == 3 and leaf_restart_wait > 0 then
+            leaf_restart_wait = leaf_restart_wait - 1
+            held.B = false
+            held.A = false
+            held.left = h_m.x > 240
+            held.right = h_m.x < 236
+            if h_m.x >= 236 and h_m.x <= 244 and h_hazard ~= nil
+                and h_hazard.id == 90 and h_hazard.dy <= -60
+                and memory.readbytesigned(0xCF + h_hazard.slot) > 0 then
+              leaf_restart_wait = 0
+            end
+          elseif leaf_buffer_phase == 3 and h_hazard ~= nil
+              and h_hazard.id == 90 and h_m.x >= 240 and h_m.x < 350
+              and math.abs(h_hazard.dx) <= 32
+              and h_hazard.dy >= -80 and h_hazard.dy <= 40 then
+            -- Pause on the solid middle floor when the buffered bouncing
+            -- hazard re-enters Mario's lane during the second pass.
+            leaf_restart_wait = 600
+            held.B = false
+            held.A = false
+            held.left = true
+            held.right = false
           elseif A_approach_phase == 1 and not on_A_brick then
             -- Preserve the opening's running momentum while descending onto
             -- the orange brick immediately left of door A, then jump on the
@@ -13545,8 +16104,77 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.right = h_m.x < 446
             held.A = false
             held.down = false
-            held.up = h_m.x >= 440 and h_m.x <= 452
-              and h_m.air == 0 and h_frame % 2 == 0
+            if h_m.x >= 446 and h_m.x <= 449 and h_m.air == 0
+                and math.abs(memory.readbytesigned(0xBD)) <= 1 then
+              A_door_centered_frames = A_door_centered_frames + 1
+            else
+              A_door_centered_frames = 0
+            end
+            if discovery_mode and not A_door_trigger_grid_done
+                and A_door_centered_frames >= 2
+                and os.getenv("SMB3_WORLD_8_A_DOOR_TRIGGER_GRID") == "1" then
+              A_door_trigger_grid_done = true
+              local A_trigger_checkpoint = savestate.create()
+              savestate.save(A_trigger_checkpoint)
+              local A_trigger_best_delay = -1
+              local A_trigger_best_form = -1
+              for A_trigger_delay = 0, 180 do
+                savestate.load(A_trigger_checkpoint)
+                held.A = false; held.B = false; held.left = false
+                held.right = false; held.down = false; held.up = false
+                for _ = 1, A_trigger_delay do apply(); advance_frame() end
+                held.up = true; apply(); advance_frame()
+                held.up = false; apply(); advance_frame()
+                local A_trigger_transition_seen = false
+                for _ = 1, 240 do
+                  local A_trigger_m = mario()
+                  if A_trigger_m.y == 0 then
+                    A_trigger_transition_seen = true
+                  end
+                  if memory.readbyte(0x736) < starting_lives
+                      or memory.readbyte(0x70A) == 0 then
+                    break
+                  end
+                  apply(); advance_frame()
+                  if A_trigger_transition_seen and mario().y ~= 0
+                      and memory.readbyte(0x70A) == 2 then
+                    break
+                  end
+                end
+                local A_trigger_after = mario()
+                local A_trigger_form = memory.readbyte(0xED)
+                if A_trigger_form > A_trigger_best_form then
+                  A_trigger_best_form = A_trigger_form
+                  A_trigger_best_delay = A_trigger_delay
+                end
+                if A_trigger_transition_seen
+                    and memory.readbyte(0x736) == starting_lives
+                    and memory.readbyte(0x70A) == 2
+                    and A_trigger_after.y ~= 0
+                    and A_trigger_form == 1 then
+                  log_state(
+                    "post_probe_world_8_fortress_A_door_trigger_grid_found",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 delay="
+                      .. tostring(A_trigger_delay)
+                      .. " transitioned_x=" .. tostring(A_trigger_after.x)
+                      .. " transitioned_y=" .. tostring(A_trigger_after.y)
+                      .. " transitioned_entry_id="
+                      .. tostring(memory.readbyte(0x1E))
+                  )
+                  return
+                end
+              end
+              savestate.load(A_trigger_checkpoint)
+              log_state(
+                "post_probe_world_8_fortress_A_door_trigger_grid_failed",
+                "failure_classification=bounded_door_trigger_search_exhausted review_only=1 promotable=0 counts_toward_reliability=0 best_delay="
+                  .. tostring(A_trigger_best_delay)
+                  .. " best_form=" .. tostring(A_trigger_best_form)
+              )
+              return
+            end
+            held.up = A_door_centered_frames
+              == A_door_trigger_wait + 2
           elseif dropped_from_A_ledge and attempting_A_door
               and not lower_roto_launch_ready then
             -- Wait left of the lower Roto-Disc until its orb has passed below
@@ -13676,28 +16304,1517 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.left = false
             held.A = A_route_clock % 72 < 42
           end
-          if discovery_mode and h_frame % 30 == 0 then
+          if (discovery_mode
+                or os.getenv("BEAT_MARIO_FORTRESS_TRACE") == "1")
+              and h_frame % 15 == 0 then
             log_state(
-              "post_probe_world_8_fortress_H_door_tick",
+              discovery_mode
+                  and "post_probe_world_8_fortress_H_door_tick"
+                or "diagnostic_world_8_fortress_route_tick",
               "target=researched_H_door x=" .. tostring(h_m.x)
                 .. " y=" .. tostring(h_m.y)
                 .. " max_x=" .. tostring(h_door_max_x)
                 .. " form=" .. tostring(memory.readbyte(0xED))
                 .. " hold_up=" .. tostring(held.up and 1 or 0)
+                .. " route_phase=" .. tostring(main_route_climb_phase)
+                .. " route_frames=" .. tostring(main_after_A_frames)
+                .. " D_left_cycles=" .. tostring(D_left_brick_cycles)
                 .. " " .. object_summary_between(h_m, -160, 180, 180)
+            )
+          end
+          if discovery_mode and reached_A_ledge and not dropped_from_A_ledge
+              and os.getenv("SMB3_WORLD_8_A_DOOR_TRACE") == "1" then
+            log_state(
+              "post_probe_world_8_fortress_A_door_trace",
+              "trace_frame=" .. tostring(A_ledge_trace_frames)
+                .. " hold_up=" .. tostring(held.up and 1 or 0)
+                .. " pad_holding=" .. tostring(memory.readbyte(0x16))
+                .. " pad_input=" .. tostring(memory.readbyte(0x17))
+                .. " level_jct_ctl=" .. tostring(memory.readbyte(0x3DE))
             )
           end
           apply()
           advance_frame()
         end
-        log_state(
-          "post_probe_world_8_fortress_H_door_failed",
-          "failure_classification=targeted_route_timeout max_x="
-            .. tostring(h_door_max_x)
-            .. " start_form=" .. tostring(h_door_start_form)
-            .. " current_form=" .. tostring(memory.readbyte(0xED))
-        )
-        return
+        if fortress_returned_to_map then
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          -- Wait until the fortress destruction, bonus check, and short map
+          -- handoff have all reached normal map operation.  World 8's circular
+          -- darkness mask remains visible during normal movement and is not a
+          -- transition indicator.
+          local normal_map_frames = 0
+          for wipe_frame = 1, 600 do
+            if wipe_frame % 30 == 0 then
+              log_state(
+                "post_probe_world_8_fortress_map_wipe_tick",
+                "review_only=1 promotable=0 counts_toward_reliability=0 wipe_frame="
+                  .. tostring(wipe_frame)
+              )
+            end
+            apply()
+            advance_frame()
+            if memory.readbyte(0x729) == 13 then
+              normal_map_frames = normal_map_frames + 1
+            else
+              normal_map_frames = 0
+            end
+            if normal_map_frames >= 180 then break end
+          end
+          log_state(
+            discovery_mode
+                and "post_probe_world_8_fortress_discovery_post_clear"
+              or "post_probe_world_8_fortress_post_clear",
+            extension_evidence(
+              "evidence=stable_world_8_map_with_super_tanks_accessible world_number=7 object_set=0 fortress_cleared=1 stable_frames="
+                .. tostring(normal_map_frames)
+                .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+                .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+                .. " map_page=" .. tostring(memory.readbyte(0x77))
+                .. " boss_state_transitions="
+                .. tostring(fortress_boss_stomp_transitions)
+                .. " super_tanks_accessible=1 super_tanks_entered=0"
+            )
+          )
+          if discovery_mode then
+            local post_fortress_map_checkpoint = savestate.create()
+            savestate.save(post_fortress_map_checkpoint)
+            for _, direction in ipairs({"left", "right", "up", "down"}) do
+              savestate.load(post_fortress_map_checkpoint)
+              press(
+                direction,
+                18,
+                "post_probe_world_8_super_tanks_post_fortress_probe_" .. direction
+              )
+              advance(
+                60,
+                "post_probe_world_8_super_tanks_post_fortress_probe_settle_"
+                  .. direction
+              )
+              log_state(
+                "post_probe_world_8_super_tanks_post_fortress_probe",
+                "review_only=1 promotable=0 counts_toward_reliability=0 direction="
+                  .. direction
+                  .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+                  .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+                  .. " map_page=" .. tostring(memory.readbyte(0x77))
+              )
+            end
+            savestate.load(post_fortress_map_checkpoint)
+          end
+          local post_fortress_route = {
+            "right", "up", "left", "left",
+          }
+          for route_step, direction in ipairs(post_fortress_route) do
+            press(
+              direction,
+              18,
+              "post_probe_world_8_super_tanks_post_fortress_route_"
+                .. tostring(route_step) .. "_" .. direction
+            )
+            advance(
+              60,
+              "post_probe_world_8_super_tanks_post_fortress_route_settle_"
+                .. tostring(route_step)
+            )
+            log_state(
+              "post_probe_world_8_super_tanks_post_fortress_route",
+              "review_only=1 promotable=0 counts_toward_reliability=0 step="
+                .. tostring(route_step)
+                .. " direction=" .. direction
+                .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+                .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+                .. " map_page=" .. tostring(memory.readbyte(0x77))
+            )
+          end
+          press(
+            "A",
+            18,
+            "post_probe_world_8_super_tanks_post_fortress_pipe_enter"
+          )
+          advance(
+            180,
+            "post_probe_world_8_super_tanks_post_fortress_pipe_enter_settle"
+          )
+          log_state(
+            "post_probe_world_8_super_tanks_post_fortress_pipe_inside",
+            "review_only=1 promotable=0 counts_toward_reliability=0"
+          )
+          local post_fortress_pipe_exited = false
+          for pipe_frame = 1, 900 do
+            if memory.readbyte(0x70A) == 0
+                and memory.readbyte(0x727) == 7 then
+              post_fortress_pipe_exited = true
+              break
+            end
+            local pipe_m = mario()
+            held.A = pipe_m.x >= 170 and pipe_m.x < 208
+              and pipe_frame % 60 < 42
+            held.up = false; held.left = false
+            held.right = pipe_m.x < 208
+            held.B = pipe_m.x < 208
+            if pipe_m.x >= 208 then
+              held.right = pipe_m.x < 216
+              held.left = pipe_m.x > 224
+              held.B = false
+            end
+            held.down = pipe_m.x >= 208 and pipe_m.x <= 224
+              and pipe_m.air == 0
+            apply()
+            advance_frame()
+          end
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          if post_fortress_pipe_exited then
+            local post_pipe_normal_frames = 0
+            for _ = 1, 600 do
+              apply(); advance_frame()
+              if memory.readbyte(0x729) == 13 then
+                post_pipe_normal_frames = post_pipe_normal_frames + 1
+              else
+                post_pipe_normal_frames = 0
+              end
+              if post_pipe_normal_frames >= 120 then break end
+            end
+          end
+          log_state(
+            "post_probe_world_8_super_tanks_post_fortress_pipe_exit",
+            "review_only=1 promotable=0 counts_toward_reliability=0 exited="
+              .. tostring(post_fortress_pipe_exited and 1 or 0)
+              .. " cursor_x=" .. tostring(memory.readbyte(0x79))
+              .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+              .. " map_page=" .. tostring(memory.readbyte(0x77))
+          )
+          if post_fortress_pipe_exited then
+            press(
+              "right",
+              18,
+              "post_probe_world_8_super_tanks_map_right"
+            )
+            advance(
+              360,
+              "post_probe_world_8_super_tanks_map_right_settle"
+            )
+            log_state(
+              "post_probe_world_8_super_tanks_entry_observation",
+              "review_only=1 promotable=0 counts_toward_reliability=0 cursor_x="
+                .. tostring(memory.readbyte(0x79))
+                .. " cursor_y=" .. tostring(memory.readbyte(0x75))
+                .. " map_page=" .. tostring(memory.readbyte(0x77))
+                .. " object_set=" .. tostring(memory.readbyte(0x70A))
+                .. " entry_id=" .. tostring(memory.readbyte(0x1E))
+            )
+            if memory.readbyte(0x70A) == 10 then
+              local super_tanks_starting_lives = memory.readbyte(0x736)
+              local super_tanks_max_x = mario().x
+              local super_tanks_boss_room = false
+              local super_tanks_final_pipe_logged = false
+              local super_tanks_gameplay_logged = false
+              local super_tanks_jump_frames = 0
+              local super_tanks_release_frames = 0
+              local super_tanks_pending_jump = false
+              local super_tanks_cannon_phase = 0
+              local super_tanks_cannon_frames = 0
+              local super_tanks_cannon_slot = nil
+              local super_tanks_cannon_last_obstacle_x = -1000
+              local super_tanks_projectile_release_frames = 0
+              local super_tanks_projectile_pending_jump = false
+              local super_tanks_projectile_jump_frames = 0
+              local super_tanks_projectile_avoid_right = true
+              local super_tanks_projectile_jump_duration = 54
+              local super_tanks_projectile_avoid_active = false
+              local super_tanks_projectile_was_airborne = false
+              local super_tanks_scroll_escape_jump_frames = 0
+              local super_tanks_bobomb_jump_phase = 0
+              local super_tanks_bobomb_jump_frames = 0
+              local super_tanks_bobomb_was_airborne = false
+              local super_tanks_pipe_phase = 0
+              local super_tanks_pipe_was_airborne = false
+              local super_tanks_boss_jump_frames = 0
+              local super_tanks_boss_last_state = nil
+              local super_tanks_boss_stomp_transitions = 0
+              local super_tanks_boss_third_stomp_setup = false
+              local super_tanks_boss_post_third_jump_frames = 0
+              local super_tanks_boss_post_third_landed = false
+              local super_tanks_boss_post_third_survival_frames = 0
+              local super_tanks_boss_seen = false
+              local super_tanks_boss_defeated = false
+              local super_tanks_magic_ball = false
+              local super_tanks_boss_intercept_frames = 0
+              log_state(
+                "post_probe_world_8_super_tanks_entered",
+                extension_evidence(
+                  "evidence=game_owned_automatic_entry_after_fortress_clear stage_identity=world_8_super_tanks distinct_vehicle_identity=1 map_enter_via_id=14 object_set_identity=10 mario_alive=1 player_is_dying=0 entry_x="
+                    .. tostring(mario().x)
+                    .. " entry_y=" .. tostring(mario().y)
+                )
+              )
+              for super_tanks_frame = 1, 12000 do
+                local super_tanks_m = mario()
+                local super_tanks_object_set = memory.readbyte(0x70A)
+                if memory.readbyte(0xF1) ~= 0
+                    or memory.readbyte(0x736) < super_tanks_starting_lives then
+                  log_state(
+                    "post_probe_world_8_super_tanks_death",
+                    "failure_classification=death review_only=1 promotable=0 counts_toward_reliability=0 max_x="
+                      .. tostring(super_tanks_max_x)
+                      .. " " .. special_object_summary(super_tanks_m)
+                  )
+                  do return end
+                end
+                if super_tanks_object_set == 10
+                    and memory.readbyte(0x14) == 1
+                    and super_tanks_boss_defeated
+                    and not super_tanks_magic_ball then
+                  super_tanks_magic_ball = true
+                  log_state(
+                    "post_probe_world_8_super_tanks_magic_ball",
+                    extension_evidence(
+                      "evidence=normal_input_touched_game_owned_magic_ball magic_ball_touched=1 mario_alive=1 player_is_dying=0 observer=return_map_transition_after_object_76_became_object_74"
+                    )
+                  )
+                end
+                if super_tanks_object_set == 0
+                    and memory.readbyte(0x727) == 7 then
+                  if not super_tanks_boss_defeated
+                      or super_tanks_boss_stomp_transitions ~= 3
+                      or not super_tanks_magic_ball then
+                    log_state(
+                      "post_probe_world_8_super_tanks_unobserved_map_return",
+                      "failure_classification=map_return_without_boss_observer review_only=1 promotable=0 counts_toward_reliability=0 max_x="
+                        .. tostring(super_tanks_max_x)
+                    )
+                    do return end
+                  end
+                  held.A = false; held.B = false; held.right = false
+                  held.left = false; held.down = false; held.up = false
+                  log_state(
+                    "post_probe_world_8_super_tanks_clear",
+                    extension_evidence(
+                      "evidence=game_owned_super_tanks_return_map_transition return_map=1 mario_alive=1 player_is_dying=0 boss_state_transitions=3 defeated_transition_object_id_74_observed=1 bowser_castle_entered=0"
+                    )
+                  )
+                  local super_tanks_normal_map_frames = 0
+                  for map_frame = 1, 1800 do
+                    apply()
+                    advance_frame()
+                    if map_frame % 30 == 0 then
+                      log_state(
+                        "post_probe_world_8_super_tanks_map_effect_tick",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 map_frame="
+                          .. tostring(map_frame)
+                      )
+                    end
+                    if memory.readbyte(0x70A) == 0
+                        and memory.readbyte(0x727) == 7
+                        and memory.readbyte(0x729) == 13 then
+                      super_tanks_normal_map_frames =
+                        super_tanks_normal_map_frames + 1
+                    else
+                      super_tanks_normal_map_frames = 0
+                    end
+                    if super_tanks_normal_map_frames >= 180 then break end
+                  end
+                  log_state(
+                    "post_probe_world_8_super_tanks_stable_map",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 evidence=stable_world_8_map_after_super_tanks_clear stable_frames="
+                      .. tostring(super_tanks_normal_map_frames)
+                      .. " bowser_castle_entered=0"
+                  )
+                  press(
+                    "right",
+                    18,
+                    "post_probe_world_8_super_tanks_castle_access_right"
+                  )
+                  held.A = false; held.B = false; held.right = false
+                  held.left = false; held.down = false; held.up = false
+                  local castle_stable_frames = 0
+                  for castle_settle = 1, 360 do
+                    apply()
+                    advance_frame()
+                    if memory.readbyte(0x727) == 7
+                        and memory.readbyte(0x70A) == 0
+                        and memory.readbyte(0x729) == 13
+                        and memory.readbyte(0x77) == 3
+                        and memory.readbyte(0x79) == 96
+                        and memory.readbyte(0x75) == 112 then
+                      castle_stable_frames = castle_stable_frames + 1
+                    else
+                      castle_stable_frames = 0
+                    end
+                    if castle_stable_frames >= 180 then break end
+                  end
+                  if castle_stable_frames < 180 then
+                    log_state(
+                      "post_probe_world_8_super_tanks_unstable_post_clear",
+                      "failure_classification=missing_castle_unlock expected_world_number=7 expected_object_set=0 expected_map_page=3 expected_cursor_x=96 expected_cursor_y=112 bowser_castle_entered=0"
+                    )
+                    do return end
+                  end
+                  log_state(
+                    discovery_mode
+                        and "post_probe_world_8_super_tanks_castle_access_observation"
+                      or "post_probe_world_8_super_tanks_post_clear",
+                    extension_evidence(
+                      "evidence=stable_world_8_map_with_bowser_castle_accessible world_number=7 object_set=0 map_page=3 map_cursor_x=96 map_cursor_y=112 bowser_castle_accessible=1 bowser_castle_entered=0 stable_frames="
+                        .. tostring(castle_stable_frames)
+                        .. " unlock_observer=game_owned_clear_fx_then_normal_right_movement_from_64_112_to_96_112 no_A_input_after_castle_cursor=1"
+                    )
+                  )
+                  do return end
+                end
+                if super_tanks_object_set == 10
+                    and super_tanks_m.x < 8192 and super_tanks_m.y ~= 0 then
+                  if super_tanks_max_x >= 1500 and super_tanks_m.x < 512 then
+                    super_tanks_boss_room = true
+                    if not super_tanks_final_pipe_logged then
+                      super_tanks_final_pipe_logged = true
+                      log_state(
+                        "post_probe_world_8_super_tanks_final_pipe",
+                        extension_evidence(
+                          "evidence=normal_input_entered_final_warp_pipe boss_room_transition=1 object_set_identity=10 pre_pipe_max_x="
+                            .. tostring(super_tanks_max_x)
+                            .. " boss_room_entry_x="
+                            .. tostring(super_tanks_m.x)
+                        )
+                      )
+                    end
+                  end
+                  if not super_tanks_boss_room then
+                    super_tanks_max_x = math.max(
+                      super_tanks_max_x,
+                      super_tanks_m.x
+                    )
+                  end
+                  if not super_tanks_gameplay_logged
+                      and super_tanks_max_x >= 600 then
+                    super_tanks_gameplay_logged = true
+                    log_state(
+                      "post_probe_world_8_super_tanks_gameplay",
+                      extension_evidence(
+                        "evidence=normal_super_tanks_convoy_progression moving_tank_geometry_observed=1 overhead_airships_observed=1 object_set_identity=10 max_x="
+                          .. tostring(super_tanks_max_x)
+                      )
+                    )
+                  end
+                  local super_tanks_enemy = nearest_enemy_between(
+                    super_tanks_m, -80, 160
+                  )
+                  if super_tanks_cannon_phase == 0
+                      and super_tanks_enemy ~= nil
+                      and super_tanks_enemy.id == -83
+                      and super_tanks_enemy.dx >= 0
+                      and super_tanks_enemy.dx <= 80
+                      and super_tanks_enemy.x
+                        - super_tanks_cannon_last_obstacle_x >= 32 then
+                    if super_tanks_m.air ~= 0
+                        and super_tanks_enemy.dy >= 32 then
+                      super_tanks_cannon_phase = 4
+                      super_tanks_cannon_frames = 90
+                    elseif super_tanks_enemy.x >= 1950
+                        and super_tanks_m.sx < 120 then
+                      -- The final Rocky appears after the autoscroll has
+                      -- already consumed the usual backup runway.  Start the
+                      -- proven vertical-then-forward stomp immediately.
+                      super_tanks_cannon_phase = 3
+                      super_tanks_cannon_frames = 130
+                    else
+                      super_tanks_cannon_phase = 1
+                      super_tanks_cannon_frames = 32
+                    end
+                    super_tanks_cannon_slot = super_tanks_enemy.slot
+                    super_tanks_cannon_last_obstacle_x = super_tanks_enemy.x
+                    super_tanks_jump_frames = 0
+                    super_tanks_release_frames = 0
+                    super_tanks_pending_jump = false
+                    super_tanks_projectile_release_frames = 0
+                    super_tanks_projectile_pending_jump = false
+                    super_tanks_projectile_jump_frames = 0
+                    super_tanks_projectile_avoid_active = false
+                    log_state(
+                      super_tanks_cannon_phase == 4
+                        and "post_probe_world_8_super_tanks_rocky_stomp"
+                        or "post_probe_world_8_super_tanks_cannon_backup",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 enemy_id=-83 enemy_dx="
+                        .. tostring(super_tanks_enemy.dx)
+                        .. " rocky_state="
+                        .. tostring(memory.readbyte(
+                          0x99 + super_tanks_enemy.slot
+                        ))
+                        .. " rocky_timer="
+                        .. tostring(memory.readbyte(
+                          0x517 + super_tanks_enemy.slot
+                        ))
+                    )
+                  end
+                  held.up = false
+                  held.down = not super_tanks_boss_room
+                    and super_tanks_m.x >= 2050
+                    and super_tanks_m.air == 0
+                  held.right = super_tanks_m.sx < 205
+                  held.left = super_tanks_m.sx > 225
+                  held.B = true
+                  local super_tanks_close_enemy = super_tanks_enemy ~= nil
+                      and math.abs(super_tanks_enemy.dx) <= 72
+                  if super_tanks_cannon_phase == 4 then
+                    held.left = false
+                    held.right = true
+                    held.A = false
+                    super_tanks_cannon_frames = super_tanks_cannon_frames - 1
+                    local rocky_stomp_active = super_tanks_cannon_slot ~= nil
+                      and memory.readbytesigned(
+                        0x670 + super_tanks_cannon_slot
+                      ) == -83
+                    local rocky_stomp_state = rocky_stomp_active
+                      and memory.readbyte(0x99 + super_tanks_cannon_slot) or -1
+                    if super_tanks_m.air == 0
+                        and super_tanks_enemy ~= nil
+                        and super_tanks_enemy.id == -83
+                        and super_tanks_enemy.x
+                          == super_tanks_cannon_last_obstacle_x
+                        and super_tanks_enemy.dx > 16 then
+                      super_tanks_cannon_phase = 2
+                      super_tanks_cannon_frames = 60
+                      log_state(
+                        "post_probe_world_8_super_tanks_rocky_stomp_retry",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 evidence=grounded_before_target enemy_dx="
+                          .. tostring(super_tanks_enemy.dx)
+                      )
+                    elseif rocky_stomp_state == 6
+                        or not rocky_stomp_active
+                        or (super_tanks_enemy ~= nil
+                          and super_tanks_enemy.id == -83
+                          and super_tanks_enemy.x
+                            == super_tanks_cannon_last_obstacle_x
+                          and super_tanks_enemy.dx < -24)
+                        or super_tanks_cannon_frames == 0 then
+                      if rocky_stomp_state == 6 then
+                        log_state(
+                          "post_probe_world_8_super_tanks_rocky_stomp_observed",
+                          "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_Objects_Var5_6"
+                        )
+                      end
+                      super_tanks_cannon_phase = 0
+                    end
+                  elseif super_tanks_cannon_phase == 1 then
+                    local rocky_active = super_tanks_cannon_slot ~= nil
+                      and memory.readbytesigned(
+                        0x670 + super_tanks_cannon_slot
+                      ) == -83
+                    local rocky_state = rocky_active
+                      and memory.readbyte(0x99 + super_tanks_cannon_slot) or -1
+                    local rocky_timer = rocky_active
+                      and memory.readbyte(0x517 + super_tanks_cannon_slot) or -1
+                    held.left = true
+                    held.right = false
+                    held.A = false
+                    super_tanks_cannon_frames = super_tanks_cannon_frames - 1
+                    if super_tanks_cannon_frames == 0 then
+                      super_tanks_cannon_phase = 2
+                      super_tanks_cannon_frames = 60
+                      log_state(
+                        "post_probe_world_8_super_tanks_cannon_runup",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 rocky_state="
+                          .. tostring(rocky_state)
+                          .. " rocky_timer=" .. tostring(rocky_timer)
+                      )
+                    end
+                  elseif super_tanks_cannon_phase == 2 then
+                    held.left = false
+                    held.right = false
+                    held.A = false
+                    super_tanks_cannon_frames = super_tanks_cannon_frames - 1
+                    if super_tanks_m.air == 0
+                        or super_tanks_cannon_frames == 0 then
+                      super_tanks_cannon_phase = 3
+                      super_tanks_cannon_frames = 130
+                      log_state(
+                        "post_probe_world_8_super_tanks_cannon_jump",
+                        "review_only=1 promotable=0 counts_toward_reliability=0"
+                      )
+                    end
+                  elseif super_tanks_cannon_phase == 3 then
+                    held.left = false
+                    -- Build vertical clearance before committing forward; a
+                    -- freshly emerged Rocky's tall hitbox otherwise catches
+                    -- Mario during the first low frames of the jump.
+                    held.right = super_tanks_cannon_frames <= 110
+                    held.A = true
+                    super_tanks_cannon_frames = super_tanks_cannon_frames - 1
+                    if super_tanks_cannon_frames == 0 then
+                      super_tanks_cannon_phase = 0
+                    end
+                  elseif super_tanks_close_enemy
+                      and super_tanks_m.air == 0
+                      and super_tanks_release_frames == 0
+                      and not super_tanks_pending_jump then
+                    super_tanks_jump_frames = 0
+                    super_tanks_release_frames = 1
+                    super_tanks_pending_jump = true
+                  end
+                  if super_tanks_cannon_phase == 0 then
+                    if super_tanks_release_frames > 0 then
+                      held.A = false
+                      super_tanks_release_frames = super_tanks_release_frames - 1
+                    elseif super_tanks_pending_jump then
+                      held.A = true
+                      super_tanks_pending_jump = false
+                      super_tanks_jump_frames = 89
+                    elseif super_tanks_jump_frames > 0 then
+                      held.A = true
+                      super_tanks_jump_frames = super_tanks_jump_frames - 1
+                    elseif super_tanks_m.air ~= 0
+                        and super_tanks_enemy ~= nil
+                        and math.abs(super_tanks_enemy.dx) < 24
+                        and super_tanks_enemy.dy < 24 then
+                      held.A = false
+                      held.right = super_tanks_enemy.dx < 0
+                      held.left = super_tanks_enemy.dx >= 0
+                    else
+                      held.A = super_tanks_frame % 60 < 42
+                    end
+                  end
+                  if super_tanks_boss_room then
+                    held.down = false
+                    held.right = super_tanks_m.sx < 128
+                    held.left = super_tanks_m.sx > 160
+                  elseif super_tanks_m.x >= 1500
+                      and super_tanks_cannon_phase == 0 then
+                    -- The final barrage is a continuous deck. Stay grounded
+                    -- so a newly detected contact-height projectile can get a
+                    -- fresh jump edge instead of finding Mario mid-jump.
+                    if super_tanks_release_frames == 0
+                        and not super_tanks_pending_jump
+                        and super_tanks_jump_frames == 0 then
+                      held.A = false
+                    elseif super_tanks_jump_frames > 0 then
+                      held.left = false
+                      held.right = true
+                    end
+                    if super_tanks_m.x >= 1600 then
+                      held.right = super_tanks_m.sx < 200
+                      held.left = super_tanks_m.sx > 225
+                    else
+                      held.right = super_tanks_m.sx < 112
+                      held.left = super_tanks_m.sx > 144
+                    end
+                  end
+                  local super_tanks_wrench = nearest_special_object(
+                    super_tanks_m, 10
+                  )
+                  local super_tanks_cannonball = nearest_special_object(
+                    super_tanks_m, 11
+                  )
+                  local super_tanks_overhead_projectile = nil
+                  if super_tanks_wrench ~= nil
+                      and super_tanks_wrench.dy >= -56
+                      and super_tanks_wrench.dy <= -12 then
+                    super_tanks_overhead_projectile = super_tanks_wrench
+                  end
+                  if super_tanks_cannonball ~= nil
+                      and super_tanks_cannonball.dy >= -56
+                      and super_tanks_cannonball.dy <= -12
+                      and (super_tanks_overhead_projectile == nil
+                        or math.abs(super_tanks_cannonball.dx)
+                          < math.abs(super_tanks_overhead_projectile.dx)) then
+                    super_tanks_overhead_projectile = super_tanks_cannonball
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 750
+                      and super_tanks_overhead_projectile ~= nil
+                      and math.abs(super_tanks_overhead_projectile.dx) <= 64
+                  then
+                    -- A wrench or cannonball passing just above small Mario
+                    -- is safe if he stays low; jumping turns the near miss
+                    -- into a hit.
+                    held.A = false
+                    if super_tanks_m.x >= 1500 then
+                      if super_tanks_m.x >= 1600 then
+                        held.right = super_tanks_m.sx < 200
+                        held.left = super_tanks_m.sx > 225
+                      else
+                        held.right = super_tanks_m.sx < 112
+                        held.left = super_tanks_m.sx > 144
+                      end
+                    else
+                      held.left = super_tanks_overhead_projectile.dx > 0
+                      held.right = super_tanks_overhead_projectile.dx <= 0
+                    end
+                  end
+                  local super_tanks_contact_projectile = nil
+                  local super_tanks_projectile_overhead_block =
+                    super_tanks_wrench ~= nil
+                      and super_tanks_wrench.dx >= 0
+                      and super_tanks_wrench.dx <= 24
+                      and super_tanks_wrench.dy >= -32
+                      and super_tanks_wrench.dy <= 8
+                  for _, projectile in ipairs({
+                    super_tanks_wrench, super_tanks_cannonball
+                  }) do
+                    if projectile ~= nil
+                        and (projectile.id == 11
+                            and math.abs(projectile.dx) <= 48
+                            and projectile.dy >= -56)
+                        and projectile.dy <= 32
+                        and (super_tanks_contact_projectile == nil
+                          or math.abs(projectile.dx)
+                            < math.abs(
+                              super_tanks_contact_projectile.dx
+                            )) then
+                      super_tanks_contact_projectile = projectile
+                    end
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 1500
+                      and super_tanks_cannon_phase == 0
+                      and super_tanks_contact_projectile ~= nil
+                      and not super_tanks_projectile_overhead_block
+                      and super_tanks_m.air == 0
+                      and super_tanks_projectile_release_frames == 0
+                      and not super_tanks_projectile_pending_jump
+                      and super_tanks_projectile_jump_frames == 0 then
+                    super_tanks_projectile_release_frames = 1
+                    super_tanks_projectile_pending_jump = true
+                    super_tanks_projectile_avoid_active = true
+                    super_tanks_projectile_was_airborne = false
+                    -- Keep moving away from the projectile throughout the
+                    -- hop.  Crossing toward it made the cannonball remain
+                    -- under Mario until contact, even with a short A hold.
+                    super_tanks_projectile_avoid_right =
+                      (super_tanks_contact_projectile.id == 10
+                        and super_tanks_contact_projectile.dx > 0)
+                      or (super_tanks_contact_projectile.id == 11
+                        and super_tanks_contact_projectile.dx <= 0)
+                    super_tanks_projectile_jump_duration = 35
+                    log_state(
+                      "post_probe_world_8_super_tanks_projectile_jump",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 projectile_id="
+                        .. tostring(super_tanks_contact_projectile.id)
+                        .. " projectile_dx="
+                        .. tostring(super_tanks_contact_projectile.dx)
+                        .. " projectile_dy="
+                        .. tostring(super_tanks_contact_projectile.dy)
+                        .. " " .. special_object_summary(super_tanks_m)
+                    )
+                  end
+                  if super_tanks_projectile_avoid_active
+                      and super_tanks_m.air ~= 0 then
+                    super_tanks_projectile_was_airborne = true
+                  elseif super_tanks_projectile_avoid_active
+                      and super_tanks_projectile_was_airborne
+                      and super_tanks_m.air == 0 then
+                    super_tanks_projectile_avoid_active = false
+                    super_tanks_projectile_was_airborne = false
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 1500
+                      and (super_tanks_projectile_release_frames > 0
+                        or super_tanks_projectile_pending_jump
+                        or super_tanks_projectile_jump_frames > 0
+                        or super_tanks_projectile_avoid_active) then
+                    held.left = not super_tanks_projectile_avoid_right
+                    held.right = super_tanks_projectile_avoid_right
+                    if super_tanks_projectile_release_frames > 0 then
+                      held.A = false
+                      super_tanks_projectile_release_frames =
+                        super_tanks_projectile_release_frames - 1
+                    elseif super_tanks_projectile_pending_jump then
+                      held.A = true
+                      super_tanks_projectile_pending_jump = false
+                      super_tanks_projectile_jump_frames =
+                        super_tanks_projectile_jump_duration
+                    elseif super_tanks_projectile_jump_frames > 0 then
+                      held.A = true
+                      super_tanks_projectile_jump_frames =
+                        super_tanks_projectile_jump_frames - 1
+                    end
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 1600
+                      and super_tanks_m.sx < 80
+                      and super_tanks_projectile_release_frames == 0
+                      and not super_tanks_projectile_pending_jump
+                      and super_tanks_projectile_jump_frames == 0
+                      and not super_tanks_projectile_avoid_active then
+                    if super_tanks_scroll_escape_jump_frames == 0
+                        and super_tanks_m.air == 0
+                        and (super_tanks_overhead_projectile == nil
+                          or math.abs(super_tanks_overhead_projectile.dx) > 32)
+                    then
+                      super_tanks_scroll_escape_jump_frames = 60
+                      log_state(
+                        "post_probe_world_8_super_tanks_scroll_escape_jump",
+                        "review_only=1 promotable=0 counts_toward_reliability=0"
+                      )
+                    end
+                    if super_tanks_scroll_escape_jump_frames > 0 then
+                      held.left = false
+                      held.right = true
+                      held.A = true
+                      super_tanks_scroll_escape_jump_frames =
+                        super_tanks_scroll_escape_jump_frames - 1
+                    end
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 1700
+                      and super_tanks_m.x < 1820
+                      and super_tanks_enemy ~= nil
+                      and super_tanks_enemy.id == 80
+                      and math.abs(super_tanks_enemy.dx) <= 96
+                      and super_tanks_m.air == 0
+                      and super_tanks_bobomb_jump_phase == 0 then
+                    super_tanks_bobomb_jump_phase = 1
+                    super_tanks_bobomb_jump_frames = 80
+                    super_tanks_bobomb_was_airborne = false
+                    log_state(
+                      "post_probe_world_8_super_tanks_bobomb_jump",
+                      "review_only=1 promotable=0 counts_toward_reliability=0 bobomb_slot="
+                        .. tostring(super_tanks_enemy.slot)
+                        .. " bobomb_dx=" .. tostring(super_tanks_enemy.dx)
+                        .. " bobomb_var5=" .. tostring(memory.readbyte(
+                          0x99 + super_tanks_enemy.slot
+                        ))
+                        .. " bobomb_var7=" .. tostring(memory.readbyte(
+                          0x420 + super_tanks_enemy.slot
+                        ))
+                        .. " bobomb_timer=" .. tostring(memory.readbyte(
+                          0x517 + super_tanks_enemy.slot
+                        ))
+                    )
+                  end
+                  if super_tanks_bobomb_jump_phase ~= 0 then
+                    super_tanks_release_frames = 0
+                    super_tanks_pending_jump = false
+                    super_tanks_jump_frames = 0
+                    super_tanks_projectile_release_frames = 0
+                    super_tanks_projectile_pending_jump = false
+                    super_tanks_projectile_jump_frames = 0
+                    super_tanks_projectile_avoid_active = false
+                    super_tanks_scroll_escape_jump_frames = 0
+                    if super_tanks_m.air ~= 0 then
+                      super_tanks_bobomb_was_airborne = true
+                    end
+                    if super_tanks_bobomb_jump_phase == 1 then
+                      held.A = false
+                      held.left = true
+                      held.right = false
+                      super_tanks_bobomb_jump_frames =
+                        super_tanks_bobomb_jump_frames - 1
+                      if super_tanks_m.sx <= 128
+                          or super_tanks_bobomb_jump_frames == 0 then
+                        super_tanks_bobomb_jump_phase = 2
+                        super_tanks_bobomb_jump_frames = 5
+                      end
+                    elseif super_tanks_bobomb_jump_phase == 2 then
+                      held.A = true
+                      held.left = false
+                      held.right = false
+                      super_tanks_bobomb_jump_frames =
+                        super_tanks_bobomb_jump_frames - 1
+                      if super_tanks_bobomb_jump_frames == 0 then
+                        super_tanks_bobomb_jump_phase = 3
+                        super_tanks_bobomb_jump_frames = 100
+                      end
+                    elseif super_tanks_bobomb_jump_phase == 3 then
+                      held.A = true
+                      held.left = false
+                      held.right = true
+                      super_tanks_bobomb_jump_frames =
+                        super_tanks_bobomb_jump_frames - 1
+                      if (super_tanks_bobomb_was_airborne
+                          and super_tanks_m.air == 0)
+                          or super_tanks_bobomb_jump_frames == 0 then
+                        super_tanks_bobomb_jump_phase = 0
+                        log_state(
+                          "post_probe_world_8_super_tanks_bobomb_cleared",
+                          "review_only=1 promotable=0 counts_toward_reliability=0 evidence=vertical_then_forward_jump_landed"
+                        )
+                      end
+                    end
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 1820
+                      and super_tanks_enemy ~= nil
+                      and super_tanks_enemy.id == 80
+                      and memory.readbyte(0x99 + super_tanks_enemy.slot) >= 1
+                  then
+                    super_tanks_release_frames = 0
+                    super_tanks_pending_jump = false
+                    super_tanks_jump_frames = 0
+                    held.A = false
+                    held.B = false
+                    held.left = false
+                    held.right = true
+                  end
+                  if not super_tanks_boss_room
+                      and super_tanks_m.x >= 2050 then
+                    if super_tanks_pipe_phase == 0 then
+                      super_tanks_pipe_phase = 1
+                      super_tanks_pipe_was_airborne = false
+                      log_state(
+                        "post_probe_world_8_super_tanks_pipe_climb_started",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_input_at_final_tank_steps"
+                      )
+                    end
+                    super_tanks_release_frames = 0
+                    super_tanks_pending_jump = false
+                    super_tanks_jump_frames = 0
+                    super_tanks_projectile_release_frames = 0
+                    super_tanks_projectile_pending_jump = false
+                    super_tanks_projectile_jump_frames = 0
+                    super_tanks_projectile_avoid_active = false
+                    super_tanks_scroll_escape_jump_frames = 0
+                    held.B = false
+                    held.down = false
+                    if super_tanks_pipe_phase == 1 then
+                      held.A = false
+                      held.left = false
+                      held.right = false
+                      super_tanks_pipe_phase = 2
+                    elseif super_tanks_pipe_phase == 2 then
+                      held.A = true
+                      held.left = true
+                      held.right = false
+                      if super_tanks_m.air ~= 0 then
+                        super_tanks_pipe_was_airborne = true
+                      elseif super_tanks_pipe_was_airborne then
+                        super_tanks_pipe_was_airborne = false
+                        if super_tanks_m.y <= 352 then
+                          super_tanks_pipe_phase = 3
+                        else
+                          super_tanks_pipe_phase = 1
+                        end
+                      end
+                    elseif super_tanks_pipe_phase == 3 then
+                      held.A = false
+                      held.left = false
+                      held.right = false
+                      super_tanks_pipe_phase = 4
+                    elseif super_tanks_pipe_phase == 4 then
+                      held.A = true
+                      held.left = false
+                      held.right = true
+                      if super_tanks_m.air ~= 0 then
+                        super_tanks_pipe_was_airborne = true
+                      elseif super_tanks_pipe_was_airborne then
+                        super_tanks_pipe_was_airborne = false
+                        if super_tanks_m.y <= 304 then
+                          super_tanks_pipe_phase = 5
+                        else
+                          super_tanks_pipe_phase = 3
+                        end
+                      end
+                    elseif super_tanks_pipe_phase == 5 then
+                      held.A = false
+                      held.left = false
+                      held.right = false
+                      super_tanks_pipe_phase = 6
+                    elseif super_tanks_pipe_phase == 6 then
+                      held.A = true
+                      held.left = false
+                      held.right = true
+                      if super_tanks_m.air ~= 0 then
+                        super_tanks_pipe_was_airborne = true
+                      elseif super_tanks_pipe_was_airborne then
+                        super_tanks_pipe_was_airborne = false
+                        if super_tanks_m.y <= 272 then
+                          super_tanks_pipe_phase = 7
+                          log_state(
+                            "post_probe_world_8_super_tanks_final_pipe_reached",
+                            "review_only=1 promotable=0 counts_toward_reliability=0 evidence=normal_three_step_climb"
+                          )
+                        else
+                          super_tanks_pipe_phase = 5
+                        end
+                      end
+                    elseif super_tanks_pipe_phase == 7 then
+                      held.A = false
+                      held.left = super_tanks_m.x > 2152
+                      held.right = super_tanks_m.x < 2144
+                      held.down = super_tanks_m.x >= 2144
+                        and super_tanks_m.x <= 2152
+                    end
+                  end
+                  if super_tanks_boss_room then
+                    local super_tanks_boss_enemy = nearest_enemy_between(
+                      super_tanks_m, -240, 240
+                    )
+                    local super_tanks_defeated_orb = nil
+                    if super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_enemy.id == 74 then
+                      super_tanks_defeated_orb = super_tanks_boss_enemy
+                    end
+                    local super_tanks_boss_state, super_tanks_boss_slot =
+                      boom_boom_state(76)
+                    local super_tanks_boss_timer2 =
+                      super_tanks_boss_slot ~= nil
+                        and memory.readbyte(0x51F + super_tanks_boss_slot) or 0
+                    local super_tanks_boss_frame =
+                      super_tanks_boss_slot ~= nil
+                        and memory.readbyte(0x668 + super_tanks_boss_slot) or -1
+                    if super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_enemy.id ~= 76 then
+                      super_tanks_boss_enemy = nil
+                    end
+                    if super_tanks_boss_enemy ~= nil then
+                      super_tanks_boss_seen = true
+                    end
+                    if super_tanks_boss_state ~= nil
+                        and super_tanks_boss_state
+                          ~= super_tanks_boss_last_state then
+                      if super_tanks_boss_last_state ~= nil
+                          and super_tanks_boss_state
+                            == super_tanks_boss_last_state + 1
+                          and super_tanks_boss_state >= 3
+                          and super_tanks_boss_state <= 5 then
+                        super_tanks_boss_stomp_transitions =
+                          super_tanks_boss_state - 2
+                        if super_tanks_boss_stomp_transitions == 2 then
+                          -- Super Tanks uses the winged Boom Boom variant.
+                          -- Let the same proven overhead-runway/swoop cycle
+                          -- produce hit three; the fortress-style immediate
+                          -- grounded reversal collides with his takeoff.
+                          super_tanks_boss_third_stomp_setup = false
+                        elseif super_tanks_boss_stomp_transitions == 3 then
+                          super_tanks_boss_post_third_survival_frames = 120
+                        end
+                        log_state(
+                          "post_probe_world_8_super_tanks_boss_stomp_confirmed",
+                          "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_Objects_Var5_increment hit="
+                            .. tostring(super_tanks_boss_stomp_transitions)
+                            .. " boom_boom_state="
+                            .. tostring(super_tanks_boss_state)
+                        )
+                      end
+                      super_tanks_boss_last_state = super_tanks_boss_state
+                      log_state(
+                        "post_probe_world_8_super_tanks_boss_state",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 observer=Objects_Var5 boss_state="
+                          .. tostring(super_tanks_boss_state)
+                          .. " timer2=" .. tostring(super_tanks_boss_timer2)
+                          .. " object_frame="
+                          .. tostring(super_tanks_boss_frame)
+                      )
+                    end
+                    if super_tanks_boss_seen
+                        and not has_active_enemy_id(76)
+                        and has_active_enemy_id(74)
+                        and not super_tanks_boss_defeated then
+                      super_tanks_boss_defeated = true
+                      log_state(
+                        "post_probe_world_8_super_tanks_boss_defeated",
+                        extension_evidence(
+                          "evidence=game_owned_boom_boom_defeated_transition boss_form=flying magic_ball_available=1 observer=object_76_to_object_74 mario_alive=1 player_is_dying=0 boss_state_transitions="
+                            .. tostring(super_tanks_boss_stomp_transitions)
+                        )
+                      )
+                    end
+                    held.up = false
+                    held.down = false
+                    if super_tanks_boss_defeated
+                        and super_tanks_defeated_orb ~= nil then
+                      held.A = super_tanks_defeated_orb.dy < -12
+                        and super_tanks_m.air == 0
+                      held.B = false
+                      held.right = super_tanks_defeated_orb.dx > 4
+                      held.left = super_tanks_defeated_orb.dx < -4
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_stomp_transitions == 2
+                        and super_tanks_boss_state == 4
+                        and super_tanks_boss_timer2 > 0 then
+                      -- Use the entire non-vulnerable second-hit recovery to
+                      -- leave the cramped left corner created by the stomp.
+                      held.A = false
+                      held.B = true
+                      held.right = true
+                      held.left = false
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_stomp_transitions == 2
+                        and super_tanks_boss_state == 4
+                        and super_tanks_boss_timer2 == 0
+                        and super_tanks_boss_enemy.y > 344
+                        and (math.abs(super_tanks_boss_enemy.dx) < 48
+                          or math.abs(memory.readbytesigned(0xBD)) > 2) then
+                      -- Do not take the fortress controller's wall jump into
+                      -- this variant's immediate winged takeoff. Keep a floor
+                      -- lane until the boss is safely overhead again.
+                      held.A = false
+                      held.B = true
+                      local recovery_x_speed = memory.readbytesigned(0xBD)
+                      if recovery_x_speed > 2 then
+                        held.right = false
+                        held.left = true
+                      elseif recovery_x_speed < -2 then
+                        held.right = true
+                        held.left = false
+                      else
+                        held.right = super_tanks_boss_enemy.dx < 0
+                          and super_tanks_m.sx < 180
+                        held.left = super_tanks_boss_enemy.dx >= 0
+                          and super_tanks_m.sx > 76
+                      end
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_intercept_frames > 0 then
+                      -- Flying Boom Boom's clean vulnerability window begins
+                      -- as his downward velocity peaks around y=300.  A short
+                      -- hop here is descending when he reaches the floor; a
+                      -- full-height late jump instead meets his upward return
+                      -- side-on.
+                      super_tanks_boss_intercept_frames =
+                        super_tanks_boss_intercept_frames - 1
+                      held.A = super_tanks_boss_intercept_frames >= 42
+                      held.B = true
+                      if super_tanks_m.air ~= 0
+                          and super_tanks_boss_enemy.dy <= 12
+                          and math.abs(super_tanks_boss_enemy.dx) < 24 then
+                        held.right = super_tanks_boss_enemy.dx < 0
+                        held.left = super_tanks_boss_enemy.dx >= 0
+                      else
+                        held.right = super_tanks_boss_enemy.dx > 4
+                        held.left = super_tanks_boss_enemy.dx < -4
+                      end
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_state ~= nil
+                        and super_tanks_boss_state >= 3
+                        and super_tanks_boss_state <= 4
+                        and super_tanks_boss_timer2 == 0
+                        and super_tanks_m.air == 0
+                        and memory.readbytesigned(
+                          0xCF + super_tanks_boss_enemy.slot
+                        ) >= 20
+                        and super_tanks_boss_enemy.y >= 286
+                        and super_tanks_boss_enemy.y <= 344
+                        and math.abs(super_tanks_boss_enemy.dx) < 40 then
+                      -- First build a horizontal lane. Jumping from directly
+                      -- underneath a descending winged boss rises into him
+                      -- before Mario can establish a stomp angle.
+                      held.A = false
+                      held.B = true
+                      held.right = super_tanks_boss_enemy.dx < 0
+                      held.left = super_tanks_boss_enemy.dx >= 0
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_state ~= nil
+                        and super_tanks_boss_state >= 3
+                        and super_tanks_boss_state <= 4
+                        and super_tanks_boss_timer2 == 0
+                        and super_tanks_m.air == 0
+                        and memory.readbytesigned(
+                          0xCF + super_tanks_boss_enemy.slot
+                        ) >= 20
+                        and super_tanks_boss_enemy.y >= 286
+                        and super_tanks_boss_enemy.y <= 344
+                        and math.abs(super_tanks_boss_enemy.dx) >= 40 then
+                      super_tanks_boss_intercept_frames = 60
+                      held.A = true
+                      held.B = true
+                      held.right = super_tanks_boss_enemy.dx > 4
+                      held.left = super_tanks_boss_enemy.dx < -4
+                      log_state(
+                        "post_probe_world_8_super_tanks_winged_intercept_launch",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 evidence=game_owned_descending_object_velocity boss_y="
+                          .. tostring(super_tanks_boss_enemy.y)
+                          .. " boss_vy="
+                          .. tostring(memory.readbytesigned(
+                            0xCF + super_tanks_boss_enemy.slot
+                          ))
+                      )
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_state ~= nil
+                        and super_tanks_boss_state >= 3
+                        and super_tanks_boss_enemy.dy < -32 then
+                      -- Build a repeatable left-side runway while Boom Boom is
+                      -- safely overhead. His observed swoop then enters the
+                      -- y=286 intercept band with ample horizontal separation.
+                      held.A = false
+                      held.B = true
+                      held.right = super_tanks_m.sx < 36
+                      held.left = super_tanks_m.sx > 48
+                      super_tanks_boss_jump_frames = 0
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_stomp_transitions >= 3
+                        and (super_tanks_boss_post_third_survival_frames > 0
+                          or super_tanks_boss_state ~= 4) then
+                      held.B = true
+                      super_tanks_boss_post_third_survival_frames = math.max(
+                        0,
+                        super_tanks_boss_post_third_survival_frames - 1
+                      )
+                      if not super_tanks_boss_post_third_landed
+                          and super_tanks_m.air ~= 0 then
+                        held.right = true
+                        held.left = false
+                        held.A = false
+                      elseif not super_tanks_boss_post_third_landed then
+                        super_tanks_boss_post_third_landed = true
+                        super_tanks_boss_post_third_jump_frames = 39
+                        held.right = false
+                        held.left = true
+                        held.A = true
+                      elseif super_tanks_boss_post_third_jump_frames > 0 then
+                        held.right = super_tanks_m.sx < 76
+                          or (super_tanks_m.sx <= 180
+                            and super_tanks_boss_enemy.dx < 0)
+                        held.left = super_tanks_m.sx > 180
+                          or (super_tanks_m.sx >= 76
+                            and super_tanks_boss_enemy.dx >= 0)
+                        held.A = true
+                        super_tanks_boss_post_third_jump_frames =
+                          super_tanks_boss_post_third_jump_frames - 1
+                      elseif super_tanks_m.air == 0 then
+                        held.right = super_tanks_m.sx < 76
+                          or (super_tanks_m.sx <= 180
+                            and super_tanks_boss_enemy.dx < 0)
+                        held.left = super_tanks_m.sx > 180
+                          or (super_tanks_m.sx >= 76
+                            and super_tanks_boss_enemy.dx >= 0)
+                        held.A = true
+                        super_tanks_boss_post_third_jump_frames = 39
+                      else
+                        held.right = super_tanks_m.sx < 76
+                          or (super_tanks_m.sx <= 180
+                            and super_tanks_boss_enemy.dx < 0)
+                        held.left = super_tanks_m.sx > 180
+                          or (super_tanks_m.sx >= 76
+                            and super_tanks_boss_enemy.dx >= 0)
+                        held.A = false
+                      end
+                      super_tanks_boss_jump_frames = 0
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_third_stomp_setup
+                        and super_tanks_boss_state == 4
+                        and super_tanks_boss_timer2 == 0
+                        and super_tanks_m.air == 0 then
+                      held.B = true
+                      held.A = true
+                      held.right = super_tanks_boss_enemy.dx >= 0
+                      held.left = super_tanks_boss_enemy.dx < 0
+                      super_tanks_boss_jump_frames = 42
+                      super_tanks_boss_third_stomp_setup = false
+                      log_state(
+                        "post_probe_world_8_super_tanks_third_stomp_launch",
+                        "review_only=1 promotable=0 counts_toward_reliability=0 evidence=first_vulnerable_grounded_running_reversal dx="
+                          .. tostring(super_tanks_boss_enemy.dx)
+                          .. " x_speed="
+                          .. tostring(memory.readbytesigned(0xBD))
+                      )
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_state ~= nil
+                        and super_tanks_boss_state >= 2
+                        and super_tanks_boss_state <= 4
+                        and super_tanks_boss_timer2 == 0
+                        and super_tanks_boss_frame ~= 7 then
+                      if super_tanks_m.air ~= 0
+                          and math.abs(super_tanks_boss_enemy.dx) < 22
+                          and ((super_tanks_boss_state < 4
+                              and super_tanks_boss_enemy.dy < 24)
+                            or (super_tanks_boss_state == 4
+                              and super_tanks_boss_enemy.dy <= 0)) then
+                        held.A = false
+                        held.B = true
+                        held.right = super_tanks_boss_enemy.dx < 0
+                          and super_tanks_m.sx < 216
+                        held.left = super_tanks_boss_enemy.dx >= 0
+                          and super_tanks_m.sx > 40
+                        super_tanks_boss_jump_frames = 0
+                      elseif math.abs(super_tanks_boss_enemy.dx) < 32
+                          and super_tanks_m.air == 0 then
+                        held.B = true
+                        if super_tanks_boss_enemy.dx >= 0
+                            and super_tanks_m.sx <= 76 then
+                          held.A = true
+                          held.right = true
+                          held.left = false
+                        elseif super_tanks_boss_enemy.dx < 0
+                            and super_tanks_m.sx >= 180 then
+                          held.A = true
+                          held.right = false
+                          held.left = true
+                        else
+                          held.A = false
+                          held.right = super_tanks_boss_enemy.dx < 0
+                            and super_tanks_m.sx < 216
+                          held.left = super_tanks_boss_enemy.dx >= 0
+                            and super_tanks_m.sx > 40
+                        end
+                        super_tanks_boss_jump_frames = 0
+                      else
+                        if super_tanks_m.air == 0
+                            and super_tanks_boss_jump_frames == 0 then
+                          super_tanks_boss_jump_frames = 32
+                        end
+                        held.A = super_tanks_boss_jump_frames > 0
+                        if super_tanks_boss_jump_frames > 0 then
+                          super_tanks_boss_jump_frames =
+                            super_tanks_boss_jump_frames - 1
+                        end
+                        held.B = true
+                        held.right = super_tanks_boss_enemy.dx > 4
+                        held.left = super_tanks_boss_enemy.dx < -4
+                      end
+                    elseif super_tanks_boss_enemy ~= nil
+                        and super_tanks_boss_stomp_transitions == 0
+                        and super_tanks_boss_state == 0 then
+                      held.A = super_tanks_frame % 60 < 42
+                      held.B = true
+                      held.right = true
+                      held.left = false
+                      super_tanks_boss_jump_frames = 0
+                    elseif super_tanks_boss_enemy ~= nil then
+                      held.A = false
+                      held.B = true
+                      super_tanks_boss_jump_frames = 0
+                      if super_tanks_boss_enemy.dx > 0
+                          and super_tanks_m.sx <= 44 then
+                        held.right = true
+                        held.left = false
+                      elseif super_tanks_boss_enemy.dx < 0
+                          and super_tanks_m.sx >= 212 then
+                        held.right = false
+                        held.left = true
+                      else
+                        held.right = super_tanks_boss_enemy.dx < 0
+                          and super_tanks_m.sx < 216
+                        held.left = super_tanks_boss_enemy.dx > 0
+                          and super_tanks_m.sx > 40
+                      end
+                    else
+                      held.A = false
+                      held.B = false
+                      held.right = super_tanks_m.sx < 128
+                      held.left = super_tanks_m.sx > 160
+                    end
+                  end
+                else
+                  held.A = false; held.B = false; held.right = false
+                  held.left = false; held.down = false; held.up = false
+                end
+                apply()
+                if super_tanks_frame % 60 == 0 then
+                  log_state(
+                    "post_probe_world_8_super_tanks_discovery_tick",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 max_x="
+                      .. tostring(super_tanks_max_x)
+                      .. " boss_room="
+                      .. tostring(super_tanks_boss_room and 1 or 0)
+                      .. " "
+                      .. object_summary_between(
+                        super_tanks_m, -120, 180, 180
+                      )
+                      .. " " .. special_object_summary(super_tanks_m)
+                  )
+                end
+                advance_frame()
+              end
+              log_state(
+                "post_probe_world_8_super_tanks_discovery_timeout",
+                "failure_classification=controller_timeout review_only=1 promotable=0 counts_toward_reliability=0 max_x="
+                  .. tostring(super_tanks_max_x)
+              )
+            end
+          end
+          do return end
+          -- The destruction wipe leaves Mario on the right mouth of World 8
+          -- pipe junction 6.  Enter it, cross from its right ledge to the left
+          -- ceiling mouth, then follow the cleared 8-2/8-1 path to junction 3.
+          press("A", 18, "post_probe_world_8_super_tanks_pipe_6_enter")
+          local pipe_6_seen_right = false
+          for pipe_frame = 1, 900 do
+            local pipe_m = mario()
+            if memory.readbyte(0x70A) == 14 and pipe_m.y ~= 0
+                and pipe_m.x >= 180 then
+              pipe_6_seen_right = true
+            end
+            held.down = false; held.right = false; held.up = false
+            held.B = true; held.left = true
+            held.A = pipe_6_seen_right and pipe_frame % 60 < 38
+            if pipe_6_seen_right and memory.readbyte(0x70A) == 14
+                and pipe_m.y ~= 0 and pipe_m.x <= 48 then
+              held.up = true; held.B = false
+              held.left = pipe_m.x > 32
+              held.right = pipe_m.x < 24
+              held.A = pipe_frame % 60 < 38
+            end
+            apply(); advance_frame()
+            if pipe_6_seen_right and memory.readbyte(0x70A) == 0
+                and memory.readbyte(0x727) == 7 then
+              break
+            end
+          end
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          for _ = 1, 1200 do advance_frame() end
+          local junction_3_route = {"left", "up", "right", "up", "right"}
+          for map_step, direction in ipairs(junction_3_route) do
+            press(
+              direction,
+              18,
+              "post_probe_world_8_super_tanks_junction_3_route_"
+                .. tostring(map_step) .. "_" .. direction
+            )
+            advance(60, "post_probe_world_8_super_tanks_junction_3_settle")
+          end
+          log_state("post_probe_world_8_super_tanks_junction_3_reached")
+          press("A", 18, "post_probe_world_8_super_tanks_junction_3_enter")
+          advance(600, "post_probe_world_8_super_tanks_junction_3_entry_settle")
+          log_state("post_probe_world_8_super_tanks_junction_3_inside")
+          if memory.readbyte(0x727) == 7 then return end
+          press("A", 18, "post_probe_world_8_super_tanks_map_trace_pipe_A")
+          local pipe_seen_right_entry = false
+          for pipe_frame = 1, 900 do
+            local pipe_m = mario()
+            if memory.readbyte(0x70A) == 14 and pipe_m.x >= 180 then
+              pipe_seen_right_entry = true
+            end
+            held.A = pipe_seen_right_entry and pipe_frame % 60 < 38
+            held.down = false; held.right = false
+            held.B = true; held.left = true
+            held.up = memory.readbyte(0x70A) == 14
+              and pipe_seen_right_entry and pipe_m.y ~= 0 and pipe_m.x <= 48
+            if held.up then
+              -- Both junction mouths descend from the ceiling.  Center under
+              -- the left mouth, then jump while holding Up to re-enter it.
+              held.B = false
+              held.left = pipe_m.x > 32
+              held.right = pipe_m.x < 24
+              held.A = pipe_frame % 60 < 38
+            end
+            apply(); advance_frame()
+            if pipe_seen_right_entry and memory.readbyte(0x70A) == 0
+                and memory.readbyte(0x727) == 7 then
+              break
+            end
+          end
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          for _ = 1, 1200 do advance_frame() end
+          log_state("post_probe_world_8_super_tanks_map_trace_after_pipe")
+          press("left", 18, "post_probe_world_8_super_tanks_map_trace_left_1")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_left_1_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_left_1")
+          press("up", 18, "post_probe_world_8_super_tanks_map_trace_up_1")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_up_1_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_up_1")
+          press("right", 18, "post_probe_world_8_super_tanks_map_trace_right_1")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_right_1_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_right_1")
+          press("up", 18, "post_probe_world_8_super_tanks_map_trace_up_2")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_up_2_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_up_2")
+          press("left", 18, "post_probe_world_8_super_tanks_map_trace_left_2")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_left_2_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_left_2")
+          press("A", 18, "post_probe_world_8_super_tanks_map_trace_second_pipe_A")
+          local second_pipe_seen_right_entry = false
+          for pipe_frame = 1, 900 do
+            local pipe_m = mario()
+            if memory.readbyte(0x70A) == 14 and pipe_m.y ~= 0
+                and pipe_m.x >= 180 then
+              second_pipe_seen_right_entry = true
+            end
+            held.A = second_pipe_seen_right_entry and pipe_frame % 60 < 38
+            held.down = false; held.right = false
+            held.B = true; held.left = true; held.up = false
+            if memory.readbyte(0x70A) == 14
+                and second_pipe_seen_right_entry and pipe_m.y ~= 0
+                and pipe_m.x <= 48 then
+              held.up = true; held.B = false
+              held.left = pipe_m.x > 32
+              held.right = pipe_m.x < 24
+              held.A = pipe_frame % 60 < 38
+            end
+            apply(); advance_frame()
+            if second_pipe_seen_right_entry and memory.readbyte(0x70A) == 0
+                and memory.readbyte(0x727) == 7 then
+              break
+            end
+          end
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          for _ = 1, 1200 do advance_frame() end
+          log_state("post_probe_world_8_super_tanks_map_trace_after_second_pipe")
+          press("right", 18, "post_probe_world_8_super_tanks_map_trace_dark_right")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_right_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_dark_right")
+          press("up", 18, "post_probe_world_8_super_tanks_map_trace_dark_up")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_up_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_dark_up")
+          press("left", 18, "post_probe_world_8_super_tanks_map_trace_dark_left")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_left_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_dark_left")
+          press("right", 18, "post_probe_world_8_super_tanks_map_trace_dark_right_2")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_right_2_settle")
+          press("down", 18, "post_probe_world_8_super_tanks_map_trace_dark_down_1")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_down_1_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_dark_down_1")
+          press("down", 18, "post_probe_world_8_super_tanks_map_trace_dark_down_2")
+          advance(60, "post_probe_world_8_super_tanks_map_trace_dark_down_2_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_after_dark_down_2")
+          for map_step = 1, 4 do
+            press(
+              "right",
+              18,
+              "post_probe_world_8_super_tanks_map_trace_dark_row_right_"
+                .. tostring(map_step)
+            )
+            advance(
+              60,
+              "post_probe_world_8_super_tanks_map_trace_dark_row_right_settle_"
+                .. tostring(map_step)
+            )
+            log_state(
+              "post_probe_world_8_super_tanks_map_trace_after_dark_row_right_"
+                .. tostring(map_step)
+            )
+          end
+          press("A", 18, "post_probe_world_8_super_tanks_map_trace_third_pipe_A")
+          advance(600, "post_probe_world_8_super_tanks_map_trace_third_pipe_A_settle")
+          log_state("post_probe_world_8_super_tanks_map_trace_in_third_pipe")
+          local third_pipe_seen_right_entry = memory.readbyte(0x70A) == 14
+            and mario().x >= 180
+          for pipe_frame = 1, 900 do
+            local pipe_m = mario()
+            if memory.readbyte(0x70A) == 14 and pipe_m.y ~= 0
+                and pipe_m.x >= 180 then
+              third_pipe_seen_right_entry = true
+            end
+            held.A = third_pipe_seen_right_entry and pipe_frame % 60 < 38
+            held.down = false; held.right = false
+            held.B = true; held.left = true; held.up = false
+            if memory.readbyte(0x70A) == 14
+                and third_pipe_seen_right_entry and pipe_m.y ~= 0
+                and pipe_m.x <= 48 then
+              held.up = true; held.B = false
+              held.left = pipe_m.x > 32
+              held.right = pipe_m.x < 24
+              held.A = pipe_frame % 60 < 38
+            end
+            apply(); advance_frame()
+            if third_pipe_seen_right_entry and memory.readbyte(0x70A) == 0
+                and memory.readbyte(0x727) == 7 then
+              break
+            end
+          end
+          held.A = false; held.B = false; held.right = false
+          held.left = false; held.down = false; held.up = false
+          apply()
+          for _ = 1, 1200 do advance_frame() end
+          log_state("post_probe_world_8_super_tanks_map_trace_after_third_pipe")
+          return
+        else
+          log_state(
+            "post_probe_world_8_fortress_H_door_failed",
+            "failure_classification=targeted_route_timeout max_x="
+              .. tostring(h_door_max_x)
+              .. " start_form=" .. tostring(h_door_start_form)
+              .. " current_form=" .. tostring(memory.readbyte(0xED))
+          )
+          return
+        end
       end
       do
         local seed_max_x = mario().x

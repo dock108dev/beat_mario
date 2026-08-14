@@ -211,9 +211,9 @@ RELIABILITY_PROFILES = {
         accepted_boundary={
             "world_number": 7,
             "object_set": 0,
-            "map_page": 2,
+            "map_page": 3,
             "map_cursor_x": 96,
-            "map_cursor_y": 144,
+            "map_cursor_y": 112,
         },
         focused_events=(
             "post_probe_world_8_2_post_clear",
