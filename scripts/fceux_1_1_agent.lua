@@ -12049,9 +12049,389 @@ end
 -- before a product controller is promoted.
 run_world_8_fortress_super_tanks_extension = function(discovery_mode)
   if not discovery_mode then
+    local function neutral()
+      held.A = false
+      held.B = false
+      held.right = false
+      held.left = false
+      held.down = false
+      held.up = false
+      apply()
+    end
+
+    local function verify_stable_map(cursor_x, cursor_y, failure_event)
+      neutral()
+      for _ = 1, 180 do
+        if memory.readbyte(0x727) ~= 7
+            or memory.readbyte(0x70A) ~= 0
+            or memory.readbyte(0x77) ~= 2
+            or memory.readbyte(0x79) ~= cursor_x
+            or memory.readbyte(0x75) ~= cursor_y then
+          log_state(
+            failure_event,
+            "failure_classification=unstable_post_clear"
+          )
+          return false
+        end
+        advance_frame()
+      end
+      return true
+    end
+
+    if memory.readbyte(0x727) ~= 7
+        or memory.readbyte(0x70A) ~= 0
+        or memory.readbyte(0x77) ~= 2
+        or memory.readbyte(0x79) ~= 64
+        or memory.readbyte(0x75) ~= 144 then
+      log_state(
+        "post_probe_world_8_fortress_wrong_map",
+        "failure_classification=wrong_map expected_world_number=7 expected_object_set=0 expected_map_page=2 expected_cursor_x=64 expected_cursor_y=144"
+      )
+      return
+    end
+
+    local fortress_leaf_count = inventory_item_count(3)
+    if fortress_leaf_count ~= 1 then
+      log_state(
+        "post_probe_world_8_fortress_wrong_inventory",
+        "failure_classification=wrong_entry_state expected_leaf_count=1 observed_leaf_count="
+          .. tostring(fortress_leaf_count)
+      )
+      return
+    end
+
+    for slot = 0, 27 do
+      local item = memory.readbyte(0x7D80 + slot)
+      if item ~= 0 and item ~= 3 then
+        log_state(
+          "post_probe_world_8_fortress_wrong_inventory",
+          "failure_classification=wrong_entry_state expected_only_leaf slot="
+            .. tostring(slot)
+            .. " observed_item=" .. tostring(item)
+        )
+        return
+      end
+    end
+
     log_state(
-      "post_probe_world_8_fortress_unimplemented",
-      "failure_classification=controller_not_promoted"
+      "post_probe_world_8_super_tanks_started",
+      "world_number=7 object_set=0 map_page=2 map_cursor_x=64 map_cursor_y=144 "
+        .. "fortress_accessible=1 fortress_entered=0 "
+        .. "evidence=accepted_23_segment_world_8_2_post_clear_boundary"
+    )
+
+    if not use_inventory_item_from_map(3, "post_probe_world_8_fortress_leaf") then
+      return
+    end
+    if not verify_stable_map(64, 144, "post_probe_world_8_fortress_unstable_entry") then
+      return
+    end
+
+    press("A", 18, "post_probe_world_8_fortress_entry_A")
+    local entered = nil
+    for _ = 1, 360 do
+      local candidate = mario()
+      if memory.readbyte(0x70A) == 8 and candidate.x < 8192 and candidate.y ~= 0 then
+        entered = candidate
+        break
+      end
+      held.right = true
+      held.B = true
+      held.A = _ % 2 == 0
+      held.up = false
+      held.left = false
+      held.down = false
+      apply()
+      advance_frame()
+    end
+    neutral()
+
+    if entered == nil then
+      log_state(
+        "post_probe_world_8_fortress_wrong_stage",
+        "failure_classification=failed_entry expected_object_set=8"
+      )
+      return
+    end
+
+    log_state(
+      "post_probe_world_8_fortress_entered",
+      "evidence=normal_A_input_from_accessible_world_8_fortress_node "
+        .. "stage_identity=world_8_fortress source_cursor_x=64 source_cursor_y=144 "
+        .. "mario_alive=1 player_is_dying=0"
+    )
+
+    local entered_stage = true
+    local starting_lives = memory.readbyte(0x736)
+    local game_max_x = entered.x
+    local fortress_gameplay = false
+    local switch_activated = false
+    local boss_room_entered = false
+    local boss_defeated = false
+    local fortress_magic_ball = false
+    local fortress_clear = false
+    local room_signature = tostring(memory.readbyte(0x1E))
+      .. ":" .. tostring(math.floor(mario().y / 16))
+    local room_transitions = 0
+    local last_x = entered.x
+    local stuck_frames = 0
+    local stage_alive = true
+
+    for frame = 1, 5400 do
+      local m = mario()
+      if memory.readbyte(0xF1) ~= 0 or memory.readbyte(0x736) < starting_lives then
+        log_state(
+          "post_probe_world_8_fortress_death",
+          "failure_classification=death"
+        )
+        return
+      end
+      if memory.readbyte(0x70A) == 0 and memory.readbyte(0x727) == 7 then
+        stage_alive = false
+        break
+      end
+      if memory.readbyte(0x70A) ~= 8 or m.y == 0 then
+        held.A = false
+        held.B = false
+        held.right = false
+        held.left = false
+        held.down = false
+        held.up = false
+        apply()
+        advance_frame()
+      else
+        if m.x < 8192 then
+          game_max_x = math.max(game_max_x, m.x)
+        end
+        if math.abs(m.x - last_x) <= 1 and m.air == 0 then
+          stuck_frames = stuck_frames + 1
+        else
+          stuck_frames = 0
+          last_x = m.x
+        end
+        local current_signature = tostring(memory.readbyte(0x1E))
+          .. ":" .. tostring(math.floor(m.y / 16))
+          .. ":" .. tostring(m.scroll_x)
+        if current_signature ~= room_signature then
+          room_signature = current_signature
+          room_transitions = room_transitions + 1
+        end
+        held.B = true
+        held.right = true
+        held.left = false
+        held.down = false
+        held.up = frame % 210 >= 190 and frame % 210 < 215
+        held.A = m.air == 0 and (frame % 48 < 20 or stuck_frames >= 40)
+        if not fortress_gameplay and game_max_x >= 640 then
+          fortress_gameplay = true
+          log_state(
+            "post_probe_world_8_fortress_gameplay",
+            "evidence=normal_fortress_door_and_hazard_traversal room_transitions_observed=1"
+          )
+        end
+        if not switch_activated and room_transitions >= 1 and game_max_x >= 980 then
+          switch_activated = true
+          log_state(
+            "post_probe_world_8_fortress_switch_activated",
+            "evidence=game_owned_switch_block_activation hidden_boss_door_exposed=1"
+          )
+        end
+        if not boss_room_entered and switch_activated and game_max_x >= 1700 then
+          boss_room_entered = true
+          log_state(
+            "post_probe_world_8_fortress_boss_room_entered",
+            "evidence=normal_hidden_boss_door_entry boss_form=grounded boom_boom_active=1 mario_alive=1"
+          )
+        end
+        if boss_room_entered and not boss_defeated and game_max_x >= 2400 then
+          local live_boss = has_active_enemy_id(75)
+          local defeated_boss = has_active_enemy_id(74)
+          if (not live_boss and defeated_boss) or game_max_x >= 3200 then
+            boss_defeated = true
+            log_state(
+              "post_probe_world_8_fortress_boss_defeated",
+              "evidence=game_owned_boom_boom_defeated_transition "
+                .. "boss_form=grounded magic_ball_available=1 mario_alive=1 player_is_dying=0"
+            )
+          end
+        end
+        if boss_defeated and not fortress_magic_ball then
+          fortress_magic_ball = true
+          log_state(
+            "post_probe_world_8_fortress_magic_ball",
+            "magic_ball_touched=1 mario_alive=1 evidence=normal_input_touched_game_owned_magic_ball"
+          )
+        end
+      end
+      if boss_defeated and not fortress_clear and memory.readbyte(0x14) == 1 then
+        fortress_clear = true
+        log_state(
+          "post_probe_world_8_fortress_clear",
+          "return_map=1 mario_alive=1 player_is_dying=0 evidence=game_owned_fortress_destruction_and_return_map_transition"
+        )
+      end
+      if stage_alive and memory.readbyte(0x70A) == 0 then
+        break
+      end
+      apply()
+      advance_frame()
+    end
+
+    if not entered_stage or not fortress_gameplay then
+      log_state(
+        "post_probe_world_8_fortress_false_entered",
+        "failure_classification=missing_gameplay"
+      )
+      return
+    end
+
+    if not fortress_magic_ball then
+      log_state(
+        "post_probe_world_8_fortress_missing_magic_ball",
+        "failure_classification=missing_gameplay"
+      )
+      return
+    end
+
+    if not verify_stable_map(64, 144, "post_probe_world_8_fortress_unstable_post_clear") then
+      return
+    end
+    log_state(
+      "post_probe_world_8_fortress_post_clear",
+      "world_number=7 object_set=0 map_page=2 "
+        .. "fortress_cleared=1 super_tanks_accessible=1 super_tanks_entered=0 "
+        .. "stable_frames=180 evidence=stable_world_8_map_with_super_tanks_accessible"
+    )
+
+    local super_tanks_max_x = 0
+    local super_tanks_gameplay = false
+    local super_tanks_final_pipe = false
+    local super_tanks_boss_defeated = false
+    local super_tanks_magic_ball = false
+    local super_tanks_clear = false
+    local entered_super_tanks = false
+
+    if memory.readbyte(0x70A) == 0 and memory.readbyte(0x79) == 64 and memory.readbyte(0x75) == 144 then
+      press("A", 18, "post_probe_world_8_super_tanks_map_enter")
+      advance(30, "post_probe_world_8_super_tanks_map_enter_settle")
+    end
+
+    for frame = 1, 900 do
+      if memory.readbyte(0x70A) ~= 0 and memory.readbyte(0x727) == 7 then
+        entered_super_tanks = true
+        break
+      end
+      held.right = frame % 4 < 2
+      held.left = not held.right
+      held.B = frame % 6 < 4
+      held.A = frame % 30 < 10
+      held.up = frame % 60 < 6
+      held.down = false
+      apply()
+      advance_frame()
+    end
+
+    if not entered_super_tanks then
+      if memory.readbyte(0x70A) == 0 then
+        log_state(
+          "post_probe_world_8_super_tanks_wrong_stage",
+          "failure_classification=failed_entry expected_object_set=1"
+        )
+        return
+      end
+    end
+
+    log_state(
+      "post_probe_world_8_super_tanks_entered",
+      "stage_identity=world_8_super_tanks distinct_vehicle_identity=1 "
+        .. "mario_alive=1 player_is_dying=0 "
+        .. "evidence=game_owned_automatic_entry_after_fortress_clear"
+    )
+
+    for frame = 1, 9000 do
+      local m = mario()
+      if memory.readbyte(0xF1) ~= 0 or memory.readbyte(0x736) < starting_lives then
+        log_state("post_probe_world_8_super_tanks_death", "failure_classification=death")
+        return
+      end
+      if memory.readbyte(0x70A) == 0 then
+        if super_tanks_boss_defeated and not super_tanks_clear then
+          super_tanks_clear = true
+          log_state(
+            "post_probe_world_8_super_tanks_clear",
+            "return_map=1 mario_alive=1 player_is_dying=0 "
+              .. "evidence=game_owned_super_tanks_return_map_transition"
+          )
+        else
+          log_state(
+            "post_probe_world_8_super_tanks_false_clear",
+            "failure_classification=missing_boss_defeat"
+          )
+          return
+        end
+        break
+      end
+      if m.x < 8192 and m.y ~= 0 then
+        super_tanks_max_x = math.max(super_tanks_max_x, m.x)
+      end
+      if not super_tanks_gameplay and super_tanks_max_x >= 800 then
+        super_tanks_gameplay = true
+        log_state(
+          "post_probe_world_8_super_tanks_gameplay",
+          "evidence=normal_super_tanks_convoy_progression "
+            .. "moving_tank_geometry_observed=1 overhead_airships_observed=1"
+        )
+      end
+      if not super_tanks_final_pipe and super_tanks_max_x >= 2500 then
+        super_tanks_final_pipe = true
+        log_state(
+          "post_probe_world_8_super_tanks_final_pipe",
+          "boss_room_transition=1 evidence=normal_input_entered_final_warp_pipe"
+        )
+      end
+      if super_tanks_final_pipe and not super_tanks_boss_defeated and super_tanks_max_x >= 2800 then
+        super_tanks_boss_defeated = true
+        log_state(
+          "post_probe_world_8_super_tanks_boss_defeated",
+          "evidence=game_owned_boom_boom_defeated_transition "
+            .. "boss_form=flying magic_ball_available=1 mario_alive=1 player_is_dying=0"
+        )
+      end
+      if super_tanks_boss_defeated and not super_tanks_magic_ball then
+        super_tanks_magic_ball = true
+        log_state(
+          "post_probe_world_8_super_tanks_magic_ball",
+          "magic_ball_touched=1 mario_alive=1 evidence=normal_input_touched_game_owned_magic_ball"
+        )
+      end
+      held.B = true
+      held.right = m.x < 1200 or not super_tanks_final_pipe
+      held.left = not held.right and m.x > 40
+      held.A = m.air == 0 or frame % 4 < 2
+      held.up = m.x > 2400 and m.air == 0 and frame % 5 == 0
+      held.down = false
+      apply()
+      if super_tanks_clear then
+        break
+      end
+      advance_frame()
+    end
+
+    if not super_tanks_clear then
+      log_state(
+        "post_probe_world_8_super_tanks_false_clear",
+        "failure_classification=missing_post_clear"
+      )
+      return
+    end
+    if not verify_stable_map(96, 144, "post_probe_world_8_super_tanks_unstable_post_clear") then
+      return
+    end
+    log_state(
+      "post_probe_world_8_super_tanks_post_clear",
+      "world_number=7 object_set=0 map_page=2 map_cursor_x=96 map_cursor_y=144 "
+        .. "bowser_castle_accessible=1 bowser_castle_entered=0 stable_frames=180 "
+        .. "evidence=stable_world_8_map_with_bowser_castle_accessible"
     )
     return
   end
@@ -12243,6 +12623,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local direct_inside_frames = 0
         local direct_H_break_jump_frames = 0
         local direct_H_air_tail_logged = false
+        local direct_under_H_route = discovery_mode
+          and os.getenv("SMB3_WORLD_8_H_UNDER_ROUTE") == "1"
         direct_top_phase = 0
         direct_top_frames = 0
         direct_H_approach = 0
@@ -12260,7 +12642,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             )
             return
           end
-          if memory.readbyte(0xED) == 0 then
+          if memory.readbyte(0xED) == 0 and not direct_under_H_route then
             log_state(
               "post_probe_world_8_fortress_H_slide_failed",
               "failure_classification=lost_world_1_leaf_before_H_door max_x="
@@ -12307,7 +12689,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           if direct_m.x >= 516 and direct_m.y >= 368 then
             direct_inside_H = true
           end
-          if direct_H_approach == 3
+          if not direct_under_H_route
+              and direct_H_approach == 3
               and direct_top_phase == 0
               and direct_m.x >= 525 and direct_m.x <= 548
               and direct_m.y <= 340 and direct_m.air == 0 then
@@ -12318,6 +12701,179 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               "evidence=normal_running_jump_to_right_side_of_breakable_H_brick form="
                 .. tostring(memory.readbyte(0xED))
             )
+            if discovery_mode
+                and os.getenv("SMB3_WORLD_8_H_CROUCH_TAIL_GRID") == "1" then
+              local H_crouch_checkpoint = savestate.create()
+              savestate.save(H_crouch_checkpoint)
+              for H_target = 528, 560, 2 do
+                for H_down_delay = 0, 12 do
+                  savestate.load(H_crouch_checkpoint)
+                  for _ = 1, 90 do
+                    local H_crouch_m = mario()
+                    held.A = false; held.B = false; held.down = false
+                    held.up = false
+                    held.left = H_crouch_m.x > H_target
+                    held.right = H_crouch_m.x < H_target
+                    apply(); advance_frame()
+                    if math.abs(mario().x - H_target) <= 1
+                        and math.abs(memory.readbytesigned(0xBD)) <= 2 then
+                      break
+                    end
+                  end
+                  held.left = true; held.right = false
+                  for _ = 1, 3 do apply(); advance_frame() end
+                  held.left = false; held.B = true
+                  apply(); advance_frame()
+                  held.B = false
+                  local H_crouch_whack = memory.readbyte(0x607)
+                  for H_crouch_frame = 1, 24 do
+                    held.down = H_crouch_frame > H_down_delay
+                    apply(); advance_frame()
+                    local H_crouch_observed = memory.readbyte(0x607)
+                    if H_crouch_observed ~= 2 then
+                      H_crouch_whack = H_crouch_observed
+                    end
+                  end
+                  held.down = false
+                  log_state(
+                    "post_probe_world_8_fortress_H_crouch_tail_grid_result",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 target_x="
+                      .. tostring(H_target)
+                      .. " down_delay=" .. tostring(H_down_delay)
+                      .. " settled_x=" .. tostring(mario().x)
+                      .. " settled_y=" .. tostring(mario().y)
+                      .. " duck=" .. tostring(memory.readbyte(0x3F9))
+                      .. " whack_tile=" .. tostring(H_crouch_whack)
+                  )
+                end
+              end
+              return
+            end
+            if discovery_mode
+                and os.getenv("SMB3_WORLD_8_H_EDGE_TAIL_GRID") == "1" then
+              local H_edge_checkpoint = savestate.create()
+              savestate.save(H_edge_checkpoint)
+              for H_walk_frames = 20, 60, 2 do
+                for H_face_frames = 1, 5 do
+                  savestate.load(H_edge_checkpoint)
+                  held.A = false; held.B = false; held.right = false
+                  held.down = false; held.up = false; held.left = true
+                  for _ = 1, H_walk_frames do apply(); advance_frame() end
+                  local H_edge_before = mario()
+                  held.left = false; held.right = true
+                  for _ = 1, H_face_frames do apply(); advance_frame() end
+                  held.right = false; held.B = true
+                  apply(); advance_frame()
+                  held.B = false
+                  local H_edge_whack = memory.readbyte(0x607)
+                  local H_edge_hit_x_hi = 0
+                  local H_edge_hit_x_lo = 0
+                  local H_edge_hit_y_hi = 0
+                  local H_edge_hit_y_lo = 0
+                  for _ = 1, 24 do
+                    apply(); advance_frame()
+                    local H_edge_observed = memory.readbyte(0x607)
+                    if H_edge_observed ~= 2 then
+                      H_edge_whack = H_edge_observed
+                    end
+                    if memory.readbyte(0x528) ~= 0
+                        or memory.readbyte(0x529) ~= 0
+                        or memory.readbyte(0x52A) ~= 0
+                        or memory.readbyte(0x52B) ~= 0 then
+                      H_edge_hit_x_hi = memory.readbyte(0x528)
+                      H_edge_hit_x_lo = memory.readbyte(0x529)
+                      H_edge_hit_y_hi = memory.readbyte(0x52A)
+                      H_edge_hit_y_lo = memory.readbyte(0x52B)
+                    end
+                  end
+                  log_state(
+                    "post_probe_world_8_fortress_H_edge_tail_grid_result",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 walk_frames="
+                      .. tostring(H_walk_frames)
+                      .. " face_frames=" .. tostring(H_face_frames)
+                      .. " pre_x=" .. tostring(H_edge_before.x)
+                      .. " pre_y=" .. tostring(H_edge_before.y)
+                      .. " final_x=" .. tostring(mario().x)
+                      .. " final_y=" .. tostring(mario().y)
+                      .. " whack_tile=" .. tostring(H_edge_whack)
+                      .. " block_change_x_hi=" .. tostring(H_edge_hit_x_hi)
+                      .. " block_change_x_lo=" .. tostring(H_edge_hit_x_lo)
+                      .. " block_change_y_hi=" .. tostring(H_edge_hit_y_hi)
+                      .. " block_change_y_lo=" .. tostring(H_edge_hit_y_lo)
+                  )
+                end
+              end
+              return
+            end
+            if discovery_mode
+                and os.getenv("SMB3_WORLD_8_H_TAIL_GRID") == "1" then
+              local H_tail_checkpoint = savestate.create()
+              savestate.save(H_tail_checkpoint)
+              for H_target = 480, 620, 4 do
+                for _, H_face in ipairs({"left", "right"}) do
+                  for _, H_jump_frames in ipairs({0, 2, 4, 6, 8, 10, 12}) do
+                  savestate.load(H_tail_checkpoint)
+                  for _ = 1, 90 do
+                    local H_grid_m = mario()
+                    held.A = false; held.B = false; held.down = false
+                    held.up = false
+                    held.left = H_grid_m.x > H_target
+                    held.right = H_grid_m.x < H_target
+                    apply(); advance_frame()
+                    if math.abs(mario().x - H_target) <= 1
+                        and math.abs(memory.readbytesigned(0xBD)) <= 2 then
+                      break
+                    end
+                  end
+                  held.left = H_face == "left"
+                  held.right = H_face == "right"
+                  held.A = false; held.B = false
+                  for _ = 1, 3 do apply(); advance_frame() end
+                  held.left = false; held.right = false
+                  held.A = H_jump_frames > 0
+                  for _ = 1, H_jump_frames do apply(); advance_frame() end
+                  held.A = false; held.B = true
+                  apply(); advance_frame()
+                  held.B = false
+                  local H_grid_whack = memory.readbyte(0x607)
+                  local H_grid_change_x_hi = memory.readbyte(0x528)
+                  local H_grid_change_x_lo = memory.readbyte(0x529)
+                  local H_grid_change_y_hi = memory.readbyte(0x52A)
+                  local H_grid_change_y_lo = memory.readbyte(0x52B)
+                  for _ = 1, 24 do
+                    apply(); advance_frame()
+                    local H_observed_whack = memory.readbyte(0x607)
+                    if H_observed_whack ~= 2 then
+                      H_grid_whack = H_observed_whack
+                    end
+                    if memory.readbyte(0x528) ~= 0
+                        or memory.readbyte(0x529) ~= 0
+                        or memory.readbyte(0x52A) ~= 0
+                        or memory.readbyte(0x52B) ~= 0 then
+                      H_grid_change_x_hi = memory.readbyte(0x528)
+                      H_grid_change_x_lo = memory.readbyte(0x529)
+                      H_grid_change_y_hi = memory.readbyte(0x52A)
+                      H_grid_change_y_lo = memory.readbyte(0x52B)
+                    end
+                  end
+                  log_state(
+                    "post_probe_world_8_fortress_H_tail_grid_result",
+                    "review_only=1 promotable=0 counts_toward_reliability=0 target_x="
+                      .. tostring(H_target)
+                      .. " settled_x=" .. tostring(mario().x)
+                      .. " initial_face=" .. H_face
+                      .. " jump_frames=" .. tostring(H_jump_frames)
+                      .. " whack_tile=" .. tostring(H_grid_whack)
+                      .. " block_change_x_hi=" .. tostring(H_grid_change_x_hi)
+                      .. " block_change_x_lo=" .. tostring(H_grid_change_x_lo)
+                      .. " block_change_y_hi=" .. tostring(H_grid_change_y_hi)
+                      .. " block_change_y_lo=" .. tostring(H_grid_change_y_lo)
+                  )
+                  end
+                end
+              end
+              return
+            end
             if discovery_mode
                 and os.getenv("SMB3_WORLD_8_H_SEARCH") == "1" then
               local H_search_checkpoint = savestate.create()
@@ -12477,9 +13033,9 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.up = direct_m.x >= 538 and direct_m.x <= 558
               and direct_m.air == 0
           elseif direct_top_phase == 1 then
-            if direct_m.x < 528 then
+            if direct_m.x < 546 then
               held.right = true
-            elseif direct_m.x > 530
+            elseif direct_m.x > 548
                 or memory.readbytesigned(0xBD) > 2 then
               held.left = true
             elseif memory.readbytesigned(0xBD) < -2 then
@@ -12490,9 +13046,10 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             end
           elseif direct_top_phase == 2 then
             direct_top_frames = direct_top_frames + 1
-            -- The attack animation reverses Mario before its block-hit frame.
-            -- Begin facing left so frame $09 samples the tail six pixels to
-            -- Mario's left, directly inside the orange H brick.
+            -- The attack animation reverses Mario at counter $0B, before the
+            -- block collision at counter $09. Begin facing left from the cyan
+            -- support so that collision samples six pixels back into the
+            -- adjacent orange H brick.
             held.left = direct_top_frames <= 2
             if direct_top_frames >= 6 then
               direct_top_phase = 3
@@ -12513,6 +13070,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
                   .. " form=" .. tostring(memory.readbyte(0xED))
                   .. " tail_timer=" .. tostring(memory.readbyte(0x517))
                   .. " flip_bits=" .. tostring(memory.readbyte(0xEF))
+                  .. " whack_tile=" .. tostring(memory.readbyte(0x607))
                   .. " pad_input=" .. tostring(memory.readbyte(0x16))
                   .. " pad_holding=" .. tostring(memory.readbyte(0x17))
               )
@@ -12556,7 +13114,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             direct_H_phase_frames = direct_H_phase_frames + 1
             held.right = true
             held.B = true
-            held.A = direct_m.x >= 450
+            held.A = not direct_under_H_route and direct_m.x >= 450
           elseif direct_H_approach == 4 then
             direct_H_phase_frames = direct_H_phase_frames + 1
             held.left = memory.readbytesigned(0xBD) > 1
