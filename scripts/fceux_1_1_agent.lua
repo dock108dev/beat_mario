@@ -12610,7 +12610,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
       local actual_last_signature = ""
       local actual_last_entry_id = memory.readbyte(0x1E)
       do
-        do
+        if discovery_mode
+            and os.getenv("SMB3_WORLD_8_H_DIRECT_ROUTE") == "1" then
         -- The final stored Leaf is applied immediately before this stage.
         -- Follow the researched H route: reach its roof, wait out the left
         -- Roto-Disc, jump to the cyan block on the right of the orange brick,
@@ -13201,8 +13202,28 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local h_small_seen = false
         local h_damage_recovery = 0
         local h_small_jump_elapsed = -1
+        local A_retry_phase = 0
+        local A_approach_phase = 0
+        local leaf_buffer_phase = 0
+        local leaf_restart_frame = 0
+        local leaf_restart_wait = tonumber(
+          os.getenv("SMB3_WORLD_8_LEAF_RESTART_WAIT") or "0"
+        ) or 0
         for h_frame = 1, 1500 do
           local h_m = mario()
+          if leaf_buffer_phase == 0 and memory.readbyte(0xED) == 3
+              and h_m.air == 0 and h_m.y == 304
+              and h_m.x >= 140 and h_m.x <= 180 then
+            leaf_buffer_phase = 1
+          end
+          if leaf_buffer_phase == 1 and memory.readbyte(0xED) == 1 then
+            leaf_buffer_phase = 2
+          end
+          if leaf_buffer_phase == 3 then
+            leaf_restart_frame = leaf_restart_frame + 1
+          end
+          local A_route_clock = leaf_buffer_phase == 3
+            and leaf_restart_frame or h_frame
           if memory.readbyte(0xED) == 0 and not h_small_seen then
             h_small_seen = true
             h_damage_recovery = 60
@@ -13215,6 +13236,73 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
                 .. " start_form=" .. tostring(h_door_start_form)
                 .. " current_form=" .. tostring(memory.readbyte(0xED))
             )
+            return
+          end
+          if discovery_mode
+              and os.getenv("SMB3_WORLD_8_A_DOOR_SEARCH") == "1"
+              and not A_door_alignment_search_done
+              and h_m.x >= 388 and h_m.x <= 410
+              and h_m.y >= 276 and h_m.y <= 310 then
+            A_door_alignment_search_done = true
+            local A_checkpoint = savestate.create()
+            savestate.save(A_checkpoint)
+            local A_found = nil
+            for A_target = 384, 464, 2 do
+              if A_found == nil then
+                for A_pre_frames = 0, 20, 2 do
+                  if A_found == nil then
+                    for _, A_jump_frames in ipairs({0, 6, 12, 24, 40}) do
+                      if A_found == nil then
+                        savestate.load(A_checkpoint)
+                        for _ = 1, A_pre_frames do
+                          local A_m = mario()
+                          held.A = false; held.B = false; held.up = false
+                          held.down = false
+                          held.left = A_m.x > A_target
+                          held.right = A_m.x < A_target
+                          apply(); advance_frame()
+                        end
+                        local A_transitioned = false
+                        for A_action_frame = 1, 120 do
+                          local A_m = mario()
+                          held.up = true; held.down = false; held.B = false
+                          held.left = A_m.x > A_target
+                          held.right = A_m.x < A_target
+                          held.A = A_action_frame <= A_jump_frames
+                          apply(); advance_frame()
+                          if mario().y == 0 then
+                            A_transitioned = true
+                            break
+                          end
+                        end
+                        if A_transitioned then
+                          A_found = {
+                            target = A_target,
+                            pre_frames = A_pre_frames,
+                            jump_frames = A_jump_frames,
+                          }
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            if A_found ~= nil then
+              log_state(
+                "post_probe_world_8_fortress_A_door_search_found",
+                "review_only=1 promotable=0 counts_toward_reliability=0 target_x="
+                  .. tostring(A_found.target)
+                  .. " pre_frames=" .. tostring(A_found.pre_frames)
+                  .. " jump_frames=" .. tostring(A_found.jump_frames)
+              )
+            else
+              savestate.load(A_checkpoint)
+              log_state(
+                "post_probe_world_8_fortress_A_door_search_failed",
+                "failure_classification=bounded_door_input_search_exhausted review_only=1 promotable=0 counts_toward_reliability=0"
+              )
+            end
             return
           end
           if discovery_mode and on_A_brick and attempting_A_door
@@ -13330,7 +13418,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           end
           h_door_max_x = math.max(h_door_max_x, h_m.x)
           local h_hazard = nearest_enemy_between(h_m, -8, 112)
-          if not on_A_brick and h_m.x >= 365 and h_m.x <= 400
+          if os.getenv("SMB3_WORLD_8_A_PLATFORM_EXPERIMENT") == "1"
+              and not on_A_brick and h_m.x >= 365 and h_m.x <= 400
               and h_m.y >= 300 and h_m.y <= 308 and h_m.air == 0 then
             on_A_brick = true
             A_brick_jump_elapsed = 0
@@ -13340,7 +13429,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             reached_A_ledge = true
             attempting_A_door = true
           end
-          if on_A_brick and h_m.y >= 320 then
+          if on_A_brick and h_m.y >= 368 then
             on_A_brick = false
           end
           if reached_A_ledge and h_m.y >= 320 then
@@ -13348,17 +13437,105 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
           end
           held.down = false
           held.up = false
-          if on_A_brick then
+          if os.getenv("SMB3_WORLD_8_A_PLATFORM_EXPERIMENT") == "1"
+              and A_approach_phase == 0 and not on_A_brick
+              and h_m.x >= 335 and h_m.x < 410 and h_m.y < 350 then
+            A_approach_phase = 1
+          end
+          if os.getenv("SMB3_WORLD_8_A_PLATFORM_EXPERIMENT") == "1"
+              and A_retry_phase == 0 and not on_A_brick
+              and h_m.y >= 315
+              and h_m.x >= 425 and h_m.x <= 455 then
+            A_retry_phase = 1
+          end
+          if leaf_buffer_phase == 1 then
+            -- Spend only the raccoon layer on the first Roto-Disc.  Big Mario
+            -- follows the previously observed door-A trajectory exactly.
+            held.B = false
+            held.A = false
+            held.left = false
+            held.right = true
+          elseif leaf_buffer_phase == 2 then
+            held.B = true
+            held.left = true
+            held.right = false
+            held.A = leaf_restart_frame % 66 < 42
+            leaf_restart_frame = leaf_restart_frame + 1
+            if h_m.x <= 24 and h_m.air == 0 then
+              leaf_buffer_phase = leaf_restart_wait > 0 and 4 or 3
+              leaf_restart_frame = 0
+            end
+          elseif leaf_buffer_phase == 4 then
+            held.B = false
+            held.A = false
+            held.left = false
+            held.right = false
+            leaf_restart_wait = leaf_restart_wait - 1
+            if leaf_restart_wait <= 0 then
+              leaf_buffer_phase = 3
+              leaf_restart_frame = 0
+            end
+          elseif A_approach_phase == 1 and not on_A_brick then
+            -- Preserve the opening's running momentum while descending onto
+            -- the orange brick immediately left of door A, then jump on the
+            -- first grounded frame.  The brick is too narrow for a new run-up.
+            held.B = true
+            held.A = false
+            held.left = false
+            held.right = true
+            if h_m.air == 0 and h_m.y >= 296 and h_m.y <= 312
+                and h_m.x >= 354 and h_m.x <= 386 then
+              on_A_brick = true
+              attempting_A_door = true
+              A_brick_jump_elapsed = 0
+              A_approach_phase = 2
+            end
+          elseif A_retry_phase == 1 then
+            held.B = false
+            held.A = false
+            held.left = h_m.x > 414
+            held.right = h_m.x < 410
+            if h_m.air == 0 and math.abs(memory.readbytesigned(0xBD)) <= 1
+                and h_m.x >= 408 and h_m.x <= 416 then
+              A_retry_phase = 2
+            end
+          elseif A_retry_phase == 2 then
+            held.B = false
+            held.left = false
+            held.right = true
+            held.A = h_m.x < 458
+            if h_m.x >= 450 then
+              A_retry_phase = 3
+            end
+          elseif A_retry_phase == 3 then
+            held.B = false
+            held.A = false
+            held.left = h_m.x > 464
+            held.right = h_m.x < 458
+            held.up = h_m.air == 0 and h_m.x >= 452 and h_m.x <= 466
+              and h_frame % 4 < 2
+          elseif on_A_brick then
             -- The researched optional route jumps from this orange brick
             -- into the front of the hanging A door.  A short hop prevents the
             -- accepted opening's full-height arc from landing on its roof.
-            held.B = false
-            held.left = h_m.x > 446
-            held.right = h_m.x < 446
+            held.B = true
+            held.left = h_m.x > 472
+            held.right = h_m.x < 472
             held.A = A_brick_jump_elapsed >= 0
-              and A_brick_jump_elapsed < 8
-            held.down = h_m.x >= 442 and h_m.x <= 450
+              and A_brick_jump_elapsed < 40
+            held.down = false
+            held.up = h_m.x >= 415 and h_m.x <= 436
+              and h_m.y >= 240 and h_m.y <= 330
+              and h_frame % 2 == 0
             A_brick_jump_elapsed = A_brick_jump_elapsed + 1
+            if discovery_mode then
+              log_state(
+                "post_probe_world_8_fortress_A_door_jump_tick",
+                "jump_elapsed=" .. tostring(A_brick_jump_elapsed)
+                  .. " hold_up=" .. tostring(held.up and 1 or 0)
+                  .. " pad_input=" .. tostring(memory.readbyte(0x16))
+              )
+            end
           elseif reached_A_ledge and not dropped_from_A_ledge then
             -- The first opening rhythm already arcs across the hanging A
             -- door.  Stop jumping, center on x=448, and hold Up while Mario
@@ -13367,7 +13544,9 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.left = h_m.x > 446
             held.right = h_m.x < 446
             held.A = false
-            held.down = h_m.x >= 442 and h_m.x <= 450
+            held.down = false
+            held.up = h_m.x >= 440 and h_m.x <= 452
+              and h_m.air == 0 and h_frame % 2 == 0
           elseif dropped_from_A_ledge and attempting_A_door
               and not lower_roto_launch_ready then
             -- Wait left of the lower Roto-Disc until its orb has passed below
@@ -13474,8 +13653,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.left = false
             held.right = true
             held.B = true
-            held.A = h_frame % 66 < 42
-          elseif h_m.x < 378 then
+            held.A = A_route_clock % 66 < 42
+          elseif h_m.x < 365 then
             held.left = false
             held.right = true
             held.B = true
@@ -13486,12 +13665,16 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.B = true
             -- Fresh jump edges move off the elevated door platform and smash
             -- the first blocking brick wall; continuously held A cannot.
-            held.A = h_frame % 54 < 34
+            held.A = A_route_clock % 54 < 34
+            -- Door A hangs above the opening brick.  Up must already be held
+            -- while Mario crosses its doorway band during the first arc.
+            held.up = h_m.x >= 390 and h_m.x <= 456
+              and h_m.y >= 260 and h_m.y <= 330
           else
             held.B = true
             held.right = true
             held.left = false
-            held.A = h_frame % 72 < 42
+            held.A = A_route_clock % 72 < 42
           end
           if discovery_mode and h_frame % 30 == 0 then
             log_state(
