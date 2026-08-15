@@ -11602,9 +11602,7 @@ local function run_world_8_hand_traps_jet_extension()
         )
       end
     end
-    if goal ~= nil and not world_8_1_goal_touched
-        and not (world_8_fortress_super_tanks_mode
-          and world_8_1_final_gap_state >= 7 and m.x >= 2400) then
+    if goal ~= nil and not world_8_1_goal_touched then
       world_8_1_goal_jump_cycle = (world_8_1_goal_jump_cycle + 1) % 60
       held.up = false
       held.down = false
@@ -11613,45 +11611,6 @@ local function run_world_8_hand_traps_jet_extension()
       held.B = true
       held.A = world_8_1_goal_jump_cycle >= 5
         and world_8_1_goal_jump_cycle <= 50
-    end
-    if world_8_fortress_super_tanks_mode
-        and world_8_1_final_gap_state >= 7
-        and m.x >= 2400
-        and not world_8_1_goal_touched then
-      held.up = false
-      held.down = false
-      if world_8_1_goal_jump_cycle < 100 then
-        -- The cumulative World 8 contract enters 8-1 with two cards and must
-        -- preserve the established Star-card clear.  Settle directly beneath
-        -- the roulette, observe its real animation frame, and start the
-        -- vertical jump late in the Star phase instead of depending on a
-        -- global-frame delay.
-        held.left = memory.readbytesigned(0xBD) > 4 and m.x >= 2580
-          or (math.abs(memory.readbytesigned(0xBD)) <= 4 and m.x > 2686)
-        held.right = memory.readbytesigned(0xBD) < -4
-          or (math.abs(memory.readbytesigned(0xBD)) <= 4 and m.x < 2680)
-        held.B = false
-        held.A = false
-        if goal ~= nil and m.x >= 2680 and m.x <= 2686
-            and math.abs(memory.readbytesigned(0xBD)) <= 4
-            and memory.readbyte(0x668 + goal.slot) == 2 then
-          world_8_1_goal_jump_cycle = world_8_1_goal_jump_cycle + 1
-        else
-          world_8_1_goal_jump_cycle = 0
-        end
-        if world_8_1_goal_jump_cycle >= 5 then
-          world_8_1_goal_jump_cycle = 100
-        end
-      else
-        world_8_1_goal_jump_cycle = world_8_1_goal_jump_cycle + 1
-        held.left = m.x > 2686
-        held.right = m.x < 2680
-        held.B = false
-        held.A = world_8_1_goal_jump_cycle <= 145
-        if world_8_1_goal_jump_cycle > 145 and m.air == 0 then
-          world_8_1_goal_jump_cycle = 0
-        end
-      end
     end
     apply()
     advance_frame()
@@ -12496,9 +12455,9 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         return
       end
       if not discovery_mode then
-        -- Map transitions may consume a different number of frames after the
-        -- observer-based 8-1 Star-card clear.  Normalize the actual Fortress
-        -- A press to the accepted game-owned hazard phase on the safe map.
+        -- Normalize the actual Fortress A press on the safe map.  The
+        -- accepted route enters object set 2 at global phase 196, and the
+        -- game-owned transition from this A press consumes 53 frames.
         advance(
           (143 - (movie.framecount() % 256) + 256) % 256,
           "post_probe_world_8_fortress_actual_entry_phase_alignment"
@@ -13151,6 +13110,7 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local A_door_trigger_grid_done = false
         local main_route_climb_phase = 0
         local main_after_A_frames = 0
+        local main_upper_column_above = false
         local D_left_brick_cycles = 0
         local D_left_strike_armed = false
         local D_room_launched = false
@@ -13189,12 +13149,11 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
         local leaf_restart_frame = 0
         local leaf_route_grid_done = false
         local leaf_restart_wait = tonumber(
-          os.getenv("SMB3_WORLD_8_LEAF_RESTART_WAIT")
-            or (discovery_mode and "0" or "45")
+          os.getenv("SMB3_WORLD_8_LEAF_RESTART_WAIT") or "0"
         ) or 0
         local leaf_route_offset = tonumber(
           os.getenv("SMB3_WORLD_8_LEAF_ROUTE_OFFSET")
-            or "0"
+            or (discovery_mode and "0" or "34")
         ) or 0
         for h_frame = 1, 12000 do
           local h_m = mario()
@@ -13875,7 +13834,31 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               main_after_A_frames = main_after_A_frames + 1
               held.A = main_after_A_frames <= 70
               held.B = true; held.left = false; held.right = true
-              if main_after_A_frames > 45 and h_m.air == 0
+              if main_after_A_frames > 20 and h_m.air == 0
+                  and h_m.x >= 430 and h_m.x < 495 and h_m.y <= 320 then
+                -- The long opening trajectory can settle on the short ledge
+                -- instead of clearing it.  Observe that landing and re-arm a
+                -- fresh jump rather than walking off into the Roto-Disc.
+                main_route_climb_phase = 37
+                main_after_A_frames = 0
+              elseif main_after_A_frames > 45 and h_m.air == 0
+                  and h_m.x >= 495 then
+                main_route_climb_phase = 4
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 37 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = false; held.B = false
+              held.left = false; held.right = false
+              if main_after_A_frames >= 3 then
+                main_route_climb_phase = 38
+                main_after_A_frames = 0
+              end
+            elseif main_route_climb_phase == 38 then
+              main_after_A_frames = main_after_A_frames + 1
+              held.A = main_after_A_frames % 60 < 42
+              held.B = true; held.left = false; held.right = true
+              if main_after_A_frames > 42 and h_m.air == 0
                   and h_m.x >= 495 then
                 main_route_climb_phase = 4
                 main_after_A_frames = 0
@@ -13936,9 +13919,12 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               end
             elseif main_route_climb_phase == 9 then
               main_after_A_frames = main_after_A_frames + 1
-              held.A = main_after_A_frames <= 45; held.B = true
-              -- Brake back over the narrow column instead of overshooting it
-              -- into the dead-end wall to the right.
+              -- Retry with fresh jump edges until the game-owned upper-column
+              -- landing is actually observed; one missed arc must not leave
+              -- the controller holding Left on the floor forever.
+              held.A = main_after_A_frames % 60 < 42; held.B = true
+              -- Brake early enough to shed the opening run speed over the
+              -- narrow upper column instead of carrying past its right edge.
               held.left = h_m.x >= 706; held.right = h_m.x < 706
               if main_after_A_frames > 45 and h_m.air == 0
                   and h_m.x >= 690 and h_m.x <= 730 and h_m.y <= 336 then
@@ -13949,14 +13935,28 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               main_after_A_frames = main_after_A_frames + 1
               held.A = false; held.B = false
               held.left = false; held.right = false
-              if main_after_A_frames >= 1 then
+              if main_after_A_frames >= 4 then
                 main_route_climb_phase = 11
                 main_after_A_frames = 0
               end
             elseif main_route_climb_phase == 11 then
               main_after_A_frames = main_after_A_frames + 1
-              held.A = main_after_A_frames <= 42; held.B = true
-              held.left = h_m.x > 654; held.right = h_m.x < 650
+              -- Keep issuing fresh jumps until the upper-left platform
+              -- landing is observed; hazard knockback can invalidate the
+              -- first arc without invalidating the route.
+              held.A = main_after_A_frames % 60 < 42; held.B = true
+              if h_m.y <= 304 then
+                main_upper_column_above = true
+              elseif h_m.air == 0 and h_m.y >= 336 then
+                main_upper_column_above = false
+              end
+              if main_upper_column_above then
+                held.left = h_m.x > 670; held.right = h_m.x < 666
+              else
+                -- Rise outside the upper platform's right edge.  Moving left
+                -- before this observation collides with its underside.
+                held.left = h_m.x > 710; held.right = h_m.x < 706
+              end
               if main_after_A_frames > 42 and h_m.air == 0
                   and h_m.x >= 640 and h_m.x <= 680 and h_m.y <= 304 then
                 main_after_A_frames = 0
@@ -14207,7 +14207,8 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
               main_after_A_frames = main_after_A_frames + 1
               held.A = true; held.B = main_after_A_frames > 24
               held.down = false; held.left = true; held.right = false
-              if h_m.x <= 852 and h_m.y <= 336 and h_m.air == 0 then
+              if h_m.x >= 830 and h_m.x <= 852
+                  and h_m.y <= 336 and h_m.air == 0 then
                 main_route_climb_phase = 41
                 main_after_A_frames = 0
                 log_state(
@@ -15890,14 +15891,11 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             if main_route_climb_phase < 2 then held.up = false end
           elseif leaf_buffer_phase == 1 then
             -- Spend only the raccoon layer on the first Roto-Disc.  Big Mario
-            -- uses it as the intended damage buffer.  Brake from the observed
-            -- collision object instead of relying on a one-pixel trajectory;
-            -- this keeps the knockback above the safe upper platform.
+            -- follows the previously observed door-A trajectory exactly.
             held.B = false
             held.A = false
-            held.left = h_hazard ~= nil and h_hazard.id == 90
-              and h_hazard.dx <= 28
-            held.right = not held.left
+            held.left = false
+            held.right = true
           elseif leaf_buffer_phase == 2 then
             held.B = true
             held.left = true
@@ -16012,28 +16010,6 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
                 leaf_restart_frame = 0
               end
             end
-          elseif leaf_buffer_phase == 3 and leaf_restart_wait > 0 then
-            leaf_restart_wait = leaf_restart_wait - 1
-            held.B = false
-            held.A = false
-            held.left = h_m.x > 240
-            held.right = h_m.x < 236
-            if h_m.x >= 236 and h_m.x <= 244 and h_hazard ~= nil
-                and h_hazard.id == 90 and h_hazard.dy <= -60
-                and memory.readbytesigned(0xCF + h_hazard.slot) > 0 then
-              leaf_restart_wait = 0
-            end
-          elseif leaf_buffer_phase == 3 and h_hazard ~= nil
-              and h_hazard.id == 90 and h_m.x >= 240 and h_m.x < 350
-              and math.abs(h_hazard.dx) <= 32
-              and h_hazard.dy >= -80 and h_hazard.dy <= 40 then
-            -- Pause on the solid middle floor when the buffered bouncing
-            -- hazard re-enters Mario's lane during the second pass.
-            leaf_restart_wait = 600
-            held.B = false
-            held.A = false
-            held.left = true
-            held.right = false
           elseif A_approach_phase == 1 and not on_A_brick then
             -- Preserve the opening's running momentum while descending onto
             -- the orange brick immediately left of door A, then jump on the
@@ -16304,13 +16280,9 @@ run_world_8_fortress_super_tanks_extension = function(discovery_mode)
             held.left = false
             held.A = A_route_clock % 72 < 42
           end
-          if (discovery_mode
-                or os.getenv("BEAT_MARIO_FORTRESS_TRACE") == "1")
-              and h_frame % 15 == 0 then
+          if discovery_mode and h_frame % 30 == 0 then
             log_state(
-              discovery_mode
-                  and "post_probe_world_8_fortress_H_door_tick"
-                or "diagnostic_world_8_fortress_route_tick",
+              "post_probe_world_8_fortress_H_door_tick",
               "target=researched_H_door x=" .. tostring(h_m.x)
                 .. " y=" .. tostring(h_m.y)
                 .. " max_x=" .. tostring(h_door_max_x)

@@ -420,7 +420,7 @@ def _world_8_super_tanks_lines() -> list[str]:
         "mario_alive=1 player_is_dying=0 "
         "evidence=game_owned_super_tanks_return_map_transition",
         "frame=266 event=post_probe_world_8_super_tanks_post_clear "
-        "world_number=7 object_set=0 map_page=2 map_cursor_x=96 map_cursor_y=144 "
+        "world_number=7 object_set=0 map_page=3 map_cursor_x=96 map_cursor_y=112 "
         "bowser_castle_accessible=1 bowser_castle_entered=0 stable_frames=180 "
         "evidence=stable_world_8_map_with_bowser_castle_accessible",
     ]
