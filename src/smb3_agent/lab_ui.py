@@ -95,6 +95,8 @@ LOCAL_ASSET_TYPES = {
 LOGGER = logging.getLogger(__name__)
 SUPPORTED_SPEEDS = ("1", "2", "4", "10", "25", "50", "100")
 SUPPORTED_ATTEMPTS = ("1", "3", "5", "10")
+
+
 class LabUiError(ValueError):
     pass
 
@@ -121,7 +123,7 @@ def run_lab_ui_server(host: str = "127.0.0.1", port: int = 8765, *, open_browser
         format="%(asctime)s level=%(levelname)s logger=%(name)s message=%(message)s",
     )
     server = _new_lab_ui_server(host, port)
-    url = f"http://{host}:{server.server_port}"
+    url = _lab_ui_url(host, server.server_port)
     print(f"lab_ui_url={url}")
     if open_browser:
         webbrowser.open(url)
@@ -131,6 +133,12 @@ def run_lab_ui_server(host: str = "127.0.0.1", port: int = 8765, *, open_browser
         print("lab_ui_stopped=true")
     finally:
         server.server_close()
+
+
+def _lab_ui_url(host: str, port: int) -> str:
+    # IPv6 literals require brackets when used as the host portion of a URL.
+    url_host = f"[{host}]" if ":" in host else host
+    return f"http://{url_host}:{port}"
 
 
 def _new_lab_ui_server(host: str, port: int) -> ThreadingHTTPServer:

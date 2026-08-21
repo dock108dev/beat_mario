@@ -15,11 +15,14 @@ The project CLI is available through the environment interpreter:
 .venv/bin/python -m smb3_agent --help
 ```
 
-`SMB3_GAME_FILE` is the only general operator environment variable. It points
-to a local game file for live commands. Product preset variables are internal
-execution policy defined by `src/smb3_agent/presets.py`; do not export route
-tuning variables for authoritative runs. Route Lab needs no configuration and
-binds to loopback by default.
+`SMB3_GAME_FILE` is the only operator-facing runtime environment variable. It
+points to a local game file for live commands; an explicit `--game-file` takes
+precedence. The validation script also accepts `PYTHON` solely to select its
+interpreter. Product preset variables are internal execution policy defined by
+`src/smb3_agent/presets.py`; do not export route tuning variables for
+authoritative runs. Route Lab needs no configuration and binds to loopback by
+default. See [Runtime, configuration, and data](runtime-and-configuration.md)
+for the complete boundary.
 
 ## Repository layout
 

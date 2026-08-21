@@ -112,11 +112,13 @@ Executable route changes use only the normalized route-patch lifecycle:
 Start with [the documentation index](docs/README.md). Key references are:
 
 - [Development and repository structure](docs/development.md)
+- [Runtime, configuration, and data](docs/runtime-and-configuration.md)
 - [Single sources of truth](docs/ssot.md)
 - [Goal contracts](docs/goal-contract.md)
 - [Route status and accepted evidence](docs/route-status.md)
 - [Route patch schema](docs/route-patch-schema.md)
 - [Agent architecture](docs/agent-architecture.md)
+- [Known limitations](docs/known-limitations.md)
 
 ## Working rules
 

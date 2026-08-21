@@ -14,6 +14,7 @@ from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.lab import add_batch_notes_to_latest, build_issue_ledger_latest, start_session
 from smb3_agent.lab_ui import (
     _Handler,
+    _lab_ui_url,
     _location_url,
     _new_lab_ui_server,
     _selected_location,
@@ -23,6 +24,18 @@ from smb3_agent.lab_ui import (
     render_lab_ui,
     run_lab_ui_server,
 )
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("127.0.0.1", "http://127.0.0.1:8765"),
+        ("localhost", "http://localhost:8765"),
+        ("::1", "http://[::1]:8765"),
+    ],
+)
+def test_route_lab_formats_loopback_urls(host: str, expected: str) -> None:
+    assert _lab_ui_url(host, 8765) == expected
 
 
 def test_route_lab_refuses_non_loopback_bind() -> None:

@@ -7,6 +7,8 @@ flows. The documents below provide implementation and operating detail.
 
 - [Development and repository structure](development.md): layout, entry points,
   environment, validation, and intentionally large files.
+- [Runtime, configuration, and data](runtime-and-configuration.md): process
+  model, settings, integrations, persistence, and deployment boundary.
 - [Single sources of truth](ssot.md): authoritative modules and retained paths.
 - [Agent architecture](agent-architecture.md): component responsibilities.
 - [Goal contracts](goal-contract.md): route composition and execution contract.
@@ -31,6 +33,8 @@ flows. The documents below provide implementation and operating detail.
 - [Security model](security.md): trust boundaries, implemented controls, and
   deferred security work.
 - [Local Route Lab assets](local-assets.md): optional ignored UI images.
+- [Known limitations](known-limitations.md): intentionally unsupported flows
+  and validation boundaries.
 
 Historical build plans and duplicated validation checklists are intentionally
 not retained. Current contracts, tests, source modules, and the canonical gate
