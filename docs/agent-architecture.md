@@ -18,7 +18,7 @@ User Directive
   -> Note Collector
   -> Issue Ledger
   -> Reviewer
-  -> Variant Manager
+  -> Route Patch Manager
   -> Codex Task Builder
   -> Knowledge Store
 ```
@@ -178,13 +178,15 @@ Responsibilities:
 - Preserve source note ids.
 - Feed variant proposal generation and UI summaries.
 
-## Variant Manager
+## Route Patch Manager
 
-The variant manager protects the known-working route while experiments happen.
+The route-patch manager protects the known-working route while experiments
+happen. `route_patch.py` is the only executable validation, promotion, and
+rollback implementation; descriptive proposals do not mutate route code.
 
 Responsibilities:
 
-- Create proposed variants from reviews.
+- Consume proposed variants and Codex task output from reviews.
 - Record parent variant, source session, source notes, and intended changes.
 - Normalize reviewed issues and Codex output into `beat-mario.route-patch/v1`.
 - Enforce path, file-type, hash, allowlist, size, and provenance policy before

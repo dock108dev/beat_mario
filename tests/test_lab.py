@@ -9,14 +9,10 @@ import yaml
 from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult
 from smb3_agent.lab import (
-    LabError,
     add_note_to_latest,
     build_issue_ledger_latest,
-    promote_variant,
     propose_variants_from_latest,
-    propose_variant_from_latest,
     review_latest_session,
-    run_variant,
     start_session,
     write_codex_task_latest,
     write_ui_summary_latest,
@@ -86,7 +82,7 @@ def test_lab_note_extracts_artifact_evidence_without_creating_actionable_issue(
     assert ledger.issues[0]["evidence_paths"] == ["artifacts/fceux/1_5_capture/plant_wait.png"]
 
 
-def test_lab_review_and_variant_proposal_link_note_evidence(
+def test_lab_review_and_variant_proposals_link_note_evidence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _prepare_lab(monkeypatch, tmp_path)
@@ -99,54 +95,14 @@ def test_lab_review_and_variant_proposal_link_note_evidence(
     add_note_to_latest("1-1 around 320 timer: falls into the hole and usually gets lucky")
 
     review = review_latest_session()
-    proposal = propose_variant_from_latest()
+    proposals = propose_variants_from_latest()
+    proposal = proposals.proposals[0]
 
     assert review.review["primary_segment"] == "world_1_1_clear"
     assert review.review["classification"] == "input_timing"
-    assert proposal.variant_id.startswith("world_1_1_clear_harden_320_")
-    assert proposal.proposal["source_notes"] == ["note_001"]
-    assert proposal.proposal["changes"][0]["file"] == "data/routes/scripts/world_1_1_clear_v0.yaml"
-
-
-def test_promote_variant_refuses_without_passing_validation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _prepare_lab(monkeypatch, tmp_path)
-    start_session(
-        "show me the route at 4x",
-        game_path=tmp_path / "local-game-file",
-        attempts=1,
-        artifacts_root=tmp_path / "artifacts/sessions",
-    )
-    add_note_to_latest("1-1 around 320 timer: falls into the hole and usually gets lucky")
-    proposal = propose_variant_from_latest()
-
-    with pytest.raises(LabError, match="Promotion refused"):
-        promote_variant(proposal.variant_id)
-
-
-def test_metadata_only_variant_cannot_validate_or_promote(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _prepare_lab(monkeypatch, tmp_path)
-    start_session(
-        "show me the route at 4x",
-        game_path=tmp_path / "local-game-file",
-        attempts=1,
-        artifacts_root=tmp_path / "artifacts/sessions",
-    )
-    add_note_to_latest("1-1 around 320 timer: falls into the hole and usually gets lucky")
-    proposal = propose_variant_from_latest()
-
-    with pytest.raises(LabError, match="Metadata-only variants cannot be validated"):
-        run_variant(
-            proposal.variant_id,
-            game_path=tmp_path / "local-game-file",
-            attempts=2,
-            artifacts_root=tmp_path / "artifacts/sessions",
-        )
-    with pytest.raises(LabError, match="metadata-only variants are not promotable"):
-        promote_variant(proposal.variant_id)
+    assert proposal["variant_id"].startswith("world_1_1_clear_harden_320_")
+    assert proposal["source_notes"] == ["note_001"]
+    assert proposal["changes"][0]["file"] == "data/routes/scripts/world_1_1_clear_v0.yaml"
 
 
 def test_issue_ledger_groups_batch_notes_and_prioritizes_recovery(

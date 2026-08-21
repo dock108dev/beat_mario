@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import http.client
+import logging
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,12 +13,278 @@ from smb3_agent.fceux_harness import AttemptSummary, BatchSummary
 from smb3_agent.goals import GoalRunResult, load_goal_contract
 from smb3_agent.lab import add_batch_notes_to_latest, build_issue_ledger_latest, start_session
 from smb3_agent.lab_ui import (
+    _Handler,
+    _location_url,
+    _new_lab_ui_server,
     _selected_location,
     _update_issue_latest,
     _update_observation_latest,
     build_control_panel_summary,
     render_lab_ui,
+    run_lab_ui_server,
 )
+
+
+def test_route_lab_refuses_non_loopback_bind() -> None:
+    with pytest.raises(ValueError, match="may bind only"):
+        run_lab_ui_server(host="0.0.0.0", port=0)
+
+
+def test_route_lab_rejects_malformed_form_and_logs_client_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with caplog.at_level(logging.WARNING, logger="smb3_agent.lab_ui"):
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", server.server_port, timeout=5
+            )
+            connection.putrequest("POST", "/notes")
+            connection.putheader("Content-Length", "invalid")
+            connection.endheaders()
+            response = connection.getresponse()
+            body = response.read().decode("utf-8")
+            connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 400
+    assert "Invalid Content-Length header" in body
+    assert "route_lab_request_failed" in caplog.text
+    assert "error_type=LabUiError" in caplog.text
+
+
+def test_route_lab_returns_generic_500_and_logs_unexpected_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def crash(_handler: _Handler) -> None:
+        raise RuntimeError("private unexpected detail")
+
+    monkeypatch.setattr(_Handler, "_handle_get", crash)
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with caplog.at_level(logging.ERROR, logger="smb3_agent.lab_ui"):
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", server.server_port, timeout=5
+            )
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            body = response.read().decode("utf-8")
+            connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 500
+    assert "Unexpected Route Lab failure" in body
+    assert "private unexpected detail" not in body
+    assert "RuntimeError: private unexpected detail" in caplog.text
+
+
+def test_route_lab_rejects_untrusted_host_and_missing_csrf() -> None:
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.putrequest("GET", "/api/summary", skip_host=True)
+        connection.putheader("Host", "attacker.example")
+        connection.endheaders()
+        host_response = connection.getresponse()
+        host_response.read()
+        connection.close()
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request(
+            "POST",
+            "/refresh",
+            body="",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        csrf_response = connection.getresponse()
+        csrf_body = csrf_response.read().decode("utf-8")
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert host_response.status == 403
+    assert csrf_response.status == 403
+    assert "Invalid or missing Route Lab CSRF token" in csrf_body
+
+
+def test_route_lab_sets_security_headers_and_renders_csrf_token() -> None:
+    csrf_token = "fixed-test-csrf-token"
+    html = render_lab_ui(csrf_token=csrf_token)
+
+    post_forms = html.count('<form method="post"')
+    assert post_forms >= 1
+    assert html.count(f'name="csrf_token" value="{csrf_token}"') == post_forms
+
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request("GET", "/api/summary")
+        response = connection.getresponse()
+        response.read()
+        headers = dict(response.getheaders())
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 200
+    assert headers["Content-Security-Policy"].startswith("default-src 'none'")
+    assert headers["Cache-Control"] == "no-store"
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    assert headers["X-Frame-Options"] == "DENY"
+
+
+def test_route_lab_rejects_wrong_content_type() -> None:
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request(
+            "POST",
+            "/refresh",
+            body='{"csrf_token":"unused"}',
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        body = response.read().decode("utf-8")
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 415
+    assert "application/x-www-form-urlencoded" in body
+
+
+def test_route_lab_rejects_overlapping_state_change() -> None:
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    action_lock = getattr(server, "action_lock")
+    action_lock.acquire()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request(
+            "POST",
+            "/refresh",
+            body=f"csrf_token={getattr(server, 'csrf_token')}",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response = connection.getresponse()
+        body = response.read().decode("utf-8")
+        connection.close()
+    finally:
+        action_lock.release()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 409
+    assert "Another Route Lab action is already running" in body
+
+
+def test_route_lab_serves_html_as_text_and_blocks_unsafe_artifact_type(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    artifacts.joinpath("report.html").write_text("<script>alert(1)</script>")
+    artifacts.joinpath("unsafe.svg").write_text("<svg></svg>")
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request("GET", "/artifacts/report.html")
+        html_response = connection.getresponse()
+        html_response.read()
+        html_content_type = html_response.getheader("Content-Type")
+        connection.close()
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request("GET", "/artifacts/unsafe.svg")
+        svg_response = connection.getresponse()
+        svg_response.read()
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert html_response.status == 200
+    assert html_content_type == "text/plain; charset=utf-8"
+    assert svg_response.status == 404
+
+
+def test_route_lab_rejects_oversized_artifact(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("smb3_agent.lab_ui.MAX_SERVED_FILE_BYTES", 4)
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    artifacts.joinpath("large.log").write_text("12345")
+    server = _new_lab_ui_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_port, timeout=5
+        )
+        connection.request("GET", "/artifacts/large.log")
+        response = connection.getresponse()
+        response.read()
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 413
+
+
+def test_location_url_percent_encodes_untrusted_parameters() -> None:
+    location = _location_url("route\r\nInjected: value", issue_id="issue/one")
+
+    assert "\r" not in location
+    assert "\n" not in location
+    assert "%0D%0A" in location
+    assert "issue%2Fone" in location
 
 
 def test_route_lab_renders_route_evidence_and_teaching_workflow(
@@ -425,6 +694,8 @@ def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     )
     fake_contract = SimpleNamespace(
         id="world_8_double_whistle",
+        display_name="World 8 Arrival",
+        display_subtitle="World 2-first double-whistle route to World 8",
         catalog_path=Path("data/segments/world_8_double_whistle.yaml"),
         segments=tuple(step.id for step in route_steps),
         route_steps=route_steps,
@@ -443,6 +714,10 @@ def _prepare_ui_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         }
     )
     monkeypatch.setattr("smb3_agent.lab_ui.load_goal_contract", lambda path: fake_contract)
+    monkeypatch.setattr(
+        "smb3_agent.lab_ui.load_product_goal_contracts",
+        lambda: (fake_contract,),
+    )
     monkeypatch.setattr("smb3_agent.lab_ui.resolve_goal_path", lambda goal: Path(f"data/goals/{goal}.yaml"))
     monkeypatch.setattr("smb3_agent.lab_ui.load_segment_catalog", lambda path: fake_catalog)
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import logging
 import os
 import subprocess
 import sys
 import threading
 from pathlib import Path
-from http.server import ThreadingHTTPServer
 from urllib.parse import urlencode
 
 import pytest
@@ -16,8 +16,10 @@ import yaml
 from smb3_agent.route_patch import (
     PATCH_SCHEMA_VERSION,
     RoutePatchError,
+    _remove_worktree,
     compare_route_patch,
     import_route_patch,
+    patch_summary_for_issue,
     prepare_route_patch,
     preview_route_patch,
     promote_route_patch,
@@ -25,7 +27,30 @@ from smb3_agent.route_patch import (
     rollback_route_patch,
     validate_route_patch,
 )
-from smb3_agent.lab_ui import _Handler, _route_patch_panel, run_patch_ui_action
+from smb3_agent.lab_ui import _new_lab_ui_server, _route_patch_panel, run_patch_ui_action
+
+
+def test_corrupt_patch_record_is_skipped_with_actionable_warning(
+    caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    repo, _, _ = _patch_fixture(tmp_path)
+    corrupt = repo / "artifacts/route-patches/corrupt-record/contract.yaml"
+    corrupt.parent.mkdir(parents=True)
+    corrupt.write_text("operations: [unterminated", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="smb3_agent.route_patch"):
+        summary = patch_summary_for_issue("missing-issue", repo_root=repo)
+
+    assert summary is None
+    assert "route_patch_record_skipped" in caplog.text
+    assert str(corrupt) in caplog.text
+
+
+def test_worktree_cleanup_refuses_current_directory(tmp_path: Path) -> None:
+    repo, _, _ = _patch_fixture(tmp_path)
+
+    with pytest.raises(RoutePatchError, match="unsafe worktree cleanup target"):
+        _remove_worktree(repo, Path("."))
 
 
 def test_disposable_patch_executes_candidate_promotes_and_rolls_back(tmp_path: Path) -> None:
@@ -277,6 +302,8 @@ def test_partial_promotion_failure_restores_all_files_atomically(tmp_path: Path)
         (repo / "artifacts/route-patches" / patch_id / "promotion-failure.yaml").read_text()
     )
     assert failure["restored_atomically"] is True
+    assert failure["exception"]["type"] == "OSError"
+    assert "injected partial-write failure" in failure["exception"]["traceback"]
 
 
 def test_documentation_only_patch_is_validatable_but_not_promotable(tmp_path: Path) -> None:
@@ -312,7 +339,7 @@ def test_cli_and_route_lab_http_actions_share_patch_backend_and_artifacts(
     patch_dir = repo / "artifacts/route-patches" / patch_id
 
     monkeypatch.chdir(repo)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = _new_lab_ui_server("127.0.0.1", 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -324,6 +351,7 @@ def test_cli_and_route_lab_http_actions_share_patch_backend_and_artifacts(
                 "issue_id": "fixture-issue",
                 "return_location": "fixture-location",
                 "return_goal": "world_8_double_whistle",
+                "csrf_token": getattr(server, "csrf_token"),
             }
         )
         connection.request(

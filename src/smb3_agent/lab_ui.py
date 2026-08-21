@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import html
 import json
-import mimetypes
+import logging
 import os
+import re
+import secrets
+import socket
 import subprocess
 import sys
+import threading
 import webbrowser
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 import yaml
 
@@ -28,6 +32,7 @@ from smb3_agent.goals import (
     GoalContract,
     GoalValidationError,
     load_goal_contract,
+    load_product_goal_contracts,
     resolve_goal_path,
 )
 from smb3_agent.segments import load_segment_catalog
@@ -51,26 +56,71 @@ WORLD_1_LOCATION_PATH = Path("data/worlds/world_1_locations.yaml")
 LAST_COMMAND_PATH = Path("artifacts/ui/last_command.yaml")
 LOCAL_ASSET_DIR = Path("public/assets/local")
 ARTIFACT_DIR = Path("artifacts")
+MAX_FORM_BYTES = 64 * 1024
+MAX_SERVED_FILE_BYTES = 50 * 1024 * 1024
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+POST_PATHS = frozenset(
+    {
+        "/notes",
+        "/observation-action",
+        "/issue-action",
+        "/refresh",
+        "/run",
+        "/test",
+        "/codex-task",
+        "/patch-action",
+    }
+)
+SAFE_INLINE_TYPES = {
+    ".diff": "text/plain; charset=utf-8",
+    ".gif": "image/gif",
+    ".html": "text/plain; charset=utf-8",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".json": "application/json; charset=utf-8",
+    ".log": "text/plain; charset=utf-8",
+    ".md": "text/plain; charset=utf-8",
+    ".patch": "text/plain; charset=utf-8",
+    ".png": "image/png",
+    ".txt": "text/plain; charset=utf-8",
+    ".webp": "image/webp",
+    ".yaml": "text/plain; charset=utf-8",
+    ".yml": "text/plain; charset=utf-8",
+}
+LOCAL_ASSET_TYPES = {
+    suffix: content_type
+    for suffix, content_type in SAFE_INLINE_TYPES.items()
+    if content_type.startswith("image/")
+}
+LOGGER = logging.getLogger(__name__)
 SUPPORTED_SPEEDS = ("1", "2", "4", "10", "25", "50", "100")
 SUPPORTED_ATTEMPTS = ("1", "3", "5", "10")
-LAB_GOALS = (
-    (ACTIVE_PRODUCT_GOAL_ID, "World 8 Arrival"),
-    ("world_8_big_tanks", "World 8 Big Tanks"),
-    ("world_8_battleships", "World 8-Battleships"),
-    ("world_8_hand_traps_jet", "World 8 Hand Traps + Jet"),
-    ("world_8_8_2", "World 8-1 + 8-2"),
-    ("world_8_super_tanks", "World 8 Fortress + Super Tanks"),
-    ("world_8_finish_game", "Bowser's Castle + Ending"),
-)
-LAB_GOAL_IDS = frozenset(goal_id for goal_id, _ in LAB_GOALS)
-
-
 class LabUiError(ValueError):
     pass
 
 
+class LabUiForbidden(LabUiError):
+    pass
+
+
+class LabUiConflict(LabUiError):
+    pass
+
+
+class LabUiUnsupportedMediaType(LabUiError):
+    pass
+
+
+class _ThreadingHTTPServerV6(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
 def run_lab_ui_server(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = False) -> None:
-    server = ThreadingHTTPServer((host, port), _Handler)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s level=%(levelname)s logger=%(name)s message=%(message)s",
+    )
+    server = _new_lab_ui_server(host, port)
     url = f"http://{host}:{server.server_port}"
     print(f"lab_ui_url={url}")
     if open_browser:
@@ -79,18 +129,41 @@ def run_lab_ui_server(host: str = "127.0.0.1", port: int = 8765, *, open_browser
         server.serve_forever()
     except KeyboardInterrupt:
         print("lab_ui_stopped=true")
+    finally:
+        server.server_close()
+
+
+def _new_lab_ui_server(host: str, port: int) -> ThreadingHTTPServer:
+    if host not in LOOPBACK_HOSTS:
+        raise LabUiError(
+            "Route Lab may bind only to 127.0.0.1, ::1, or localhost"
+        )
+    server_class = _ThreadingHTTPServerV6 if host == "::1" else ThreadingHTTPServer
+    server = server_class((host, port), _Handler)
+    setattr(server, "csrf_token", secrets.token_urlsafe(32))
+    setattr(server, "action_lock", threading.Lock())
+    return server
 
 
 class _Handler(BaseHTTPRequestHandler):
     server_version = "SMB3ControlPanel/0.2"
 
     def do_GET(self) -> None:
+        try:
+            self._validate_host()
+            self._handle_get()
+        except (GoalValidationError, LabError, LabUiError, RoutePatchError) as exc:
+            self._send_request_failure(exc)
+        except Exception:
+            self._send_internal_error()
+
+    def _handle_get(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
         if path == "/":
             query = parse_qs(parsed.query)
             goal_id = query.get("goal", [ACTIVE_PRODUCT_GOAL_ID])[0]
-            if goal_id not in LAB_GOAL_IDS:
+            if goal_id not in _product_goal_ids():
                 self._send_html(
                     render_error(f"Unsupported Route Lab goal: {goal_id}"),
                     status=HTTPStatus.BAD_REQUEST,
@@ -103,13 +176,14 @@ class _Handler(BaseHTTPRequestHandler):
                     selected_note_id=query.get("note", [""])[0] or None,
                     selected_issue_id=query.get("issue", [""])[0] or None,
                     selected_mode=query.get("mode", [""])[0] or None,
+                    csrf_token=self._csrf_token(),
                 )
             )
             return
         if path == "/api/summary":
             query = parse_qs(parsed.query)
             goal_id = query.get("goal", [ACTIVE_PRODUCT_GOAL_ID])[0]
-            if goal_id not in LAB_GOAL_IDS:
+            if goal_id not in _product_goal_ids():
                 self.send_error(HTTPStatus.BAD_REQUEST)
                 return
             self._send_json(build_control_panel_summary(goal_id))
@@ -123,85 +197,110 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
-        path = urlparse(self.path).path
-        data = self._read_form()
         try:
-            if path == "/notes":
-                notes = _notes_from_form(data)
-                if notes:
-                    add_batch_notes_to_latest(notes)
-                build_issue_ledger_latest()
-                propose_variants_from_latest()
-                self._redirect(_location_url(_single(data, "return_location", default="")))
-                return
-            if path == "/observation-action":
-                location_id = _single(data, "return_location", default="")
-                _update_observation_latest(
-                    _single(data, "note_id"),
-                    _single(data, "action"),
-                    data,
-                )
-                self._redirect(_location_url(location_id))
-                return
-            if path == "/issue-action":
-                location_id = _single(data, "return_location", default="")
-                _update_issue_latest(
-                    _single(data, "issue_id"),
-                    _single(data, "action"),
-                )
-                self._redirect(_location_url(location_id))
-                return
-            if path == "/refresh":
-                build_issue_ledger_latest()
-                propose_variants_from_latest()
-                _write_last_command(
-                    "refresh",
-                    ("python", "-m", "smb3_agent", "lab", "issues", "latest"),
-                    0,
-                    "review artifacts refreshed",
-                    "",
-                )
-                self._redirect("/")
-                return
-            if path == "/run":
-                result = _run_world_1_from_form(data)
-                _write_last_command(
-                    "run_world_1",
-                    (
-                        "python",
-                        "-m",
-                        "smb3_agent",
-                        "lab",
-                        "start",
-                        result["command"],
-                        "--attempts",
-                        str(result["attempts"]),
-                    ),
-                    0,
-                    result["summary"],
-                    "",
-                )
-                self._redirect("/")
-                return
-            if path == "/test":
-                action = _single(data, "action")
-                command = _test_command(action)
-                completed = _run_command_capture(action, command)
-                _write_last_command(
-                    action,
-                    command,
-                    completed.returncode,
-                    completed.stdout,
-                    completed.stderr,
-                )
-                self._redirect("/")
-                return
-            if path == "/codex-task":
-                issue_id = _issue_id_from_form(data)
-                write_codex_task_latest(issue_id)
-                self._redirect("/")
-                return
-            if path == "/patch-action":
+            self._validate_host()
+            self._handle_post()
+        except (
+            GoalValidationError,
+            LabError,
+            LabUiError,
+            RoutePatchError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+        ) as exc:
+            self._send_request_failure(exc)
+        except Exception:
+            self._send_internal_error()
+
+    def _handle_post(self) -> None:
+        path = urlparse(self.path).path
+        if path not in POST_PATHS:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        data = self._read_form()
+        self._validate_csrf(data)
+        action_lock = getattr(self.server, "action_lock", None)
+        if not isinstance(action_lock, type(threading.Lock())):
+            raise RuntimeError("Route Lab server is missing its action lock")
+        if not action_lock.acquire(blocking=False):
+            raise LabUiConflict("Another Route Lab action is already running")
+        try:
+            try:
+                if path == "/notes":
+                    notes = _notes_from_form(data)
+                    if notes:
+                        add_batch_notes_to_latest(notes)
+                    build_issue_ledger_latest()
+                    propose_variants_from_latest()
+                    self._redirect(_location_url(_single(data, "return_location", default="")))
+                    return
+                if path == "/observation-action":
+                    location_id = _single(data, "return_location", default="")
+                    _update_observation_latest(
+                        _single(data, "note_id"),
+                        _single(data, "action"),
+                        data,
+                    )
+                    self._redirect(_location_url(location_id))
+                    return
+                if path == "/issue-action":
+                    location_id = _single(data, "return_location", default="")
+                    _update_issue_latest(
+                        _single(data, "issue_id"),
+                        _single(data, "action"),
+                    )
+                    self._redirect(_location_url(location_id))
+                    return
+                if path == "/refresh":
+                    build_issue_ledger_latest()
+                    propose_variants_from_latest()
+                    _write_last_command(
+                        "refresh",
+                        ("python", "-m", "smb3_agent", "lab", "issues", "latest"),
+                        0,
+                        "review artifacts refreshed",
+                        "",
+                    )
+                    self._redirect("/")
+                    return
+                if path == "/run":
+                    result = _run_world_1_from_form(data)
+                    _write_last_command(
+                        "run_world_1",
+                        (
+                            "python",
+                            "-m",
+                            "smb3_agent",
+                            "lab",
+                            "start",
+                            result["command"],
+                            "--attempts",
+                            str(result["attempts"]),
+                        ),
+                        0,
+                        result["summary"],
+                        "",
+                    )
+                    self._redirect("/")
+                    return
+                if path == "/test":
+                    action = _single(data, "action")
+                    command = _test_command(action)
+                    completed = _run_command_capture(action, command)
+                    _write_last_command(
+                        action,
+                        command,
+                        completed.returncode,
+                        completed.stdout,
+                        completed.stderr,
+                    )
+                    self._redirect("/")
+                    return
+                if path == "/codex-task":
+                    issue_id = _issue_id_from_form(data)
+                    write_codex_task_latest(issue_id)
+                    self._redirect("/")
+                    return
                 result = run_patch_ui_action(data, repo_root=Path.cwd())
                 _write_last_command(
                     f"patch_{_single(data, 'action')}",
@@ -218,26 +317,119 @@ class _Handler(BaseHTTPRequestHandler):
                         goal_id=_single(data, "return_goal", default=ACTIVE_PRODUCT_GOAL_ID),
                     )
                 )
-                return
-        except (
-            GoalValidationError,
-            LabError,
-            LabUiError,
-            RoutePatchError,
-            FileNotFoundError,
-            subprocess.TimeoutExpired,
-        ) as exc:
-            self._send_html(render_error(str(exc)), status=HTTPStatus.BAD_REQUEST)
-            return
-        self.send_error(HTTPStatus.NOT_FOUND)
+            except (
+                GoalValidationError,
+                LabError,
+                LabUiError,
+                RoutePatchError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+            ) as exc:
+                self._send_request_failure(exc)
+        finally:
+            action_lock.release()
 
     def log_message(self, format: str, *args: object) -> None:
-        return
+        LOGGER.info(
+            "route_lab_access client=%s message=%s",
+            self.client_address[0],
+            format % args,
+        )
+
+    def end_headers(self) -> None:
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'none'; base-uri 'none'; form-action 'self'; "
+            "frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; "
+            "script-src 'none'; style-src 'unsafe-inline'",
+        )
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        super().end_headers()
 
     def _read_form(self) -> dict[str, list[str]]:
-        length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length).decode("utf-8")
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            length = int(raw_length)
+        except ValueError as exc:
+            raise LabUiError("Invalid Content-Length header") from exc
+        if length < 0:
+            raise LabUiError("Content-Length cannot be negative")
+        if length > MAX_FORM_BYTES:
+            raise LabUiError(f"Form body exceeds the {MAX_FORM_BYTES}-byte limit")
+        if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+            raise LabUiUnsupportedMediaType(
+                "Route Lab forms require application/x-www-form-urlencoded"
+            )
+        payload = self.rfile.read(length)
+        if len(payload) != length:
+            raise LabUiError("Incomplete form body")
+        try:
+            body = payload.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise LabUiError("Form body must be valid UTF-8") from exc
         return parse_qs(body, keep_blank_values=True)
+
+    def _validate_host(self) -> None:
+        raw_host = self.headers.get("Host", "")
+        try:
+            hostname = urlparse(f"//{raw_host}").hostname
+        except ValueError as exc:
+            raise LabUiForbidden("Invalid Route Lab Host header") from exc
+        if hostname not in LOOPBACK_HOSTS:
+            raise LabUiForbidden("Route Lab requests require a loopback Host header")
+
+    def _csrf_token(self) -> str:
+        token = getattr(self.server, "csrf_token", None)
+        if not isinstance(token, str) or not token:
+            raise RuntimeError("Route Lab server is missing its CSRF token")
+        return token
+
+    def _validate_csrf(self, data: dict[str, list[str]]) -> None:
+        supplied = _single(data, "csrf_token", default="")
+        if not supplied or not secrets.compare_digest(supplied, self._csrf_token()):
+            raise LabUiForbidden("Invalid or missing Route Lab CSRF token")
+
+    def _send_request_failure(self, exc: Exception) -> None:
+        status = (
+            HTTPStatus.GATEWAY_TIMEOUT
+            if isinstance(exc, subprocess.TimeoutExpired)
+            else HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+            if isinstance(exc, LabUiUnsupportedMediaType)
+            else HTTPStatus.CONFLICT
+            if isinstance(exc, LabUiConflict)
+            else HTTPStatus.FORBIDDEN
+            if isinstance(exc, LabUiForbidden)
+            else HTTPStatus.NOT_FOUND
+            if isinstance(exc, FileNotFoundError)
+            else HTTPStatus.BAD_REQUEST
+        )
+        LOGGER.warning(
+            "route_lab_request_failed method=%s path=%s status=%d error_type=%s detail=%s",
+            self.command,
+            self.path,
+            status,
+            type(exc).__name__,
+            exc,
+        )
+        self._send_html(render_error(str(exc)), status=status)
+
+    def _send_internal_error(self) -> None:
+        LOGGER.exception(
+            "route_lab_request_crashed method=%s path=%s",
+            self.command,
+            self.path,
+        )
+        self._send_html(
+            render_error("Unexpected Route Lab failure. Check the server log for the traceback."),
+            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
 
     def _send_html(self, body: str, *, status: HTTPStatus = HTTPStatus.OK) -> None:
         encoded = body.encode("utf-8")
@@ -256,12 +448,17 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def _send_local_asset(self, asset_path: str) -> None:
-        self._send_workspace_file(LOCAL_ASSET_DIR, asset_path)
+        self._send_workspace_file(LOCAL_ASSET_DIR, asset_path, LOCAL_ASSET_TYPES)
 
     def _send_artifact(self, artifact_path: str) -> None:
-        self._send_workspace_file(ARTIFACT_DIR, artifact_path)
+        self._send_workspace_file(ARTIFACT_DIR, artifact_path, SAFE_INLINE_TYPES)
 
-    def _send_workspace_file(self, root: Path, requested_path: str) -> None:
+    def _send_workspace_file(
+        self,
+        root: Path,
+        requested_path: str,
+        allowed_types: dict[str, str],
+    ) -> None:
         try:
             relative = Path(unquote(requested_path))
             if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
@@ -274,8 +471,15 @@ class _Handler(BaseHTTPRequestHandler):
         if not full_path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
+        content_type = allowed_types.get(full_path.suffix.lower())
+        if content_type is None:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        file_size = full_path.stat().st_size
+        if file_size > MAX_SERVED_FILE_BYTES:
+            self.send_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
         content = full_path.read_bytes()
-        content_type = mimetypes.guess_type(str(full_path))[0] or "application/octet-stream"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
@@ -295,8 +499,9 @@ def render_lab_ui(
     selected_note_id: str | None = None,
     selected_issue_id: str | None = None,
     selected_mode: str | None = None,
+    csrf_token: str | None = None,
 ) -> str:
-    if goal_id not in LAB_GOAL_IDS:
+    if goal_id not in _product_goal_ids():
         raise GoalValidationError(f"Unsupported Route Lab goal: {goal_id}")
     summary = build_control_panel_summary(goal_id)
     last_command = _load_yaml(LAST_COMMAND_PATH)
@@ -310,6 +515,7 @@ def render_lab_ui(
     evidence = _latest_evidence(summary, last_command, selected)
     return _page(
         title="Mario Route Lab",
+        csrf_token=csrf_token,
         body=f"""
         <div class="route-lab">
           <header class="lab-top">
@@ -561,7 +767,17 @@ def _fix_issue_mode(
               </section>"""
 
 
-def _page(*, title: str, body: str) -> str:
+def _page(*, title: str, body: str, csrf_token: str | None = None) -> str:
+    if csrf_token is not None:
+        csrf_field = (
+            '<input type="hidden" name="csrf_token" '
+            f'value="{_esc(csrf_token)}">'
+        )
+        body = re.sub(
+            r'(<form\s+method="post"[^>]*>)',
+            lambda match: match.group(1) + csrf_field,
+            body,
+        )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -2261,45 +2477,38 @@ def _location_url(
     issue_id: str | None = None,
     goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
 ) -> str:
-    params = []
+    params: list[tuple[str, str]] = []
     if goal_id != ACTIVE_PRODUCT_GOAL_ID:
-        params.append(f"goal={_esc(goal_id)}")
+        params.append(("goal", goal_id))
     if location_id:
-        params.append(f"location={_esc(_location_id_for_artifact(location_id))}")
+        params.append(("location", _location_id_for_artifact(location_id)))
     if mode:
-        params.append(f"mode={_esc(mode)}")
+        params.append(("mode", mode))
     if note_id:
-        params.append(f"note={_esc(note_id)}")
+        params.append(("note", note_id))
     if issue_id:
-        params.append(f"issue={_esc(issue_id)}")
-    return "/?" + "&".join(params) if params else "/"
+        params.append(("issue", issue_id))
+    return "/?" + urlencode(params) if params else "/"
 
 
 def _goal_subtitle(goal_id: str) -> str:
-    if goal_id == "world_8_finish_game":
-        return "Complete 26-segment route through Bowser, Princess rescue, credits, and ending"
-    if goal_id == "world_8_super_tanks":
-        return "World 2-first double-whistle route through Super Tanks and Bowser's Castle access"
-    if goal_id == "world_8_8_2":
-        return "World 2-first double-whistle route through World 8-2 and Fortress access"
-    if goal_id == "world_8_hand_traps_jet":
-        return "World 2-first double-whistle route through all Hand Traps and World 8-Jet"
-    if goal_id == "world_8_battleships":
-        return "World 2-first double-whistle route through World 8-Battleships"
-    if goal_id == "world_8_big_tanks":
-        return "World 2-first double-whistle route through World 8 Big Tanks"
-    return "World 2-first double-whistle route to World 8"
+    return load_goal_contract(resolve_goal_path(goal_id)).display_subtitle
 
 
 def _goal_switcher(goal_id: str) -> str:
     links = []
-    for candidate_id, label in LAB_GOALS:
-        selected = " goal-selected" if candidate_id == goal_id else ""
-        href = "/" if candidate_id == ACTIVE_PRODUCT_GOAL_ID else f"/?goal={candidate_id}"
+    for contract in load_product_goal_contracts():
+        selected = " goal-selected" if contract.id == goal_id else ""
+        href = "/" if contract.id == ACTIVE_PRODUCT_GOAL_ID else f"/?goal={contract.id}"
         links.append(
-            f'<a class="goal-choice{selected}" href="{_esc(href)}">{_esc(label)}</a>'
+            f'<a class="goal-choice{selected}" href="{_esc(href)}">'
+            f"{_esc(contract.display_name)}</a>"
         )
     return '<nav class="goal-switcher" aria-label="Goal">' + "".join(links) + "</nav>"
+
+
+def _product_goal_ids() -> frozenset[str]:
+    return frozenset(contract.id for contract in load_product_goal_contracts())
 
 
 def _now() -> str:

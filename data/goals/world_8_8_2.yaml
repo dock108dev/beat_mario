@@ -3,6 +3,9 @@ game: smb3
 goal_type: product_goal
 execution_status: executable
 user_directive: From fresh power-on, complete the accepted Hand Traps and Jet route, clear World 8-1 and World 8-2 through normal gameplay and their distinct game-owned goal cards, then stop on the stable World 8 map with the Fortress accessible but unentered.
+display:
+  name: World 8-1 + 8-2
+  subtitle: World 2-first double-whistle route through World 8-2 and Fortress access
 
 objective:
   type: route_completion

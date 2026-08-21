@@ -6,6 +6,12 @@ The default product contract remains
 `data/goals/world_8_big_tanks.yaml` contract without changing that default.
 `data/goals/world_8_battleships.yaml` is the next cumulative product contract.
 
+Goal contracts are also authoritative for supported product-goal ids, prefix
+order, and Route Lab display metadata. Every contract declares `display.name`
+and `display.subtitle`; Route Lab discovers product contracts instead of
+maintaining its own registry. Fixed preset environment policy belongs only in
+`src/smb3_agent/presets.py`; goal-local `runner.env` is unsupported.
+
 ## Route semantics
 
 - `objective_milestone`: directly required by the owner goal.
@@ -32,6 +38,9 @@ execution_status: executable
 user_directive: >-
   Collect both World 1 Warp Whistles, safely reach World 2, use both
   whistles, and arrive on the World 8 map.
+display:
+  name: World 8 Arrival
+  subtitle: World 2-first double-whistle route to World 8
 
 objective:
   type: route_completion
@@ -224,9 +233,10 @@ selectable.
 The final observer is ordered and fail-closed: exact Castle entry,
 representative hazard and door traversal, boss-room entry, live Bowser, the
 game's Bowser fight-state transition from active combat to falling through the
-broken floor while Mario retains his life, Princess rescue, credits start,
-credits completion through ending world 8, and 300 consecutive frames at the
-game-owned final `THE END` state. Bowser disappearance, coordinates, elapsed
+broken floor while Mario retains his life, Princess rescue, credits start, all
+eight zero-based credits scenes 0 through 7 followed by the wrap to 0, and 300
+consecutive frames at the game-owned final `THE END` state. Bowser
+disappearance, coordinates, elapsed
 time, or a Lua declaration cannot independently advance the contract.
 
 Discovery may resume ignored local checkpoints but is review-only and cannot
@@ -239,8 +249,10 @@ RAM mutation, resumed execution, and throttled evidence.
 .venv/bin/python -m smb3_agent goal status world_8_finish_game
 ```
 
-This contract remains unaccepted until one full fresh smoke and at least 3/3
-independent fresh authoritative runs prove all 26 milestones.
+This contract is accepted. The fresh smoke passed 1/1, and the authoritative
+`20260821T013757.568299Z_reliability` aggregate passed 3/3 independent fresh
+runs with all 26 milestones, eight focused screenshots per run, and
+byte-identical logs.
 
 ## Legacy diagnostic
 

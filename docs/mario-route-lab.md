@@ -60,6 +60,11 @@ row, World 8-Bowser's Castle and Ending. Its URL selection is
 `/?goal=world_8_finish_game`; selecting it changes only the review surface, not
 the default goal or acceptance state.
 
+Goal ids, ordering, labels, and subtitles come from the resolved product
+contracts under `data/goals/`. Route Lab does not maintain an independent goal
+registry. Product-contract and reliability-profile drift is rejected by the
+ROM-free test suite. See [Single sources of truth](ssot.md).
+
 Each route row uses player-facing language and displays its role:
 
 - `goal milestone` for owner-required outcomes;
@@ -123,9 +128,9 @@ run and a separate 17-frame review contact sheet.
 In the finish-game view, the final row requires eight focused evidence roles:
 accepted Super Tanks boundary, Castle entry, representative Castle gameplay,
 Bowser encounter, game-owned Bowser defeat, Princess rescue, credits, and the
-stable final screen. Until the required fresh live aggregate exists, Route Lab
-shows controller readiness from the catalog, but that display is not product
-acceptance; only the authoritative reliability report can accept Slice 5.
+stable final screen. Route Lab remains a review surface and does not itself
+grant acceptance; Slice 5 is accepted by the passing authoritative 3/3 report
+and its independently retained live evidence.
 
 ## Route roles and observations
 
@@ -165,6 +170,16 @@ Serve locally:
 ```bash
 python -m smb3_agent lab ui --host 127.0.0.1 --port 8765
 ```
+
+The server logs completed requests, expected request failures, subprocess
+timeouts, and unexpected handler tracebacks. Browser responses distinguish
+400 validation failures, 403 authorization failures, 404 missing records, 409
+action conflicts, 413 oversized artifacts, 415 unsupported forms, 504 action
+timeouts, and generic 500 server failures. Form bodies are bounded at 65,536
+bytes and require the supported media type and valid UTF-8. Non-loopback bind
+addresses and `Host` values are refused; POST forms require the server's CSRF
+token. Operational details are in [Error handling and operations](error-handling.md),
+and the complete trust model is in [Security model and hardening](security.md).
 
 Inspect the contract independently:
 

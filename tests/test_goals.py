@@ -8,9 +8,12 @@ from smb3_agent.goals import (
     GoalValidationError,
     evaluate_success_metrics,
     load_goal_contract,
+    load_product_goal_contracts,
     resolve_goal_path,
     run_goal_contract,
 )
+from smb3_agent.presets import EXECUTABLE_PRESETS, environment_for_preset
+from smb3_agent.reliability import RELIABILITY_PROFILES
 
 
 def test_load_world_1_king_goal_contract() -> None:
@@ -21,6 +24,35 @@ def test_load_world_1_king_goal_contract() -> None:
     assert contract.preset == "fceux_world_1_king"
     assert "world_1_fortress_whistle" not in contract.bridged_segments
     assert contract.segments[0] == "fresh_start_to_1_1"
+
+
+def test_product_goal_contracts_are_authoritative_for_supported_product_catalog() -> None:
+    contracts = load_product_goal_contracts()
+
+    assert contracts[0].id == "world_8_double_whistle"
+    assert [len(contract.route_steps) for contract in contracts] == sorted(
+        len(contract.route_steps) for contract in contracts
+    )
+    assert {contract.id for contract in contracts} == set(RELIABILITY_PROFILES)
+    assert all(contract.display_name and contract.display_subtitle for contract in contracts)
+    assert {contract.preset for contract in contracts}.issubset(EXECUTABLE_PRESETS)
+
+
+def test_preset_environment_policy_has_one_authoritative_mapping() -> None:
+    contract_presets = {
+        load_goal_contract(contract_path).preset
+        for contract_path in Path("data/goals").glob("*.yaml")
+    }
+
+    assert contract_presets == EXECUTABLE_PRESETS
+    assert environment_for_preset("fceux_world_8_double_whistle") == ()
+    assert all(
+        "=" in setting
+        for preset in EXECUTABLE_PRESETS
+        for setting in environment_for_preset(preset)
+    )
+    with pytest.raises(ValueError, match="Unsupported executable preset"):
+        environment_for_preset("removed_preset")
 
 
 def test_goal_contract_reports_missing_required_fields(tmp_path: Path) -> None:
@@ -38,6 +70,16 @@ def test_goal_contract_rejects_bridge_not_in_route(tmp_path: Path) -> None:
     bad_contract.write_text(yaml.safe_dump(raw))
 
     with pytest.raises(GoalValidationError, match="bridged_segments not present"):
+        load_goal_contract(bad_contract)
+
+
+def test_goal_contract_rejects_duplicate_runner_environment_policy(tmp_path: Path) -> None:
+    raw = yaml.safe_load(Path("data/goals/world_8_double_whistle.yaml").read_text())
+    raw["runner"]["env"] = ["SMB3_WORLD_8_EXTENSION_MODE=shadow_path"]
+    bad_contract = tmp_path / "duplicate-runner-policy.yaml"
+    bad_contract.write_text(yaml.safe_dump(raw))
+
+    with pytest.raises(GoalValidationError, match="runner.env is unsupported"):
         load_goal_contract(bad_contract)
 
 

@@ -4,8 +4,9 @@ FCEUX is the current reliable backend for SMB3 route work. It gives the project
 direct controller input, stable state reads, route logs, and optional screenshot
 captures.
 
-Use this document for backend mechanics. Use `docs/implementation-plan.md` for
-project sequencing and `docs/validation-gates.md` for pass/fail gates.
+Use this document for backend mechanics. Use
+[World 8 reliability gates](reliability-gate.md) for product pass/fail rules and
+[development](development.md) for the repository validation workflow.
 
 ## Core Runner
 
@@ -42,11 +43,10 @@ area. This avoids mistaking a death or invalid transition for a completed level.
 Command:
 
 ```bash
-python -m smb3_agent task fceux-world-1-king \
+python -m smb3_agent goal run world_1_king \
   --game-file "$SMB3_GAME_FILE" \
   --attempts 10 \
-  --artifacts-dir artifacts/fceux/world_1_king \
-  --require-perfect
+  --artifacts-dir artifacts/goals/world_1_king
 ```
 
 Expected summary:
@@ -60,21 +60,22 @@ post_probe_clear=true
 
 This preset is a diagnostic route, not the product goal and not a claim that
 every World 1 segment is solved by regular gameplay. It cannot prove safe World
-2 arrival or World 8. See `docs/route-status.md`.
+2 arrival or World 8. See [Route status](route-status.md).
 
 ## Visual Review
 
 For screenshot-backed review:
 
 ```bash
-python -m smb3_agent task fceux-world-1-king \
+python -m smb3_agent goal run world_1_king \
+  --game-file "$SMB3_GAME_FILE" \
   --attempts 1 \
-  --artifacts-dir artifacts/fceux/inspect_world_1_king \
+  --artifacts-dir artifacts/goals/inspect_world_1_king \
   --capture-images \
   --capture-ticks
 
 python -m smb3_agent task fceux-contact-sheet \
-  --input-dir artifacts/fceux/inspect_world_1_king/images
+  --input-dir artifacts/goals/inspect_world_1_king/images
 ```
 
 The contact sheet is a review aid only. Structured log markers are the source of

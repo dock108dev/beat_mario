@@ -13,6 +13,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/rom-free-ci.yml"
 GATE_PATH = REPOSITORY_ROOT / "scripts/validate_phase0.sh"
 PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
+CLI_PATH = REPOSITORY_ROOT / "src/smb3_agent/cli.py"
+LAB_PATH = REPOSITORY_ROOT / "src/smb3_agent/lab.py"
+README_PATH = REPOSITORY_ROOT / "README.md"
 CHECKOUT_PIN = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_PIN = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"
 MACOS_MODULES = (
@@ -96,6 +99,57 @@ def test_canonical_gate_covers_complete_rom_free_surface() -> None:
     assert gate.index("goal validate") < gate.index("segment validate")
     assert gate.index("segment validate") < gate.index("goal status")
     assert gate.index("goal status") < gate.index("lab ui-render")
+
+
+def test_removed_legacy_ssot_paths_do_not_return() -> None:
+    cli = CLI_PATH.read_text(encoding="utf-8")
+    lab = LAB_PATH.read_text(encoding="utf-8")
+
+    for command in (
+        '"fceux-world-1-' + 'king"',
+        '"propose-' + 'variant"',
+        '"run-' + 'variant"',
+        '"compare-' + 'variant"',
+        '"promote-' + 'variant"',
+    ):
+        assert command not in cli
+    for symbol in (
+        "def propose_variant(",
+        "def run_variant(",
+        "def compare_variant(",
+        "def promote_variant(",
+    ):
+        assert symbol not in lab
+
+
+def test_repository_cleanup_keeps_docs_lean_linked_and_current() -> None:
+    retired_paths = (
+        "docs/attempt-lab.md",
+        "docs/implementation-plan.md",
+        "docs/validation-gates.md",
+        "docs/world-1-lab-guide.md",
+        "data/lab/codex-task-template.yaml",
+        "data/lab/issue-ledger-template.yaml",
+        "data/lab/note-template.yaml",
+        "data/lab/session-template.yaml",
+        "data/lab/variant-proposal-template.yaml",
+        "data/routes/scripts/world_1_1_tail_from_stairs.yaml",
+        "data/routes/scripts/world_1_1_to_late_pipe.yaml",
+        "scripts/fceux_1_1_runner.lua",
+        "scripts/fceux_probe.lua",
+    )
+    assert len(README_PATH.read_text(encoding="utf-8").splitlines()) < 180
+    assert all(not (REPOSITORY_ROOT / path).exists() for path in retired_paths)
+
+    markdown_files = (README_PATH, *sorted((REPOSITORY_ROOT / "docs").glob("*.md")))
+    missing_links: list[tuple[Path, str]] = []
+    for source in markdown_files:
+        for target in re.findall(r"\[[^]]+\]\(([^)#]+)", source.read_text(encoding="utf-8")):
+            if "://" in target or target.startswith("/"):
+                continue
+            if not (source.parent / target).resolve().exists():
+                missing_links.append((source, target))
+    assert missing_links == []
 
 
 def test_gate_forbids_generated_evidence_game_assets_caches_and_metadata() -> None:

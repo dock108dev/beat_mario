@@ -324,7 +324,7 @@ observed in the accepted batch.
 | 23 | World 8-2 clear | objective milestone in cumulative goal | normal gameplay | solved 3/3; distinct goal object 65 state 4, Fortress accessible and unentered |
 | 24 | World 8-Fortress clear | objective milestone in cumulative goal | normal gameplay | accepted 3/3; switch, Boom Boom, and Magic Ball proved |
 | 25 | World 8-Super Tanks clear | objective milestone in cumulative goal | normal gameplay | accepted 3/3; Bowser's Castle accessible and unentered |
-| 26 | Bowser's Castle through stable ending | objective milestone in final cumulative goal | normal gameplay | implemented; live smoke and 3/3 acceptance pending |
+| 26 | Bowser's Castle through stable ending | objective milestone in final cumulative goal | normal gameplay | accepted 3/3; Bowser defeated, Princess rescued, eight credits scenes completed, stable ending proved |
 
 Rows 18-21 belong to `world_8_hand_traps_jet`; rows 22-23 are added only by
 `world_8_8_2`. Rows 24-25 belong to the accepted `world_8_super_tanks`
@@ -433,13 +433,13 @@ a World 8 success marker and is rejected by the active goal metrics.
 
 ## Current boundary
 
-The accepted cumulative boundary is World 8 map page 3 cursor `(96,112)` after
-Super Tanks, with `world_number=7`, `object_set=0`, and Bowser's Castle
-accessible but unentered. The default Rank 27, Rank 28, Battleships,
-Hand-Traps-and-Jet, and World-8-1/8-2 goals remain unchanged at their earlier
-boundaries. The final Castle controller and observer are implemented, but the
-finish-game objective remains unaccepted until the fresh smoke, 3/3
-authoritative runs, regressions, and separate watch complete.
+The accepted final cumulative boundary is the game-owned stable ending after
+Bowser's live floor-break defeat, Princess rescue, eight ordered credits scenes
+0 through 7, the credits wrap to 0, and `ending_state=1` for 300 frames. The
+default Rank 27, Rank 28, Battleships, Hand-Traps-and-Jet, World-8-1/8-2, and
+Super Tanks goals remain unchanged at their earlier boundaries. The
+`world_8_finish_game` fresh smoke, authoritative 3/3, separate review-only
+watch, canonical gate, and all cumulative regressions passed.
 
 ## Roaming placement note
 

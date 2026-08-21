@@ -105,6 +105,10 @@ def test_bowser_castle_controller_emits_game_owned_ending_contract() -> None:
     assert "failure_classification=observer_mismatch" in controller
     assert "ending_title_event == 0xFF" in controller
     assert "castle_stable_ending_frames >= 300" in controller
+    assert '"post_probe_world_8_bowser_castle_entry_visible"' in controller
+    assert '"post_probe_world_8_bowser_castle_gameplay_visible"' in controller
+    assert "if frame == 60 then" in controller
+    assert "castle_gameplay_visual_wait_frames == 96" in controller
     stairs_transition = controller[
         controller.index("if m.x >= 1550 then") :
         controller.index("elseif opening_phase == 4")

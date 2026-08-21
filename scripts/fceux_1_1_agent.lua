@@ -167,8 +167,8 @@ end
 if world_8_finish_game_mode then
   world_8_focused_capture_events = {
     post_probe_world_8_super_tanks_post_clear = true,
-    post_probe_world_8_bowser_castle_entered = true,
-    post_probe_world_8_bowser_castle_gameplay = true,
+    post_probe_world_8_bowser_castle_entry_visible = true,
+    post_probe_world_8_bowser_castle_gameplay_visible = true,
     post_probe_world_8_bowser_castle_discovery_tick = true,
     post_probe_world_8_bowser_castle_discovery_transition = true,
     post_probe_world_8_bowser_castle_discovery_lava_platform_landed = true,
@@ -203,6 +203,8 @@ local world_8_super_tanks_production_events = {
 local world_8_finish_game_production_events = {
   post_probe_world_8_bowser_castle_entered = true,
   post_probe_world_8_bowser_castle_gameplay = true,
+  post_probe_world_8_bowser_castle_entry_visible = true,
+  post_probe_world_8_bowser_castle_gameplay_visible = true,
   post_probe_world_8_bowser_castle_boss_room_entered = true,
   post_probe_world_8_bowser_castle_bowser_live = true,
   post_probe_world_8_bowser_castle_bowser_defeated = true,
@@ -19585,6 +19587,7 @@ run_world_8_bowser_castle_finish_extension = function(discovery_mode)
   local castle_trace_interval = tonumber(
     os.getenv("SMB3_WORLD_8_CASTLE_TRACE_INTERVAL") or "60"
   )
+  castle_gameplay_visual_wait_frames = 0
   for frame = 1, castle_max_frames do
     local m = mario()
     local object_set = memory.readbyte(0x70A)
@@ -19606,6 +19609,23 @@ run_world_8_bowser_castle_finish_extension = function(discovery_mode)
     local ending_raster = memory.readbyte(0x101)
     local ending_pic_state = memory.readbyte(0x75)
     local ending_title_event = memory.readbyte(0xEF)
+    if frame == 60 then
+      log_state(
+        "post_probe_world_8_bowser_castle_entry_visible",
+        evidence_prefix
+          .. "evidence=visible_castle_entry_after_transition stable_visible_frames=60"
+      )
+    end
+    if post_g_corridor_entered and castle_gameplay_visual_wait_frames < 96 then
+      castle_gameplay_visual_wait_frames = castle_gameplay_visual_wait_frames + 1
+      if castle_gameplay_visual_wait_frames == 96 then
+        log_state(
+          "post_probe_world_8_bowser_castle_gameplay_visible",
+          evidence_prefix
+            .. "evidence=visible_representative_castle_gameplay after_connection_g_frames=96"
+        )
+      end
+    end
     -- The rescue routine owns the title/ending RAM context.  Gate the
     -- overlapping zero-page state bytes on both a proven Bowser defeat and
     -- the routine's distinct raster mode so ordinary gameplay values cannot

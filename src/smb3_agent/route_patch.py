@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +19,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 
+LOGGER = logging.getLogger(__name__)
 PATCH_SCHEMA_VERSION = "beat-mario.route-patch/v1"
 PATCH_ARTIFACTS_ROOT = Path("artifacts/route-patches")
 PATCH_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{2,79}$")
@@ -263,7 +266,7 @@ def preview_route_patch(
 ) -> RoutePatchResult:
     repo_root, patch_dir, contract, state = _load_record(patch_id, repo_root, artifacts_root)
     diff_text = _contract_diff(contract, repo_root)
-    blockers = _promotion_blockers(contract, state, repo_root, patch_dir, read_only=True)
+    blockers = _promotion_blockers(contract, state, repo_root, patch_dir)
     details = {
         "variant_id": contract["variant_id"],
         "source_session": contract["source"]["session_id"],
@@ -338,6 +341,7 @@ def prepare_route_patch(
                 "patch_id": patch_id,
                 "failed_at": _now(),
                 "error": str(exc),
+                "exception": _exception_record(exc),
                 "candidate_removed": not candidate_path.exists(),
             },
         )
@@ -512,7 +516,7 @@ def promote_route_patch(
         raise RoutePatchError("Promotion confirmation must exactly match the patch ID")
     repo_root, patch_dir, contract, state = _load_record(patch_id, repo_root, artifacts_root)
     _require_status(state, "validated")
-    blockers = _promotion_blockers(contract, state, repo_root, patch_dir, read_only=False)
+    blockers = _promotion_blockers(contract, state, repo_root, patch_dir)
     if blockers:
         raise RoutePatchError("Promotion refused: " + "; ".join(blockers))
 
@@ -593,6 +597,7 @@ def promote_route_patch(
                 "patch_id": patch_id,
                 "failed_at": _now(),
                 "error": str(exc),
+                "exception": _exception_record(exc),
                 "restored_atomically": True,
             },
         )
@@ -657,6 +662,19 @@ def rollback_route_patch(
         return _result(contract, state, patch_dir, rollback_path, rollback)
     except Exception as exc:
         _restore_bytes(repo_root, originals)
+        _atomic_write_yaml(
+            patch_dir / "rollback-failure.yaml",
+            {
+                "patch_id": patch_id,
+                "failed_at": _now(),
+                "error": str(exc),
+                "exception": _exception_record(exc),
+                "promoted_files_restored": (
+                    _tree_hashes(repo_root, list(originals))
+                    == promotion["postimage_sha256"]
+                ),
+            },
+        )
         if isinstance(exc, RoutePatchError):
             raise
         raise RoutePatchError(f"Rollback failed; promoted files restored: {exc}") from exc
@@ -680,7 +698,13 @@ def patch_summary_for_issue(
                 continue
             state = _read_yaml(contract_path.parent / "state.yaml")
             matches.append((str(state.get("updated_at", "")), contract, contract_path.parent))
-        except (OSError, RoutePatchError):
+        except (OSError, RoutePatchError) as exc:
+            LOGGER.warning(
+                "route_patch_record_skipped path=%s error_type=%s detail=%s",
+                contract_path,
+                type(exc).__name__,
+                exc,
+            )
             continue
     if not matches:
         return None
@@ -1125,8 +1149,6 @@ def _promotion_blockers(
     state: dict[str, Any],
     repo_root: Path,
     patch_dir: Path,
-    *,
-    read_only: bool,
 ) -> list[str]:
     blockers: list[str] = []
     if state.get("status") != "validated":
@@ -1469,26 +1491,47 @@ def _validation_output_hashes(results: list[dict[str, Any]]) -> dict[str, str]:
 
 
 def _remove_worktree(repo_root: Path, path: Path) -> None:
-    if not str(path):
-        return
+    raw_path = str(path)
+    resolved_path = path.resolve()
+    protected_paths = {repo_root.resolve(), Path.cwd().resolve(), Path(resolved_path.anchor)}
+    if raw_path in {"", "."} or resolved_path in protected_paths:
+        raise RoutePatchError(f"Refusing unsafe worktree cleanup target: {path}")
     try:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", str(path)],
+        removal = subprocess.run(
+            ["git", "worktree", "remove", "--force", str(resolved_path)],
             cwd=repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
+        if removal.returncode != 0 and resolved_path.exists():
+            LOGGER.warning(
+                "route_patch_worktree_remove_failed path=%s returncode=%d stderr=%s",
+                resolved_path,
+                removal.returncode,
+                removal.stderr.strip(),
+            )
     finally:
-        if path.exists():
-            shutil.rmtree(path, ignore_errors=True)
-        subprocess.run(
+        if resolved_path.exists():
+            try:
+                shutil.rmtree(resolved_path)
+            except OSError:
+                LOGGER.exception(
+                    "route_patch_worktree_cleanup_failed path=%s", resolved_path
+                )
+        prune = subprocess.run(
             ["git", "worktree", "prune"],
             cwd=repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
+        if prune.returncode != 0:
+            LOGGER.warning(
+                "route_patch_worktree_prune_failed returncode=%d stderr=%s",
+                prune.returncode,
+                prune.stderr.strip(),
+            )
 
 
 def _git_blob(repo_root: Path, commit: str, path: str) -> bytes:
@@ -1608,6 +1651,14 @@ def _sha256_bytes(content: bytes) -> str:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _exception_record(exc: Exception) -> dict[str, str]:
+    return {
+        "type": type(exc).__name__,
+        "message": str(exc),
+        "traceback": traceback.format_exc(),
+    }
 
 
 def _coerce_output(value: Any) -> str:

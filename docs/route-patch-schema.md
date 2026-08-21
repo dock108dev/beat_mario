@@ -88,6 +88,12 @@ any promoted file no longer matches the recorded postimage, applies only the
 recorded inverse, and verifies byte-for-byte restoration. Promotion and
 validation history remain intact.
 
+Corrupt ignored patch records do not take down Route Lab discovery, but each
+skipped record is logged with its path and parse error. Temporary-worktree
+removal and prune failures are also logged, and cleanup refuses broad targets
+such as the current directory, repository root, or filesystem root. See
+[Error handling and operations](error-handling.md).
+
 ## Security boundary
 
 Import rejects absolute and traversal paths, symlink targets, files outside the

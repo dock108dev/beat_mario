@@ -20,19 +20,14 @@ from smb3_agent.lab import (
     LabError,
     add_note_to_latest,
     build_issue_ledger_latest,
-    compare_variant,
     propose_variants_from_latest,
-    promote_variant,
-    propose_variant_from_latest,
     review_latest_session,
-    run_variant,
     start_session,
     write_codex_task_latest,
     write_ui_summary_latest,
 )
 from smb3_agent.lab_ui import LabUiError, render_lab_ui, run_lab_ui_server
 from smb3_agent.observe import ObserveError, run_observed_segment
-from smb3_agent.presets import WORLD_1_KING_ENV
 from smb3_agent.recovery import RecoveryError, simulate_recovery
 from smb3_agent.route_patch import (
     RoutePatchError,
@@ -254,36 +249,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero unless the optional post-1-1 probe reports a course clear",
     )
 
-    fceux_world_1_king = task_subparsers.add_parser(
-        "fceux-world-1-king",
-        help="Run the legacy FCEUX World 1 king-transition diagnostic",
-    )
-    fceux_world_1_king.add_argument("--game-file", required=True, help="Path to the local game file")
-    fceux_world_1_king.add_argument(
-        "--script",
-        default="scripts/fceux_1_1_agent.lua",
-        help="Lua route script to load in FCEUX",
-    )
-    fceux_world_1_king.add_argument(
-        "--artifacts-dir",
-        default="artifacts/fceux/world_1_king",
-        help="Directory for route logs and optional screenshots",
-    )
-    fceux_world_1_king.add_argument("--attempts", type=int, default=10)
-    fceux_world_1_king.add_argument("--capture-images", action="store_true")
-    fceux_world_1_king.add_argument("--capture-ticks", action="store_true")
-    fceux_world_1_king.add_argument(
-        "--set-env",
-        action="append",
-        default=[],
-        help="Set an environment override for the Lua route, formatted KEY=VALUE",
-    )
-    fceux_world_1_king.add_argument(
-        "--require-perfect",
-        action="store_true",
-        help="Exit non-zero unless every 1-1 attempt clears",
-    )
-
     review_fceux = task_subparsers.add_parser(
         "review-fceux-log",
         help="Summarize a FCEUX route log",
@@ -462,9 +427,6 @@ def build_parser() -> argparse.ArgumentParser:
     lab_issues = lab_subparsers.add_parser("issues", help="Build grouped issue ledger for a lab session")
     lab_issues.add_argument("target", choices=["latest"], help="Session target")
 
-    lab_propose = lab_subparsers.add_parser("propose-variant", help="Create a route variant proposal")
-    lab_propose.add_argument("target", choices=["latest"], help="Session target")
-
     lab_propose_many = lab_subparsers.add_parser(
         "propose-variants",
         help="Create route variant proposals for all actionable issues",
@@ -524,33 +486,13 @@ def build_parser() -> argparse.ArgumentParser:
     patch_reject.add_argument("patch_id")
     patch_reject.add_argument("--reason", required=True)
 
-    lab_ui = lab_subparsers.add_parser("ui", help="Serve the local World 1 lab UI")
+    lab_ui = lab_subparsers.add_parser("ui", help="Serve the local Mario Route Lab UI")
     lab_ui.add_argument("--host", default="127.0.0.1")
     lab_ui.add_argument("--port", type=int, default=8765)
     lab_ui.add_argument("--open", action="store_true", help="Open the UI in the default browser")
 
     lab_ui_render = lab_subparsers.add_parser("ui-render", help="Render the lab UI HTML once")
     lab_ui_render.add_argument("--output", default="artifacts/ui/latest.html")
-
-    lab_run_variant = lab_subparsers.add_parser(
-        "run-variant", help="Legacy metadata-only command; executable validation uses lab patch"
-    )
-    lab_run_variant.add_argument("variant_id")
-    lab_run_variant.add_argument("--game-file", default=None, help="Path to the local game file")
-    lab_run_variant.add_argument("--attempts", type=int, default=10)
-    lab_run_variant.add_argument(
-        "--artifacts-root",
-        default="artifacts/sessions",
-        help="Root directory for lab sessions",
-    )
-
-    lab_compare_variant = lab_subparsers.add_parser("compare-variant", help="Compare variant evidence")
-    lab_compare_variant.add_argument("variant_id")
-
-    lab_promote_variant = lab_subparsers.add_parser(
-        "promote-variant", help="Legacy metadata-only command; exact promotion uses lab patch"
-    )
-    lab_promote_variant.add_argument("variant_id")
 
     return parser
 
@@ -658,23 +600,6 @@ def main() -> None:
         if args.require_perfect and summary.success_count != summary.total:
             raise SystemExit(1)
         if args.require_post_probe_clear and not summary.post_probe_clear:
-            raise SystemExit(1)
-        return
-
-    if args.command == "task" and args.task_name == "fceux-world-1-king":
-        summary = run_fceux_1_1(
-            game_path=Path(args.game_file),
-            script_path=Path(args.script),
-            artifacts_dir=Path(args.artifacts_dir),
-            attempts=args.attempts,
-            capture_images=args.capture_images,
-            capture_ticks=args.capture_ticks,
-            post_1_1_probe="run_1_castle_after_1_6",
-            env_overrides=WORLD_1_KING_ENV + tuple(args.set_env),
-            allow_bridges=True,
-        )
-        print(summary.to_text())
-        if args.require_perfect and (summary.success_count != summary.total or not summary.post_probe_clear):
             raise SystemExit(1)
         return
 
@@ -921,13 +846,6 @@ def main() -> None:
             parser.error(str(exc))
         return
 
-    if args.command == "lab" and args.lab_command == "propose-variant":
-        try:
-            print(propose_variant_from_latest().to_text())
-        except LabError as exc:
-            parser.error(str(exc))
-        return
-
     if args.command == "lab" and args.lab_command == "propose-variants":
         try:
             print(propose_variants_from_latest().to_text())
@@ -1004,37 +922,6 @@ def main() -> None:
         except (LabError, LabUiError) as exc:
             parser.error(str(exc))
         print(f"html={output}")
-        return
-
-    if args.command == "lab" and args.lab_command == "run-variant":
-        game_file = args.game_file or os.environ.get("SMB3_GAME_FILE")
-        if not game_file:
-            parser.error("lab run-variant requires --game-file or SMB3_GAME_FILE")
-        try:
-            print(
-                run_variant(
-                    args.variant_id,
-                    game_path=Path(game_file),
-                    attempts=args.attempts,
-                    artifacts_root=Path(args.artifacts_root),
-                ).to_text()
-            )
-        except (LabError, FileNotFoundError, GoalValidationError) as exc:
-            parser.error(str(exc))
-        return
-
-    if args.command == "lab" and args.lab_command == "compare-variant":
-        try:
-            print(compare_variant(args.variant_id).to_text())
-        except LabError as exc:
-            parser.error(str(exc))
-        return
-
-    if args.command == "lab" and args.lab_command == "promote-variant":
-        try:
-            print(promote_variant(args.variant_id).to_text())
-        except LabError as exc:
-            parser.error(str(exc))
         return
 
     parser.error("Unsupported command")

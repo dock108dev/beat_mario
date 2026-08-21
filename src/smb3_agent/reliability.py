@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import traceback
 from typing import Any, Callable
 
 from smb3_agent.fceux_harness import BatchSummary, parse_fceux_log
@@ -240,8 +241,8 @@ RELIABILITY_PROFILES = {
         accepted_boundary={"ending_state": 1, "stable_frames": 300},
         focused_events=(
             "post_probe_world_8_super_tanks_post_clear",
-            "post_probe_world_8_bowser_castle_entered",
-            "post_probe_world_8_bowser_castle_gameplay",
+            "post_probe_world_8_bowser_castle_entry_visible",
+            "post_probe_world_8_bowser_castle_gameplay_visible",
             "post_probe_world_8_bowser_castle_bowser_live",
             "post_probe_world_8_bowser_castle_bowser_defeated",
             "post_probe_world_8_bowser_castle_princess_rescue",
@@ -381,6 +382,7 @@ def run_reliability_gate(
             "passed": False,
             "failure_classification": "preflight",
             "detail": f"{type(exc).__name__}: {exc}",
+            "exception": _exception_record(exc),
             "recommended_investigation": _recommendation("preflight", None),
         }
         _finish_report(base_report, started_at)
@@ -409,6 +411,7 @@ def run_reliability_gate(
 
         goal_result: GoalRunResult | None = None
         run_exception: Exception | None = None
+        run_exception_traceback: str | None = None
         run_started_at = datetime.now(timezone.utc)
         try:
             goal_result = goal_runner(
@@ -424,6 +427,7 @@ def run_reliability_gate(
             )
         except Exception as exc:
             run_exception = exc
+            run_exception_traceback = traceback.format_exc()
 
         run_report = _inspect_run(
             run_index=run_index,
@@ -433,6 +437,7 @@ def run_reliability_gate(
             milestones=milestones,
             goal_result=goal_result,
             run_exception=run_exception,
+            run_exception_traceback=run_exception_traceback,
             started_at=run_started_at,
             capture_images=capture_images,
             capture_ticks=False,
@@ -535,6 +540,7 @@ def run_watchable_playback(
             "passed": False,
             "failure_classification": "preflight",
             "detail": f"{type(exc).__name__}: {exc}",
+            "exception": _exception_record(exc),
             "recommended_investigation": _recommendation("preflight", None),
         }
         _finish_report(report, started_at)
@@ -566,6 +572,7 @@ def run_watchable_playback(
 
     goal_result: GoalRunResult | None = None
     run_exception: Exception | None = None
+    run_exception_traceback: str | None = None
     try:
         goal_result = goal_runner(
             contract,
@@ -580,6 +587,7 @@ def run_watchable_playback(
         )
     except Exception as exc:
         run_exception = exc
+        run_exception_traceback = traceback.format_exc()
 
     run_report = _inspect_run(
         run_index=1,
@@ -589,6 +597,7 @@ def run_watchable_playback(
         milestones=milestones,
         goal_result=goal_result,
         run_exception=run_exception,
+        run_exception_traceback=run_exception_traceback,
         started_at=started_at,
         capture_images=True,
         capture_ticks=True,
@@ -602,6 +611,7 @@ def run_watchable_playback(
 
     contact_sheet_path = artifacts_dir / "review" / "contact_sheet.png"
     contact_sheet_error: str | None = None
+    contact_sheet_exception: dict[str, str] | None = None
     converted_count = 0
     try:
         converted = convert_gd_directory(
@@ -612,6 +622,7 @@ def run_watchable_playback(
         write_contact_sheet(focused, contact_sheet_path, columns=contact_sheet_columns)
     except Exception as exc:
         contact_sheet_error = f"{type(exc).__name__}: {exc}"
+        contact_sheet_exception = _exception_record(exc)
 
     review_pass = (
         run_report["passed"]
@@ -629,6 +640,7 @@ def run_watchable_playback(
             if contact_sheet_path.is_file()
             else None,
             "contact_sheet_error": contact_sheet_error,
+            "contact_sheet_exception": contact_sheet_exception,
             "tick_trace": str(tick_trace_path) if tick_trace_path.is_file() else None,
         }
     )
@@ -681,8 +693,6 @@ def _load_product_contract(
         raise ValueError("active product contract does not explicitly forbid bridges")
     if contract.allowed_tactics.get("blind_state_mutation") is not False:
         raise ValueError("active product contract does not explicitly forbid mutation")
-    if contract.runner.get("env"):
-        raise ValueError("reliability mode does not permit route environment overrides")
     script_path = Path(contract.runner["script"])
     if not script_path.is_file():
         raise FileNotFoundError(f"Product route script not found: {script_path}")
@@ -711,6 +721,7 @@ def _inspect_run(
     milestones: tuple[dict[str, str], ...],
     goal_result: GoalRunResult | None,
     run_exception: Exception | None,
+    run_exception_traceback: str | None,
     started_at: datetime,
     capture_images: bool,
     capture_ticks: bool,
@@ -750,11 +761,13 @@ def _inspect_run(
         None,
     )
     summary: BatchSummary | None = goal_result.summary if goal_result is not None else None
+    log_parse_exception: dict[str, str] | None = None
     if summary is None and log_text is not None:
         try:
             summary = parse_fceux_log(log_path, expected_attempts=1)
         except Exception as exc:
             log_error = log_error or f"structured route log is unparseable: {exc}"
+            log_parse_exception = _exception_record(exc)
 
     final_event = summary.post_probe_last_event if summary is not None else None
     final_observable = _final_observable(log_text or "", required_final_event)
@@ -773,7 +786,11 @@ def _inspect_run(
         and final_event == required_final_event
         and boundary_matches
     )
-    focused_screenshots, screenshot_evidence_error = _focused_screenshot_evidence(
+    (
+        focused_screenshots,
+        screenshot_evidence_error,
+        screenshot_evidence_exception,
+    ) = _focused_screenshot_evidence(
         run_dir, required_image_events if success_candidate else ()
     )
     passed = (
@@ -848,12 +865,15 @@ def _inspect_run(
         "execution": execution,
         "execution_metadata_error": execution_error,
         "log_integrity_error": log_error,
+        "log_parse_exception": log_parse_exception,
         "focused_screenshots": focused_screenshots,
         "screenshot_evidence_error": screenshot_evidence_error,
+        "screenshot_evidence_exception": screenshot_evidence_exception,
         "prohibited_evidence": prohibited,
         "exception": f"{type(run_exception).__name__}: {run_exception}"
         if run_exception is not None
         else None,
+        "exception_traceback": run_exception_traceback,
         "failure_classification": classification,
         "recommended_investigation": _recommendation(classification, first_missing)
         if classification is not None
@@ -864,9 +884,9 @@ def _inspect_run(
 
 def _focused_screenshot_evidence(
     run_dir: Path, required_events: tuple[str, ...]
-) -> tuple[list[str], str | None]:
+) -> tuple[list[str], str | None, dict[str, str] | None]:
     if not required_events:
-        return [], None
+        return [], None, None
     image_dir = run_dir / "images"
     output_dir = run_dir / "evidence" / "png"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -884,8 +904,8 @@ def _focused_screenshot_evidence(
             load_gd_screenshot(candidates[0]).save(output_path)
             screenshots.append(str(output_path))
     except Exception as exc:
-        return screenshots, f"{type(exc).__name__}: {exc}"
-    return screenshots, None
+        return screenshots, f"{type(exc).__name__}: {exc}", _exception_record(exc)
+    return screenshots, None, None
 
 
 def _milestone_progress(
@@ -1083,7 +1103,7 @@ def _base_report(
     started_at: datetime,
     goal_id: str,
 ) -> dict[str, Any]:
-    commit, dirty = _source_state()
+    commit, dirty, source_state_error = _source_state()
     return {
         "schema_version": 1,
         "mode": mode,
@@ -1091,6 +1111,7 @@ def _base_report(
         "goal_id": goal_id,
         "source_commit": commit,
         "source_dirty": dirty,
+        "source_state_error": source_state_error,
         "started_at": started_at.isoformat(),
         "artifacts_dir": str(artifacts_dir),
     }
@@ -1172,6 +1193,14 @@ def _finish_report(report: dict[str, Any], started_at: datetime) -> None:
     )
 
 
+def _exception_record(exc: Exception) -> dict[str, str]:
+    return {
+        "type": type(exc).__name__,
+        "message": str(exc),
+        "traceback": traceback.format_exc(),
+    }
+
+
 def _new_artifacts_dir(root: Path, label: str) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     return root / f"{timestamp}_{label}"
@@ -1188,19 +1217,31 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _source_state() -> tuple[str | None, bool | None]:
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=no"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+def _source_state() -> tuple[str | None, bool | None, str | None]:
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        return None, None, f"cannot inspect Git source state: {type(exc).__name__}: {exc}"
     resolved_commit = commit.stdout.strip() if commit.returncode == 0 else None
     dirty = bool(status.stdout.strip()) if status.returncode == 0 else None
-    return resolved_commit, dirty
+    errors = []
+    if commit.returncode != 0:
+        errors.append(
+            f"git rev-parse failed with exit {commit.returncode}: {commit.stderr.strip()}"
+        )
+    if status.returncode != 0:
+        errors.append(
+            f"git status failed with exit {status.returncode}: {status.stderr.strip()}"
+        )
+    return resolved_commit, dirty, "; ".join(errors) or None

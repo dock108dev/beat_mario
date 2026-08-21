@@ -3,6 +3,9 @@ game: smb3
 goal_type: product_goal
 execution_status: executable
 user_directive: From fresh power-on, complete the unchanged accepted 25-segment World 8 route, enter and traverse Bowser's Castle through normal gameplay, defeat Bowser through the game's floor-breaking mechanic while Mario remains alive, observe the Princess rescue and credits, and stop only at the stable game-owned ending.
+display:
+  name: Bowser's Castle + Ending
+  subtitle: Complete 26-segment route through Bowser, Princess rescue, credits, and ending
 
 objective:
   type: route_completion

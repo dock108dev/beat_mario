@@ -3,6 +3,9 @@ game: smb3
 goal_type: product_goal
 execution_status: executable
 user_directive: From a fresh game, complete the accepted Big Tanks route, enter World 8-Battleships by normal map input, clear its fleet and Boom Boom through normal gameplay, and stop on the stable post-clear World 8 map before a Hand Trap.
+display:
+  name: World 8-Battleships
+  subtitle: World 2-first double-whistle route through World 8-Battleships
 
 objective:
   type: route_completion

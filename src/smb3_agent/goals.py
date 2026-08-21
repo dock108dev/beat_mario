@@ -8,15 +8,7 @@ from typing import Any
 import yaml
 
 from smb3_agent.fceux_harness import BatchSummary, run_fceux_1_1
-from smb3_agent.presets import (
-    WORLD_1_KING_ENV,
-    WORLD_8_BATTLESHIPS_ENV,
-    WORLD_8_BIG_TANKS_ENV,
-    WORLD_8_8_2_ENV,
-    WORLD_8_HAND_TRAPS_JET_ENV,
-    WORLD_8_SUPER_TANKS_ENV,
-    WORLD_8_FINISH_GAME_ENV,
-)
+from smb3_agent.presets import DIAGNOSTIC_PRESETS, EXECUTABLE_PRESETS, environment_for_preset
 
 
 ACTIVE_PRODUCT_GOAL_ID = "world_8_double_whistle"
@@ -30,17 +22,7 @@ SUPPORTED_ROUTE_CLASSIFICATIONS = {
     "diagnostic_route",
 }
 SUPPORTED_EXECUTION_MODES = {"normal_gameplay", "bridge", "planned"}
-SUPPORTED_PRESETS = {
-    "fceux_world_1_king",
-    "fceux_world_8_double_whistle",
-    "fceux_world_8_big_tanks",
-    "fceux_world_8_battleships",
-    "fceux_world_8_hand_traps_jet",
-    "fceux_world_8_8_2",
-    "fceux_world_8_super_tanks",
-    "fceux_world_8_finish_game",
-    "unavailable",
-}
+SUPPORTED_PRESETS = EXECUTABLE_PRESETS | {"unavailable"}
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
 SUPPORTED_SUMMARY_FIELDS = {
     "success_count",
@@ -87,6 +69,8 @@ class GoalContract:
     runner: dict[str, Any]
     prefix_goal: str | None
     bridged_segments: tuple[str, ...]
+    display_name: str
+    display_subtitle: str
     path: Path
 
     @property
@@ -163,6 +147,13 @@ def load_goal_contract(path: Path, *, _seen: frozenset[Path] = frozenset()) -> G
     _require_type(raw, "recovery_policy", dict)
     _require_type(raw, "runner", dict)
 
+    display = raw.get("display")
+    if not isinstance(display, dict):
+        raise GoalValidationError("display must be a mapping")
+    _require_fields(display, ("name", "subtitle"))
+    if not all(isinstance(display[field], str) and display[field] for field in ("name", "subtitle")):
+        raise GoalValidationError("display.name and display.subtitle must be non-empty strings")
+
     goal_type = raw["goal_type"]
     if goal_type not in SUPPORTED_GOAL_TYPES:
         raise GoalValidationError(f"Unsupported goal_type: {goal_type}")
@@ -206,6 +197,10 @@ def load_goal_contract(path: Path, *, _seen: frozenset[Path] = frozenset()) -> G
     )
     if runner["preset"] not in SUPPORTED_PRESETS:
         raise GoalValidationError(f"Unsupported runner preset: {runner['preset']}")
+    if "env" in runner:
+        raise GoalValidationError(
+            "runner.env is unsupported; define fixed execution policy in presets.py"
+        )
     if not isinstance(runner["executable"], bool):
         raise GoalValidationError("runner.executable must be bool")
     if execution_status == "planned" and runner["executable"]:
@@ -261,8 +256,35 @@ def load_goal_contract(path: Path, *, _seen: frozenset[Path] = frozenset()) -> G
         runner=runner,
         prefix_goal=prefix_goal,
         bridged_segments=tuple(bridged_segments),
+        display_name=display["name"],
+        display_subtitle=display["subtitle"],
         path=path,
     )
+
+
+def load_product_goal_contracts(goals_dir: Path = Path("data/goals")) -> tuple[GoalContract, ...]:
+    contracts = tuple(
+        load_goal_contract(path)
+        for path in sorted(goals_dir.glob("*.yaml"))
+    )
+    product_contracts = tuple(
+        sorted(
+            (
+                contract
+                for contract in contracts
+                if contract.goal_type == "product_goal" and contract.executable
+            ),
+            key=lambda contract: len(contract.route_steps),
+        )
+    )
+    ids = [contract.id for contract in product_contracts]
+    if len(ids) != len(set(ids)):
+        raise GoalValidationError("Product goal ids must be unique")
+    if not product_contracts or product_contracts[0].id != ACTIVE_PRODUCT_GOAL_ID:
+        raise GoalValidationError(
+            f"Product goal catalog must begin with {ACTIVE_PRODUCT_GOAL_ID}"
+        )
+    return product_contracts
 
 
 def run_goal_contract(
@@ -283,28 +305,10 @@ def run_goal_contract(
             f"Goal {contract.id} is planned and not yet executable; "
             "no diagnostic runner fallback is permitted"
         )
-    if contract.preset not in {
-        "fceux_world_1_king",
-        "fceux_world_8_double_whistle",
-        "fceux_world_8_big_tanks",
-        "fceux_world_8_battleships",
-        "fceux_world_8_hand_traps_jet",
-        "fceux_world_8_8_2",
-        "fceux_world_8_super_tanks",
-        "fceux_world_8_finish_game",
-    }:
+    if contract.preset not in EXECUTABLE_PRESETS:
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
 
-    preset_env = {
-        "fceux_world_1_king": WORLD_1_KING_ENV,
-        "fceux_world_8_double_whistle": (),
-        "fceux_world_8_big_tanks": WORLD_8_BIG_TANKS_ENV,
-        "fceux_world_8_battleships": WORLD_8_BATTLESHIPS_ENV,
-        "fceux_world_8_hand_traps_jet": WORLD_8_HAND_TRAPS_JET_ENV,
-        "fceux_world_8_8_2": WORLD_8_8_2_ENV,
-        "fceux_world_8_super_tanks": WORLD_8_SUPER_TANKS_ENV,
-        "fceux_world_8_finish_game": WORLD_8_FINISH_GAME_ENV,
-    }[contract.preset]
+    preset_env = environment_for_preset(contract.preset)
 
     run_dir = artifacts_dir or _default_artifacts_dir(contract)
     summary = run_fceux_1_1(
@@ -315,8 +319,8 @@ def run_goal_contract(
         capture_images=capture_images,
         capture_ticks=capture_ticks,
         post_1_1_probe="run_1_castle_after_1_6",
-        env_overrides=preset_env + tuple(contract.runner.get("env", ())) + env_overrides,
-        allow_bridges=contract.preset == "fceux_world_1_king",
+        env_overrides=preset_env + env_overrides,
+        allow_bridges=contract.preset in DIAGNOSTIC_PRESETS,
         clean_product_env=clean_product_env,
         frame_sleep_seconds=frame_sleep_seconds,
         timeout_seconds=timeout_seconds,

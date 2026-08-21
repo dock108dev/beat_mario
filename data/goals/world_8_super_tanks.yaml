@@ -3,6 +3,9 @@ game: smb3
 goal_type: product_goal
 execution_status: executable
 user_directive: From fresh power-on, complete the accepted World 8-1 and World 8-2 route, clear World 8-Fortress and World 8-Super Tanks through normal gameplay with their distinct Boom Boom and Magic Ball transitions, then stop on the stable World 8 map with Bowser's Castle accessible but unentered.
+display:
+  name: World 8 Fortress + Super Tanks
+  subtitle: World 2-first double-whistle route through Super Tanks and Bowser's Castle access
 
 objective:
   type: route_completion

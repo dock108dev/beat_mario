@@ -64,7 +64,7 @@ class MednafenProcess:
         )
         return self
 
-    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+    def __exit__(self, _exc_type: object, _exc: object, _traceback: object) -> None:
         self.close()
 
     @property
@@ -87,19 +87,32 @@ class MednafenProcess:
 
 
 def focus_mednafen() -> None:
-    subprocess.run(
-        ["osascript", "-e", 'tell application "mednafen" to activate'],
-        capture_output=True,
-        text=True,
-        timeout=5,
+    _run_focus_command(
+        ["osascript", "-e", 'tell application "mednafen" to activate']
     )
-    subprocess.run(
-        ["osascript", "-e", 'tell application "System Events" to set frontmost of process "mednafen" to true'],
-        capture_output=True,
-        text=True,
-        timeout=5,
+    _run_focus_command(
+        [
+            "osascript",
+            "-e",
+            'tell application "System Events" to set frontmost of process "mednafen" to true',
+        ]
     )
     time.sleep(0.5)
+
+
+def _run_focus_command(argv: list[str]) -> None:
+    completed = subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no command output"
+        raise RuntimeError(
+            f"Failed to focus Mednafen (exit {completed.returncode}): {detail}"
+        )
 
 
 def find_mednafen_window() -> WindowBounds:

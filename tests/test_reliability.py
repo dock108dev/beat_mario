@@ -17,6 +17,7 @@ from smb3_agent.reliability import (
     WORLD_8_8_2_FINAL_EVENT,
     WORLD_8_SUPER_TANKS_FINAL_EVENT,
     WORLD_8_FINISH_GAME_FINAL_EVENT,
+    _source_state,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -276,8 +277,8 @@ def _fake_runner_factory(
                 if goal_id == "world_8_super_tanks"
                 else [
                     "post_probe_world_8_super_tanks_post_clear",
-                    "post_probe_world_8_bowser_castle_entered",
-                    "post_probe_world_8_bowser_castle_gameplay",
+                    "post_probe_world_8_bowser_castle_entry_visible",
+                    "post_probe_world_8_bowser_castle_gameplay_visible",
                     "post_probe_world_8_bowser_castle_bowser_live",
                     "post_probe_world_8_bowser_castle_bowser_defeated",
                     "post_probe_world_8_bowser_castle_princess_rescue",
@@ -1268,6 +1269,48 @@ def test_diagnostic_route_fallback_fails_preflight(
     assert result.report["completed_runs"] == 0
     assert result.report["preflight"]["failure_classification"] == "preflight"
     assert "diagnostic preset" in result.report["preflight"]["detail"]
+    exception = result.report["preflight"]["exception"]
+    assert exception["type"] == "ValueError"
+    assert "Traceback (most recent call last)" in exception["traceback"]
+
+
+def test_unexpected_runner_failure_retains_traceback_in_failed_run(
+    tmp_path: Path,
+) -> None:
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+
+    def crashing_runner(contract, **kwargs):
+        raise RuntimeError("unexpected runner defect")
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        requested_runs=1,
+        artifacts_root=tmp_path / "reliability",
+        goal_runner=crashing_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["exception"] == "RuntimeError: unexpected runner defect"
+    assert "RuntimeError: unexpected runner defect" in run["exception_traceback"]
+    assert "crashing_runner" in run["exception_traceback"]
+
+
+def test_source_state_records_git_launch_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing_git(*args, **kwargs):
+        raise FileNotFoundError("git is unavailable")
+
+    monkeypatch.setattr("smb3_agent.reliability.subprocess.run", missing_git)
+
+    commit, dirty, error = _source_state()
+
+    assert commit is None
+    assert dirty is None
+    assert error == "cannot inspect Git source state: FileNotFoundError: git is unavailable"
 
 
 def test_generated_evidence_and_local_game_assets_are_untracked_and_ignored() -> None:

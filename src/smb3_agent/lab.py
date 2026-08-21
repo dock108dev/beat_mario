@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,8 +16,6 @@ from smb3_agent.review import LogEvent, parse_log_events, review_log
 
 
 LATEST_SESSION_PATH = Path("artifacts/sessions/latest.txt")
-BASELINE_VARIANT_PATH = Path("data/variants/world_1_baseline.yaml")
-SUPPORTED_VARIANT_STATUSES = {"proposed", "validated", "promoted", "archived"}
 
 
 class LabError(ValueError):
@@ -100,71 +97,6 @@ class LabReviewResult:
             f"notes={len(self.review['linked_notes'])}",
         ]
         return "\n".join(lines)
-
-
-@dataclass(frozen=True)
-class VariantProposalResult:
-    variant_id: str
-    proposal_path: Path
-    session_proposal_path: Path
-    proposal: dict[str, Any]
-
-    def to_text(self) -> str:
-        return "\n".join(
-            [
-                f"variant_id={self.variant_id}",
-                f"proposal={self.proposal_path}",
-                f"session_proposal={self.session_proposal_path}",
-                f"parent_variant={self.proposal['parent_variant']}",
-                f"status={self.proposal['status']}",
-                f"source_session={self.proposal['source_session']}",
-                f"source_issue={self.proposal.get('source_issue', 'none')}",
-                f"source_notes={','.join(self.proposal['source_notes'])}",
-                f"route_patch_required={str(self.proposal['route_patch']['required']).lower()}",
-                f"validation_profile={self.proposal['validation']['profile']}",
-            ]
-        )
-
-
-@dataclass(frozen=True)
-class VariantCompareResult:
-    variant_id: str
-    report_path: Path
-    report: dict[str, Any]
-
-    def to_text(self) -> str:
-        outcome = self.report["variant_outcome"]
-        return "\n".join(
-            [
-                f"variant_id={self.variant_id}",
-                f"report={self.report_path}",
-                f"parent_variant={self.report['parent_variant']}",
-                f"status={self.report['status']}",
-                f"successes={outcome.get('successes', 'unknown')}",
-                f"failure_class={outcome.get('failure_class', 'unknown')}",
-                f"metrics_passed={str(outcome.get('metrics_passed', False)).lower()}",
-                f"recommendation={self.report['recommendation']}",
-            ]
-        )
-
-
-@dataclass(frozen=True)
-class VariantPromotionResult:
-    variant_id: str
-    baseline_path: Path
-    backup_path: Path
-    promotion_path: Path
-
-    def to_text(self) -> str:
-        return "\n".join(
-            [
-                f"variant_id={self.variant_id}",
-                f"baseline={self.baseline_path}",
-                f"backup={self.backup_path}",
-                f"promotion={self.promotion_path}",
-                "promoted=true",
-            ]
-        )
 
 
 @dataclass(frozen=True)
@@ -465,30 +397,6 @@ def review_session(session_dir: Path) -> LabReviewResult:
     )
 
 
-def propose_variant_from_latest() -> VariantProposalResult:
-    return propose_variant(_latest_session_dir())
-
-
-def propose_variant(session_dir: Path) -> VariantProposalResult:
-    manifest = _load_session_manifest(session_dir)
-    issues = build_issue_ledger(session_dir).issues
-    issue = _highest_priority_issue([item for item in issues if item.get("actionable")])
-    if issue is None:
-        raise LabError("No actionable issue exists for variant proposal")
-    proposal = _proposal_from_issue(manifest, issue)
-    variant_id = str(proposal["variant_id"])
-    proposal_path = Path("data/variants") / f"{variant_id}.yaml"
-    session_proposal_path = session_dir / "variant_proposal.yaml"
-    _write_yaml(proposal_path, proposal)
-    _write_yaml(session_proposal_path, proposal)
-    return VariantProposalResult(
-        variant_id=variant_id,
-        proposal_path=proposal_path,
-        session_proposal_path=session_proposal_path,
-        proposal=proposal,
-    )
-
-
 def build_issue_ledger_latest() -> IssueLedgerResult:
     return build_issue_ledger(_latest_session_dir())
 
@@ -692,91 +600,6 @@ def write_codex_task(session_dir: Path, issue_id: str) -> CodexTaskResult:
         issue_id=issue_id,
         task_path=task_path,
         excerpt_path=excerpt_path,
-    )
-
-
-def run_variant(
-    variant_id: str,
-    *,
-    game_path: Path,
-    attempts: int,
-    artifacts_root: Path = Path("artifacts/sessions"),
-) -> LabSessionResult:
-    del game_path, attempts, artifacts_root
-    _load_variant(_variant_path(variant_id))
-    raise LabError(
-        "Metadata-only variants cannot be validated. Import a beat-mario.route-patch/v1 "
-        "artifact and use the lab patch workflow so validation executes patched candidate content."
-    )
-
-
-def compare_variant(variant_id: str) -> VariantCompareResult:
-    proposal_path = _variant_path(variant_id)
-    proposal = _load_variant(proposal_path)
-    outcome = proposal.get("outcome", {})
-    report = {
-        "variant_id": variant_id,
-        "parent_variant": proposal["parent_variant"],
-        "status": proposal["status"],
-        "source_session": proposal["source_session"],
-        "changed_files": [change["file"] for change in proposal.get("changes", [])],
-        "variant_outcome": outcome,
-        "recommendation": _variant_recommendation(outcome),
-    }
-    report_path = Path("data/variants") / f"{variant_id}.compare.yaml"
-    _write_yaml(report_path, report)
-    return VariantCompareResult(variant_id=variant_id, report_path=report_path, report=report)
-
-
-def promote_variant(variant_id: str) -> VariantPromotionResult:
-    proposal_path = _variant_path(variant_id)
-    proposal = _load_variant(proposal_path)
-    if not proposal.get("route_patch_id"):
-        raise LabError(
-            "Promotion refused: metadata-only variants are not promotable; use lab patch promote"
-        )
-    outcome = proposal.get("outcome", {})
-    if proposal["status"] != "validated" or not outcome.get("metrics_passed"):
-        raise LabError("Promotion refused: variant has no passing validation artifact")
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = Path("data/variants/backups")
-    promotion_dir = Path("data/variants/promotions")
-    backup_path = backup_dir / f"world_1_baseline_{timestamp}.yaml"
-    promotion_path = promotion_dir / f"{variant_id}_{timestamp}.yaml"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    promotion_dir.mkdir(parents=True, exist_ok=True)
-
-    if BASELINE_VARIANT_PATH.exists():
-        shutil.copyfile(BASELINE_VARIANT_PATH, backup_path)
-    else:
-        _write_yaml(backup_path, _default_baseline())
-
-    baseline = {
-        "variant_id": "world_1_baseline",
-        "active_variant": variant_id,
-        "promoted_at": _now(),
-        "source_variant": str(proposal_path),
-        "validation_session": outcome.get("session_id"),
-        "validation_artifacts_dir": outcome.get("artifacts_dir"),
-        "reason": proposal["reason"],
-    }
-    _write_yaml(BASELINE_VARIANT_PATH, baseline)
-    proposal["status"] = "promoted"
-    _write_yaml(proposal_path, proposal)
-    promotion = {
-        "variant_id": variant_id,
-        "promoted_at": baseline["promoted_at"],
-        "baseline": str(BASELINE_VARIANT_PATH),
-        "backup": str(backup_path),
-        "validation_artifacts_dir": outcome.get("artifacts_dir"),
-    }
-    _write_yaml(promotion_path, promotion)
-    return VariantPromotionResult(
-        variant_id=variant_id,
-        baseline_path=BASELINE_VARIANT_PATH,
-        backup_path=backup_path,
-        promotion_path=promotion_path,
     )
 
 
@@ -1124,64 +947,10 @@ def _review_markdown(review: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _variant_id(review: dict[str, Any]) -> str:
-    segment = re.sub(r"[^a-z0-9_]+", "_", str(review["primary_segment"]).lower()).strip("_") or "route"
-    anchor = ""
-    for note in review.get("linked_notes", []):
-        anchor_data = note.get("anchor", {})
-        if anchor_data.get("value") is not None:
-            anchor = f"_{anchor_data['value']}"
-            break
-    base = f"{segment}_harden{anchor}_a"
-    candidate = base
-    index = 1
-    while (Path("data/variants") / f"{candidate}.yaml").exists():
-        index += 1
-        candidate = f"{base[:-1]}{chr(96 + min(index, 26))}"
-    return candidate
-
-
 def _suggested_change_file(segment: str) -> str:
     if _canonical_segment_id(segment) == "world_1_1_clear":
         return "data/routes/scripts/world_1_1_clear_v0.yaml"
     return "scripts/fceux_1_1_agent.lua"
-
-
-def _variant_path(variant_id: str) -> Path:
-    path = Path("data/variants") / f"{variant_id}.yaml"
-    if not path.is_file():
-        raise LabError(f"Variant not found: {variant_id}")
-    return path
-
-
-def _load_variant(path: Path) -> dict[str, Any]:
-    variant = _load_yaml(path)
-    for field in ("variant_id", "parent_variant", "status", "outcome"):
-        if field not in variant:
-            raise LabError(f"Variant missing required field: {field}")
-    if variant["status"] not in SUPPORTED_VARIANT_STATUSES:
-        raise LabError(f"Unsupported variant status: {variant['status']}")
-    return variant
-
-
-def _variant_recommendation(outcome: dict[str, Any]) -> str:
-    if not outcome or outcome.get("status") == "untested":
-        return "Run the variant before comparing or promoting it."
-    if outcome.get("metrics_passed"):
-        return "Variant has passing evidence and is eligible for guarded promotion."
-    return "Do not promote; inspect the variant session review first."
-
-
-def _default_baseline() -> dict[str, Any]:
-    return {
-        "variant_id": "world_1_baseline",
-        "active_variant": "world_1_baseline",
-        "promoted_at": None,
-        "source_variant": None,
-        "validation_session": None,
-        "validation_artifacts_dir": None,
-        "reason": "Initial baseline metadata created by promotion guard.",
-    }
 
 
 def batch_summary_to_json(summary: BatchSummary) -> str:

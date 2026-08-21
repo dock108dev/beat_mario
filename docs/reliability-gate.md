@@ -217,7 +217,10 @@ Every run report includes the last accepted product event and segment, the first
 missing milestone, the first violated event when available, the final observable
 map/mode/object set/inventory/lives/form, capture and throttle settings, and a
 bounded recommended investigation. Unknown or ambiguous evidence is never a
-pass.
+pass. Preflight, runner, log-parser, focused-screenshot, and contact-sheet
+exceptions retain their Python traceback in the owning report. See
+[Error handling and operations](error-handling.md) for the operator triage order
+and intentional resilience boundaries.
 
 ## Final finish-game profile
 
@@ -241,3 +244,8 @@ separate review root is `artifacts/review/world_8_finish_game/`. A watch remains
 `counts_toward_reliability=false`. Missing or reordered ending events, false
 Bowser clear, life loss, incomplete credits, unstable ending, corrupt focused
 evidence, and emulator or preflight failure all remain hard failures.
+
+Accepted Slice 5 evidence is recorded under
+`artifacts/reliability/world_8_finish_game/20260821T013757.568299Z_reliability`
+and the separate review-only evidence under
+`artifacts/review/world_8_finish_game/20260821T014037.846779Z_watchable`.

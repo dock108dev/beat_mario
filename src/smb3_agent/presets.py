@@ -57,3 +57,24 @@ WORLD_8_FINISH_GAME_ENV = (
     "SMB3_WORLD_8_FOCUSED_CAPTURE=1",
     "SMB3_FCEUX_TIMEOUT_SECONDS=900",
 )
+
+
+PRESET_ENV = {
+    "fceux_world_1_king": WORLD_1_KING_ENV,
+    "fceux_world_8_double_whistle": (),
+    "fceux_world_8_big_tanks": WORLD_8_BIG_TANKS_ENV,
+    "fceux_world_8_battleships": WORLD_8_BATTLESHIPS_ENV,
+    "fceux_world_8_hand_traps_jet": WORLD_8_HAND_TRAPS_JET_ENV,
+    "fceux_world_8_8_2": WORLD_8_8_2_ENV,
+    "fceux_world_8_super_tanks": WORLD_8_SUPER_TANKS_ENV,
+    "fceux_world_8_finish_game": WORLD_8_FINISH_GAME_ENV,
+}
+EXECUTABLE_PRESETS = frozenset(PRESET_ENV)
+DIAGNOSTIC_PRESETS = frozenset({"fceux_world_1_king"})
+
+
+def environment_for_preset(preset: str) -> tuple[str, ...]:
+    try:
+        return PRESET_ENV[preset]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported executable preset: {preset}") from exc
