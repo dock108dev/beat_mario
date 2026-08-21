@@ -1,0 +1,84 @@
+id: world_8_finish_game
+game: smb3
+goal_type: product_goal
+execution_status: executable
+user_directive: From fresh power-on, complete the unchanged accepted 25-segment World 8 route, enter and traverse Bowser's Castle through normal gameplay, defeat Bowser through the game's floor-breaking mechanic while Mario remains alive, observe the Princess rescue and credits, and stop only at the stable game-owned ending.
+
+objective:
+  type: route_completion
+  target: stable_final_ending
+
+runner:
+  backend: fceux
+  preset: fceux_world_8_finish_game
+  script: scripts/fceux_1_1_agent.lua
+  artifacts_root: artifacts/goals/world_8_finish_game
+  require_perfect: true
+  executable: true
+
+route:
+  catalog: data/segments/world_8_double_whistle.yaml
+  prefix_goal: world_8_super_tanks
+  segments:
+    - id: world_8_bowser_castle_finish
+      classification: objective_milestone
+      execution_mode: normal_gameplay
+      evidence: [game_owned_bowser_defeat_princess_rescue_credits_and_stable_ending]
+
+bridged_segments: []
+
+constraints:
+  prefer_real_gameplay: true
+  allow_bridge_steps: false
+  preserve_attempt_artifacts: true
+  explain_failures: true
+  start_from_power_on: true
+  require_exact_castle_entry: true
+  require_live_bowser_defeat_while_alive: true
+  require_princess_rescue: true
+  require_complete_credits: true
+  require_stable_game_owned_ending: true
+
+allowed_tactics:
+  scripted_inputs: true
+  memory_observation: true
+  known_transition_bridge: false
+  savestate: false
+  runtime_search: false
+  blind_state_mutation: false
+  in_level_quicksand_pipe_shortcut: true
+
+success_metrics:
+  - {id: accepted_super_tanks_prefix, type: event_present, value: post_probe_world_8_super_tanks_post_clear}
+  - {id: exact_castle_entry, type: event_present, value: post_probe_world_8_bowser_castle_entered}
+  - {id: representative_castle_gameplay, type: event_present, value: post_probe_world_8_bowser_castle_gameplay}
+  - {id: exact_boss_room_entry, type: event_present, value: post_probe_world_8_bowser_castle_boss_room_entered}
+  - {id: live_bowser_encounter, type: event_present, value: post_probe_world_8_bowser_castle_bowser_live}
+  - {id: game_enforced_bowser_defeat, type: event_present, value: post_probe_world_8_bowser_castle_bowser_defeated}
+  - {id: princess_rescue, type: event_present, value: post_probe_world_8_bowser_castle_princess_rescue}
+  - {id: credits_started, type: event_present, value: post_probe_world_8_bowser_castle_credits_started}
+  - {id: credits_progressed, type: event_present, value: post_probe_world_8_bowser_castle_credits_progression}
+  - {id: stable_final_ending, type: final_event, value: post_probe_world_8_bowser_castle_stable_ending}
+  - {id: accepted_observer_trace, type: summary_field, field: post_probe_clear, equals: true}
+
+recovery_policy:
+  wrong_map: {action: stop_and_review}
+  wrong_stage: {action: stop_and_review}
+  wrong_entry_state: {action: stop_and_review}
+  wrong_door: {action: stop_and_review}
+  death: {action: stop_and_review}
+  life_loss: {action: stop_and_review}
+  controller_stall: {action: stop_and_review}
+  timeout: {action: stop_and_review}
+  missing_gameplay: {action: stop_and_review}
+  missing_boss: {action: stop_and_review}
+  false_bowser_clear: {action: stop_and_review}
+  missing_princess_rescue: {action: stop_and_review}
+  missing_credits: {action: stop_and_review}
+  incomplete_credits: {action: stop_and_review}
+  event_reordering: {action: stop_and_review}
+  unstable_ending: {action: stop_and_review}
+  screenshot_integrity: {action: stop_and_review}
+  observer_mismatch: {action: stop_and_review}
+  artifact_contamination: {action: stop_and_review}
+  ambiguous_state: {action: capture_artifacts_and_stop}

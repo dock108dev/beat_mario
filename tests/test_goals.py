@@ -501,6 +501,58 @@ def test_world_8_super_tanks_uses_exact_product_preset_without_fallback(
     assert captured["allow_bridges"] is False
 
 
+def test_world_8_finish_game_is_exact_26_segment_zero_bridge_extension() -> None:
+    prefix = load_goal_contract(Path("data/goals/world_8_super_tanks.yaml"))
+    goal = load_goal_contract(Path("data/goals/world_8_finish_game.yaml"))
+
+    assert len(goal.segments) == 26
+    assert goal.prefix_goal == prefix.id
+    assert goal.segments[:25] == prefix.segments
+    assert goal.segments[-1] == "world_8_bowser_castle_finish"
+    assert goal.bridged_segments == ()
+    assert goal.preset == "fceux_world_8_finish_game"
+    assert goal.constraints["require_princess_rescue"] is True
+    assert goal.constraints["require_complete_credits"] is True
+    assert goal.constraints["require_stable_game_owned_ending"] is True
+    assert goal.allowed_tactics["runtime_search"] is False
+    assert goal.allowed_tactics["savestate"] is False
+
+
+
+def test_world_8_finish_game_uses_exact_product_preset_without_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_fceux_1_1(**kwargs):
+        captured.update(kwargs)
+        return BatchSummary(
+            attempts=(AttemptSummary(1, True, False, True, True, 3709),),
+            post_probe_last_event="post_probe_world_8_bowser_castle_stable_ending",
+            post_probe_clear=True,
+            post_probe_events=(),
+        )
+
+    monkeypatch.setattr("smb3_agent.goals.run_fceux_1_1", fake_run_fceux_1_1)
+    contract = load_goal_contract(Path("data/goals/world_8_finish_game.yaml"))
+    game_path = tmp_path / "local-game.nes"
+    game_path.write_bytes(b"local")
+
+    run_goal_contract(
+        contract,
+        game_path=game_path,
+        attempts=1,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+
+    assert captured["env_overrides"] == (
+        "SMB3_WORLD_8_EXTENSION_MODE=world_8_finish_game",
+        "SMB3_WORLD_8_FOCUSED_CAPTURE=1",
+        "SMB3_FCEUX_TIMEOUT_SECONDS=900",
+    )
+    assert captured["allow_bridges"] is False
+
+
 def test_battleships_goal_cannot_pass_on_prefix_or_entry_alone() -> None:
     contract = load_goal_contract(Path("data/goals/world_8_battleships.yaml"))
     attempts = (

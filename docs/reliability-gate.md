@@ -218,3 +218,26 @@ missing milestone, the first violated event when available, the final observable
 map/mode/object set/inventory/lives/form, capture and throttle settings, and a
 bounded recommended investigation. Unknown or ambiguous evidence is never a
 pass.
+
+## Final finish-game profile
+
+`world_8_finish_game` requires three successful runs, one attempt in each fresh
+FCEUX process and isolated run directory. Each run must complete all 26 ordered
+segments with zero bridges and retain exactly eight focused images: accepted
+Super Tanks boundary, Castle entry, representative Castle gameplay, live
+Bowser encounter, game-owned Bowser defeat, Princess rescue, credits, and the
+stable final screen.
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_finish_game --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_finish_game --game-file "$SMB3_GAME_FILE"
+```
+
+The authoritative root is `artifacts/reliability/world_8_finish_game/`; the
+separate review root is `artifacts/review/world_8_finish_game/`. A watch remains
+`review_only=true`, `promotable=false`, and
+`counts_toward_reliability=false`. Missing or reordered ending events, false
+Bowser clear, life loss, incomplete credits, unstable ending, corrupt focused
+evidence, and emulator or preflight failure all remain hard failures.

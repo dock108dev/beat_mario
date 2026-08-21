@@ -213,6 +213,35 @@ The final proof is normal Right input from the 8-2 return cursor `(32,144)` to
 the Fortress node `(64,144)`, followed by 180 stable map frames with no A input
 and no Fortress stage entry.
 
+## Bowser's Castle and ending composed contract
+
+`world_8_finish_game` declares the accepted 25-segment
+`world_8_super_tanks` goal as its unchanged prefix and appends only
+`world_8_bowser_castle_finish`. Resolution is exactly 26 ordered segments and
+zero bridges; every earlier cumulative endpoint remains independently
+selectable.
+
+The final observer is ordered and fail-closed: exact Castle entry,
+representative hazard and door traversal, boss-room entry, live Bowser, the
+game's Bowser fight-state transition from active combat to falling through the
+broken floor while Mario retains his life, Princess rescue, credits start,
+credits completion through ending world 8, and 300 consecutive frames at the
+game-owned final `THE END` state. Bowser disappearance, coordinates, elapsed
+time, or a Lua declaration cannot independently advance the contract.
+
+Discovery may resume ignored local checkpoints but is review-only and cannot
+satisfy this product goal. Product runs prohibit savestates, search, bridges,
+RAM mutation, resumed execution, and throttled evidence.
+
+```bash
+.venv/bin/python -m smb3_agent goal validate \
+  data/goals/world_8_finish_game.yaml
+.venv/bin/python -m smb3_agent goal status world_8_finish_game
+```
+
+This contract remains unaccepted until one full fresh smoke and at least 3/3
+independent fresh authoritative runs prove all 26 milestones.
+
 ## Legacy diagnostic
 
 `data/goals/world_1_king.yaml` is `goal_type: diagnostic_route`. It retains its

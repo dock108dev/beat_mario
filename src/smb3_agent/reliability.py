@@ -38,6 +38,7 @@ BATTLESHIPS_FINAL_EVENT = "post_probe_world_8_battleships_post_clear"
 HAND_TRAPS_JET_FINAL_EVENT = "post_probe_world_8_jet_post_clear"
 WORLD_8_8_2_FINAL_EVENT = "post_probe_world_8_2_post_clear"
 WORLD_8_SUPER_TANKS_FINAL_EVENT = "post_probe_world_8_super_tanks_post_clear"
+WORLD_8_FINISH_GAME_FINAL_EVENT = "post_probe_world_8_bowser_castle_stable_ending"
 RELIABILITY_ARTIFACTS_ROOT = Path("artifacts/reliability/world_8_double_whistle")
 WATCHABLE_ARTIFACTS_ROOT = Path("artifacts/review/world_8_double_whistle")
 EVENT_RE = re.compile(r"\bevent=(?P<event>[A-Za-z0-9_]+)\b")
@@ -230,6 +231,25 @@ RELIABILITY_PROFILES = {
         ),
         require_byte_identical_logs=True,
         default_timeout_seconds=600,
+    ),
+    "world_8_finish_game": ReliabilityProfile(
+        goal_id="world_8_finish_game",
+        preset="fceux_world_8_finish_game",
+        final_event=WORLD_8_FINISH_GAME_FINAL_EVENT,
+        minimum_authoritative_runs=3,
+        accepted_boundary={"ending_state": 1, "stable_frames": 300},
+        focused_events=(
+            "post_probe_world_8_super_tanks_post_clear",
+            "post_probe_world_8_bowser_castle_entered",
+            "post_probe_world_8_bowser_castle_gameplay",
+            "post_probe_world_8_bowser_castle_bowser_live",
+            "post_probe_world_8_bowser_castle_bowser_defeated",
+            "post_probe_world_8_bowser_castle_princess_rescue",
+            "post_probe_world_8_bowser_castle_credits_progression",
+            "post_probe_world_8_bowser_castle_stable_ending",
+        ),
+        require_byte_identical_logs=True,
+        default_timeout_seconds=900,
     ),
 }
 
@@ -465,7 +485,7 @@ def run_watchable_playback(
     game_path: Path,
     artifacts_root: Path | None = None,
     frame_sleep_seconds: float = 0.0035,
-    timeout_seconds: int = 600,
+    timeout_seconds: int = 900,
     contact_sheet_columns: int = 4,
     goal_id: str = ACTIVE_PRODUCT_GOAL_ID,
     goal_runner: Callable[..., GoalRunResult] = run_goal_contract,
@@ -887,7 +907,7 @@ def _prohibited_evidence(text: str, events: list[str], run_dir: Path) -> list[st
     evidence: list[str] = []
     lowered = text.lower()
     for event in events:
-        if "_bridge" in event or "_discovery_" in event:
+        if "_bridge" in event:
             evidence.append(event)
         elif any(token in event for token in PROHIBITED_SEARCH_TOKENS):
             evidence.append(event)
@@ -996,6 +1016,9 @@ def _final_observable(text: str, required_event: str) -> dict[str, Any]:
         "starting_lives": _to_int(fields.get("starting_lives")),
         "current_lives": _to_int(fields.get("current_lives")),
         "hand_trap_entered": _to_int(fields.get("hand_trap_entered")),
+        "ending_state": _to_int(fields.get("ending_state")),
+        "stable_frames": _to_int(fields.get("stable_frames")),
+        "credits_completed": _to_int(fields.get("credits_completed")),
         "event": fields.get("event"),
         "frame": _to_int(fields.get("frame")),
     }

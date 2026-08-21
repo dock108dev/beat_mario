@@ -53,6 +53,13 @@ The `world_8_8_2` view preserves all 21 earlier rows and appends World 8-1 and
 World 8-2. It renders exactly 23 locations and stops at Fortress access; the
 Fortress is not a row because its gameplay is outside this goal.
 
+The `world_8_super_tanks` view extends that route through Fortress and Super
+Tanks to the accepted Bowser's Castle map boundary. The
+`world_8_finish_game` view preserves all 25 rows and appends exactly one final
+row, World 8-Bowser's Castle and Ending. Its URL selection is
+`/?goal=world_8_finish_game`; selecting it changes only the review surface, not
+the default goal or acceptance state.
+
 Each route row uses player-facing language and displays its role:
 
 - `goal milestone` for owner-required outcomes;
@@ -113,6 +120,13 @@ In the Hand-Traps-and-Jet view, all 21 rows have normal-gameplay evidence. The
 four new rows link to a 3/3 authoritative aggregate with 17 focused images per
 run and a separate 17-frame review contact sheet.
 
+In the finish-game view, the final row requires eight focused evidence roles:
+accepted Super Tanks boundary, Castle entry, representative Castle gameplay,
+Bowser encounter, game-owned Bowser defeat, Princess rescue, credits, and the
+stable final screen. Until the required fresh live aggregate exists, Route Lab
+shows controller readiness from the catalog, but that display is not product
+acceptance; only the authoritative reliability report can accept Slice 5.
+
 ## Route roles and observations
 
 Notes and issues continue to use human locations while retaining segment ids in
@@ -133,6 +147,9 @@ artifacts. New active mappings include:
 - `world_8_jet_clear` -> World 8-Jet
 - `world_8_1_clear` -> World 8-1
 - `world_8_2_clear` -> World 8-2
+- `world_8_fortress_clear` -> World 8-Fortress
+- `world_8_super_tanks_clear` -> World 8-Super Tanks
+- `world_8_bowser_castle_finish` -> World 8-Bowser's Castle and Ending
 
 ## Commands
 
@@ -157,6 +174,8 @@ python -m smb3_agent goal status world_8_big_tanks
 python -m smb3_agent goal status world_8_battleships
 python -m smb3_agent goal status world_8_hand_traps_jet
 python -m smb3_agent goal status world_8_8_2
+python -m smb3_agent goal status world_8_super_tanks
+python -m smb3_agent goal status world_8_finish_game
 ```
 
 ## Visual contract

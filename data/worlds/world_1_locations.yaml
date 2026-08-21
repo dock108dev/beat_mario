@@ -15,7 +15,7 @@ locations:
   - id: world_1_map
     label: Map
     type: map
-    default_status: needs review
+    default_status: works
     objective: Navigate between required World 1 locations and handle map events.
     guide_terms:
       - world map
@@ -308,3 +308,17 @@ locations:
       - overhead airships
       - final Warp Pipe
       - Bowser's Castle boundary
+  - id: world_8_bowser_castle
+    segment_id: world_8_bowser_castle_finish
+    label: World 8-Bowser's Castle and Ending
+    type: level
+    default_status: needs review
+    objective: Enter and traverse Bowser's Castle, defeat Bowser through the game-owned floor-breaking mechanic while Mario remains alive, rescue the Princess, observe the credits, and stop at the stable ending.
+    guide_terms:
+      - castle entry
+      - representative castle traversal
+      - Bowser room
+      - floor-breaking defeat
+      - Princess rescue
+      - credits
+      - stable ending

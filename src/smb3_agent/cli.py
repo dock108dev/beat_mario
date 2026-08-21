@@ -345,7 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     reliability_watch.add_argument(
         "--throttle-seconds", type=float, default=0.0035
     )
-    reliability_watch.add_argument("--timeout-seconds", type=int, default=600)
+    reliability_watch.add_argument("--timeout-seconds", type=int, default=900)
     reliability_watch.add_argument("--columns", type=int, default=4)
 
     goal = subparsers.add_parser("goal", help="Validate and run goal contracts")

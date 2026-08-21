@@ -60,6 +60,7 @@ LAB_GOALS = (
     ("world_8_hand_traps_jet", "World 8 Hand Traps + Jet"),
     ("world_8_8_2", "World 8-1 + 8-2"),
     ("world_8_super_tanks", "World 8 Fortress + Super Tanks"),
+    ("world_8_finish_game", "Bowser's Castle + Ending"),
 )
 LAB_GOAL_IDS = frozenset(goal_id for goal_id, _ in LAB_GOALS)
 
@@ -2202,6 +2203,7 @@ def _location_id_for_artifact(value: str) -> str:
         "world_8_2_clear": "world_8_2",
         "world_8_fortress_clear": "world_8_fortress",
         "world_8_super_tanks_clear": "world_8_super_tanks",
+        "world_8_bowser_castle_finish": "world_8_bowser_castle",
         "world_8_map_arrival": "world_8_map",
         "fortress": "world_1_fortress",
         "castle": "world_1_airship",
@@ -2274,6 +2276,8 @@ def _location_url(
 
 
 def _goal_subtitle(goal_id: str) -> str:
+    if goal_id == "world_8_finish_game":
+        return "Complete 26-segment route through Bowser, Princess rescue, credits, and ending"
     if goal_id == "world_8_super_tanks":
         return "World 2-first double-whistle route through Super Tanks and Bowser's Castle access"
     if goal_id == "world_8_8_2":

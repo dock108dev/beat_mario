@@ -19,6 +19,10 @@ normal-gameplay segments and zero bridges. The cumulative `world_8_8_2` goal
 adds World 8-1 and World 8-2 as distinct goal-card stages, for exactly 23
 normal-gameplay segments and zero bridges, then stops on the accessible World 8
 Fortress node without entering it.
+The accepted `world_8_super_tanks` continuation clears Fortress and Super Tanks
+and stops at Bowser's Castle with 25 segments. The final
+`world_8_finish_game` contract appends only `world_8_bowser_castle_finish`, for
+exactly 26 ordered normal-gameplay segments and zero bridges.
 
 ## Current truth
 
@@ -36,6 +40,16 @@ Fortress node without entering it.
 - `data/goals/world_8_8_2.yaml` preserves that 21-segment prefix and adds only
   `world_8_1_clear` and `world_8_2_clear`. It stops at map page 2 cursor
   `(64,144)`, where the Fortress is accessible but unentered.
+- `data/goals/world_8_super_tanks.yaml` is the accepted 25-segment prefix and
+  ends at map page 3 cursor `(96,112)` with Bowser's Castle accessible and
+  unentered.
+- `data/goals/world_8_finish_game.yaml` composes that prefix with one Castle
+  segment. Its observer requires ordered Castle entry and traversal, a live
+  Bowser object, Bowser's game-owned active-to-floor-fall defeat transition,
+  the Princess chamber, complete credits progression, and 300 stable frames at
+  the game-owned final screen. Implementation or diagnostic evidence alone is
+  not acceptance; the fresh smoke, 3/3 authoritative aggregate, regressions,
+  and separate review-only watch remain mandatory.
 - World 1-4 is not in the active route.
 - World 1-5 and World 1-6 are retained as the route to the final World 1
   castle after the owner corrected the boundary to require World 2 before

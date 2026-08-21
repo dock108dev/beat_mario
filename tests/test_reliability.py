@@ -16,6 +16,7 @@ from smb3_agent.reliability import (
     HAND_TRAPS_JET_FINAL_EVENT,
     WORLD_8_8_2_FINAL_EVENT,
     WORLD_8_SUPER_TANKS_FINAL_EVENT,
+    WORLD_8_FINISH_GAME_FINAL_EVENT,
     run_reliability_gate,
     run_watchable_playback,
 )
@@ -133,6 +134,11 @@ def _write_log(
                 "map_cursor_y=112 bowser_castle_accessible=1 "
                 "bowser_castle_entered=0 stable_frames=180 "
                 "evidence=stable_world_8_map_with_bowser_castle_accessible"
+            )
+        elif event == WORLD_8_FINISH_GAME_FINAL_EVENT:
+            suffix = (
+                " ending_state=1 stable_frames=300 credits_completed=1 "
+                "evidence=stable_game_owned_final_ending"
             )
         lines.append(f"frame={frame} event={event}{suffix}")
     if extra_line is not None:
@@ -268,6 +274,17 @@ def _fake_runner_factory(
                     WORLD_8_SUPER_TANKS_FINAL_EVENT,
                 ]
                 if goal_id == "world_8_super_tanks"
+                else [
+                    "post_probe_world_8_super_tanks_post_clear",
+                    "post_probe_world_8_bowser_castle_entered",
+                    "post_probe_world_8_bowser_castle_gameplay",
+                    "post_probe_world_8_bowser_castle_bowser_live",
+                    "post_probe_world_8_bowser_castle_bowser_defeated",
+                    "post_probe_world_8_bowser_castle_princess_rescue",
+                    "post_probe_world_8_bowser_castle_credits_progression",
+                    WORLD_8_FINISH_GAME_FINAL_EVENT,
+                ]
+                if goal_id == "world_8_finish_game"
                 else []
             )
             image_events = focused_events or ["review"]
@@ -726,6 +743,73 @@ def test_world_8_super_tanks_failure_reports_last_good_and_first_missing(
     }
 
 
+def test_world_8_finish_game_requires_three_fresh_successes_and_eight_images(
+    tmp_path: Path,
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_finish_game",
+        artifacts_root=tmp_path / "finish-game",
+        goal_runner=_fake_runner_factory(
+            calls, goal_id="world_8_finish_game", write_image=True
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["requested_runs"] == 3
+    assert result.report["successful_runs"] == 3
+    assert result.report["route_segment_count"] == 26
+    assert result.report["bridged_segment_count"] == 0
+    assert result.report["required_final_event"] == WORLD_8_FINISH_GAME_FINAL_EVENT
+    assert result.report["byte_identical_logs"] is True
+    assert all(len(run["focused_screenshots"]) == 8 for run in result.report["runs"])
+    assert all(call["attempts"] == 1 for call in calls)
+    assert all(call["timeout_seconds"] == 900 for call in calls)
+
+
+@pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])
+def test_world_8_finish_game_rejects_invalid_ending_screenshot_sets(
+    tmp_path: Path, mode: str
+) -> None:
+    calls: list[dict] = []
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    base_runner = _fake_runner_factory(
+        calls, goal_id="world_8_finish_game", write_image=True
+    )
+
+    def damaged_runner(contract, **kwargs):
+        result = base_runner(contract, **kwargs)
+        image_dir = kwargs["artifacts_dir"] / "images"
+        target = next(image_dir.glob("*_post_probe_world_8_bowser_castle_princess_rescue.gd"))
+        if mode == "missing":
+            target.unlink()
+        elif mode == "duplicate":
+            image_dir.joinpath(
+                "999999_post_probe_world_8_bowser_castle_princess_rescue.gd"
+            ).write_bytes(target.read_bytes())
+        else:
+            target.write_bytes(b"corrupt")
+        return result
+
+    result = run_reliability_gate(
+        game_path=game_path,
+        goal_id="world_8_finish_game",
+        requested_runs=1,
+        artifacts_root=tmp_path / mode,
+        goal_runner=damaged_runner,
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    run = result.report["runs"][0]
+    assert run["passed"] is False
+    assert run["failure_classification"] == "artifact-integrity"
+
+
 @pytest.mark.parametrize("mode", ["missing", "duplicate", "corrupt"])
 def test_world_8_8_2_rejects_invalid_focused_screenshot_sets(
     tmp_path: Path, mode: str
@@ -1108,6 +1192,32 @@ def test_watchable_playback_is_review_only_and_separate(tmp_path: Path) -> None:
     assert result.report["tick_trace"] is not None
     assert calls[0]["attempts"] == 1
     assert calls[0]["frame_sleep_seconds"] == 0.0035
+
+
+def test_watchable_playback_allows_non_acceptance_discovery_telemetry(
+    tmp_path: Path,
+) -> None:
+    game_path = tmp_path / "local-game-file.nes"
+    game_path.write_bytes(b"local-only")
+    calls: list[dict] = []
+
+    result = run_watchable_playback(
+        game_path=game_path,
+        artifacts_root=tmp_path / "review",
+        goal_runner=_fake_runner_factory(
+            calls,
+            include_tick=True,
+            write_image=True,
+            extra_line=(
+                "frame=99 "
+                "event=post_probe_world_8_bowser_castle_discovery_tick"
+            ),
+        ),
+        emulator_resolver=lambda _: "/fake/fceux",
+    )
+
+    assert result.passed is True
+    assert result.report["run"]["prohibited_evidence"] == []
 
 
 def test_prohibited_tactics_cannot_pass(tmp_path: Path) -> None:

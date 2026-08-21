@@ -592,3 +592,41 @@ Pass condition: every earlier goal retains its segment count, zero-bridge
 status, and endpoint; `git diff --check` passes; generated evidence remains
 ignored; and no ROM, savestate, credential, log, screenshot, report, trace, or
 temporary worktree becomes tracked.
+
+## Gate 30: Bowser's Castle and ending contract
+
+```bash
+.venv/bin/python -m smb3_agent goal validate data/goals/world_8_finish_game.yaml
+.venv/bin/python -m smb3_agent goal status world_8_finish_game
+```
+
+Pass condition: the accepted `world_8_super_tanks` prefix is unchanged at 25
+segments; only `world_8_bowser_castle_finish` is appended; resolution is exactly
+26 ordered normal-gameplay segments and zero bridges; and the observer requires
+the exact Castle-to-stable-ending event sequence.
+
+## Gate 31: Finish-game live acceptance
+
+After one successful fresh, unthrottled diagnostic smoke, run the authoritative
+profile and separate watch:
+
+```bash
+.venv/bin/python -m smb3_agent reliability run \
+  --goal world_8_finish_game --game-file "$SMB3_GAME_FILE"
+.venv/bin/python -m smb3_agent reliability watch \
+  --goal world_8_finish_game --game-file "$SMB3_GAME_FILE"
+```
+
+Pass condition: at least 3/3 isolated fresh processes complete all 26
+milestones with `metrics_passed=true`, zero prohibited evidence, and all eight
+focused screenshots. The Princess rescue, credits through ending world 8, and
+300-frame game-owned final state must be observed in order. The watch is
+review-only and cannot promote the result.
+
+## Gate 32: Final regressions and hygiene
+
+Run `PYTHON=.venv/bin/python scripts/validate_phase0.sh`, all six accepted live
+reliability profiles, the final profile, and `git diff --check`. Every earlier
+goal must retain its endpoint. No ROM, state, log, image, report, trace, or
+discovery artifact may become tracked. Slice 5 remains unaccepted if any live
+gate is unavailable or fails.

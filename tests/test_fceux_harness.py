@@ -51,6 +51,80 @@ def test_agent_uses_supported_fceux_shutdown_api() -> None:
     assert not source.rstrip().endswith("os.exit()")
 
 
+def test_fresh_route_controller_does_not_reference_castle_room_state() -> None:
+    source = LUA_AGENT_PATH.read_text()
+    controller = lua_function_slice(source, "run_agent", "enter_1_2_from_map")
+
+    assert "room_transitions" not in controller
+
+
+def test_tick_capture_retains_production_discovery_trace_events() -> None:
+    source = LUA_AGENT_PATH.read_text()
+    logger = lua_function_slice(source, "log_state", "advance")
+
+    assert logger.count("and not capture_ticks") == 3
+
+
+def test_bowser_castle_controller_emits_game_owned_ending_contract() -> None:
+    source = LUA_AGENT_PATH.read_text()
+    controller = source[
+        source.index("run_world_8_bowser_castle_finish_extension = function") :
+        source.index("local function run_world_8_battleships_extension")
+    ]
+
+    for token in (
+        "evidence=normal_castle_hazard_and_door_traversal",
+        "evidence=normal_bowser_room_entry",
+        "evidence=game_owned_live_bowser_object",
+        "evidence=game_enforced_floor_break_bowser_defeat",
+        "evidence=game_owned_princess_rescue_sequence",
+        "evidence=game_owned_credits_started_after_princess_rescue",
+        "evidence=game_owned_credits_progression",
+        "evidence=stable_game_owned_final_ending",
+    ):
+        assert token in controller
+
+    assert "castle_boss_last_var5 == 1" in controller
+    assert "observed_bowser_var5 == 2" in controller
+    assert "castle_bowser_fall_transition_seen" in controller
+    assert "memory.readbyte(0x87 + bowser_slot) >= 2" in controller
+    assert "castle_boss_slam_count >= 3" in controller
+    assert "failure_classification=false_bowser_clear" in controller
+    for failure in (
+        'failure_classification = "missing_princess_rescue"',
+        'failure_classification = "missing_credits"',
+        'failure_classification = "incomplete_credits"',
+        'failure_classification = "unstable_ending"',
+    ):
+        assert failure in controller
+    assert "ending_raster == 0x80" in controller
+    assert "ending_state >= 4 and ending_state <= 7" in controller
+    assert "castle_credits_last_world == 7" in controller
+    assert "castle_credits_world_count == 8" in controller
+    assert "ending_world == 0" in controller
+    assert "failure_classification=observer_mismatch" in controller
+    assert "ending_title_event == 0xFF" in controller
+    assert "castle_stable_ending_frames >= 300" in controller
+    stairs_transition = controller[
+        controller.index("if m.x >= 1550 then") :
+        controller.index("elseif opening_phase == 4")
+    ]
+    assert "opening_phase == 3 and not opening_stairs_crossed and m.x >= 1200" in controller
+    assert "opening_phase = 6" in controller
+    assert "opening_stairs_crossed = true" in stairs_transition
+    assert "opening_phase = 7" in stairs_transition
+    descent_transition = controller[
+        controller.index("post_probe_world_8_bowser_castle_discovery_stairs_descended") :
+        controller.index("elseif opening_phase == 6")
+    ]
+    assert "opening_phase = 8" in descent_transition
+    lower_route_transition = controller[
+        controller.index("post_probe_world_8_bowser_castle_discovery_lower_route_reached") :
+        controller.index("elseif opening_phase == 7")
+    ]
+    assert "opening_phase = 9" in lower_route_transition
+
+
 def test_parse_fceux_log_counts_successes(tmp_path: Path) -> None:
     log_path = tmp_path / "route.log"
     log_path.write_text(
@@ -426,6 +500,36 @@ def _world_8_super_tanks_lines() -> list[str]:
     ]
 
 
+def _world_8_finish_game_lines() -> list[str]:
+    return _world_8_super_tanks_lines() + [
+        "frame=267 event=post_probe_world_8_bowser_castle_entered "
+        "stage_identity=world_8_bowser_castle mario_alive=1 player_is_dying=0 "
+        "evidence=normal_map_input_from_accessible_bowser_castle_node",
+        "frame=268 event=post_probe_world_8_bowser_castle_gameplay "
+        "representative_castle_progression=1 "
+        "evidence=normal_castle_hazard_and_door_traversal",
+        "frame=269 event=post_probe_world_8_bowser_castle_boss_room_entered "
+        "mario_alive=1 player_is_dying=0 evidence=normal_bowser_room_entry",
+        "frame=270 event=post_probe_world_8_bowser_castle_bowser_live "
+        "bowser_active=1 mario_alive=1 evidence=game_owned_live_bowser_object",
+        "frame=271 event=post_probe_world_8_bowser_castle_bowser_defeated "
+        "live_bowser_observed=1 mario_alive=1 player_is_dying=0 "
+        "evidence=game_enforced_floor_break_bowser_defeat",
+        "frame=272 event=post_probe_world_8_bowser_castle_princess_rescue "
+        "bowser_defeat_preceded_rescue=1 "
+        "evidence=game_owned_princess_rescue_sequence",
+        "frame=273 event=post_probe_world_8_bowser_castle_credits_started "
+        "princess_rescue_observed=1 "
+        "evidence=game_owned_credits_started_after_princess_rescue",
+        "frame=274 event=post_probe_world_8_bowser_castle_credits_progression "
+        "credits_started=1 credits_completed=1 "
+        "evidence=game_owned_credits_progression",
+        "frame=275 event=post_probe_world_8_bowser_castle_stable_ending "
+        "ending_state=1 stable_frames=300 credits_completed=1 "
+        "evidence=stable_game_owned_final_ending",
+    ]
+
+
 def _parse_lines(tmp_path: Path, lines: list[str]):
     log_path = tmp_path / "fceux.log"
     log_path.write_text("\n".join(lines) + "\n")
@@ -439,6 +543,17 @@ def test_parse_fceux_log_accepts_exact_hand_traps_and_jet_sequence(
 
     assert summary.post_probe_clear is True
     assert summary.post_probe_last_event == "post_probe_world_8_jet_post_clear"
+
+
+def test_parse_fceux_log_accepts_accumulated_hand_trap_leaf_rewards(
+    tmp_path: Path,
+) -> None:
+    lines = [
+        line.replace("leaf_before=0 leaf_after=1", "leaf_before=1 leaf_after=2")
+        for line in _world_8_hand_traps_jet_lines()
+    ]
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is True
 
 
 def test_parse_fceux_log_accepts_distinct_world_8_1_and_8_2_goal_cards(
@@ -457,6 +572,100 @@ def test_parse_fceux_log_accepts_ordered_fortress_and_super_tanks_boss_proofs(
 
     assert summary.post_probe_clear is True
     assert summary.post_probe_last_event == "post_probe_world_8_super_tanks_post_clear"
+
+
+def test_parse_fceux_log_ignores_boss_route_telemetry(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_super_tanks_lines()
+    gameplay_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_fortress_gameplay " in line
+    )
+    lines.insert(
+        gameplay_index,
+        "frame=250 event=post_probe_world_8_fortress_boss_state "
+        "observer=Objects_Var5 boss_state=4",
+    )
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is True
+
+
+def test_parse_fceux_log_accepts_complete_game_owned_ending_sequence(
+    tmp_path: Path,
+) -> None:
+    summary = _parse_lines(tmp_path, _world_8_finish_game_lines())
+
+    assert summary.post_probe_clear is True
+    assert (
+        summary.post_probe_last_event
+        == "post_probe_world_8_bowser_castle_stable_ending"
+    )
+
+
+def test_parse_fceux_log_ignores_castle_discovery_telemetry(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_finish_game_lines()
+    entered_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_bowser_castle_entered " in line
+    )
+    lines.insert(
+        entered_index + 1,
+        "frame=267 event=post_probe_world_8_bowser_castle_discovery_transition "
+        "room_signature=2:0:0:14:0:0",
+    )
+    lines.insert(
+        entered_index + 2,
+        "frame=267 event=post_probe_world_8_bowser_castle_discovery_tick "
+        "frame_in_castle=60",
+    )
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is True
+
+
+@pytest.mark.parametrize(
+    "event_to_remove",
+    [
+        "post_probe_world_8_bowser_castle_gameplay",
+        "post_probe_world_8_bowser_castle_boss_room_entered",
+        "post_probe_world_8_bowser_castle_bowser_live",
+        "post_probe_world_8_bowser_castle_bowser_defeated",
+        "post_probe_world_8_bowser_castle_princess_rescue",
+        "post_probe_world_8_bowser_castle_credits_started",
+        "post_probe_world_8_bowser_castle_credits_progression",
+    ],
+)
+def test_parse_fceux_log_rejects_incomplete_or_reordered_ending(
+    tmp_path: Path, event_to_remove: str
+) -> None:
+    lines = [
+        line
+        for line in _world_8_finish_game_lines()
+        if f"event={event_to_remove} " not in line
+    ]
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
+
+
+def test_parse_fceux_log_rejects_bowser_disappearance_without_live_defeat(
+    tmp_path: Path,
+) -> None:
+    lines = _world_8_finish_game_lines()
+    defeat_index = next(
+        index
+        for index, line in enumerate(lines)
+        if "event=post_probe_world_8_bowser_castle_bowser_defeated " in line
+    )
+    lines[defeat_index] = (
+        "frame=271 event=post_probe_world_8_bowser_castle_bowser_disappeared "
+        "failure_classification=false_bowser_clear mario_alive=1"
+    )
+
+    assert _parse_lines(tmp_path, lines).post_probe_clear is False
 
 
 @pytest.mark.parametrize(

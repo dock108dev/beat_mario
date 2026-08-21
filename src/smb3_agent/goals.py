@@ -15,6 +15,7 @@ from smb3_agent.presets import (
     WORLD_8_8_2_ENV,
     WORLD_8_HAND_TRAPS_JET_ENV,
     WORLD_8_SUPER_TANKS_ENV,
+    WORLD_8_FINISH_GAME_ENV,
 )
 
 
@@ -37,6 +38,7 @@ SUPPORTED_PRESETS = {
     "fceux_world_8_hand_traps_jet",
     "fceux_world_8_8_2",
     "fceux_world_8_super_tanks",
+    "fceux_world_8_finish_game",
     "unavailable",
 }
 SUPPORTED_METRIC_TYPES = {"summary_field", "final_event", "event_present", "event_absent"}
@@ -289,6 +291,7 @@ def run_goal_contract(
         "fceux_world_8_hand_traps_jet",
         "fceux_world_8_8_2",
         "fceux_world_8_super_tanks",
+        "fceux_world_8_finish_game",
     }:
         raise GoalValidationError(f"Unsupported runner preset: {contract.preset}")
 
@@ -300,6 +303,7 @@ def run_goal_contract(
         "fceux_world_8_hand_traps_jet": WORLD_8_HAND_TRAPS_JET_ENV,
         "fceux_world_8_8_2": WORLD_8_8_2_ENV,
         "fceux_world_8_super_tanks": WORLD_8_SUPER_TANKS_ENV,
+        "fceux_world_8_finish_game": WORLD_8_FINISH_GAME_ENV,
     }[contract.preset]
 
     run_dir = artifacts_dir or _default_artifacts_dir(contract)

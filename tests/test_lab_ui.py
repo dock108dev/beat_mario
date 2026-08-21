@@ -252,6 +252,21 @@ def test_route_lab_renders_exactly_25_world_8_super_tanks_locations() -> None:
     )
 
 
+def test_route_lab_renders_exactly_26_finish_game_locations() -> None:
+    summary = build_control_panel_summary("world_8_finish_game")
+    html = render_lab_ui(goal_id="world_8_finish_game")
+
+    assert summary["goal_id"] == "world_8_finish_game"
+    assert len(summary["locations"]) == 26
+    assert summary["locations"][-1]["id"] == "world_8_bowser_castle"
+    assert "World 8-Bowser&#x27;s Castle and Ending" in html
+    assert "Princess rescue, credits, and ending" in html
+    assert (
+        'href="/?goal=world_8_finish_game&amp;location=world_8_bowser_castle"'
+        in html
+    )
+
+
 def test_observation_lifecycle_delete_and_resolve(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

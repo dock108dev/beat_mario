@@ -86,6 +86,11 @@ class BossMagicBallObserverContract:
     ordered_events: tuple[tuple[str, tuple[str, ...]], ...]
 
 
+@dataclass(frozen=True)
+class EndingObserverContract:
+    ordered_events: tuple[tuple[str, tuple[str, ...]], ...]
+
+
 GOAL_CARD_OBSERVER_CONTRACTS = (
     GoalCardObserverContract(
         level="world_8_1",
@@ -318,6 +323,84 @@ BOSS_MAGIC_BALL_OBSERVER_CONTRACTS = (
 )
 
 
+ENDING_OBSERVER_CONTRACT = EndingObserverContract(
+    ordered_events=(
+        (
+            "entered",
+            (
+                "evidence=normal_map_input_from_accessible_bowser_castle_node",
+                "stage_identity=world_8_bowser_castle",
+                "mario_alive=1",
+                "player_is_dying=0",
+            ),
+        ),
+        (
+            "gameplay",
+            (
+                "evidence=normal_castle_hazard_and_door_traversal",
+                "representative_castle_progression=1",
+            ),
+        ),
+        (
+            "boss_room_entered",
+            (
+                "evidence=normal_bowser_room_entry",
+                "mario_alive=1",
+                "player_is_dying=0",
+            ),
+        ),
+        (
+            "bowser_live",
+            (
+                "evidence=game_owned_live_bowser_object",
+                "bowser_active=1",
+                "mario_alive=1",
+            ),
+        ),
+        (
+            "bowser_defeated",
+            (
+                "evidence=game_enforced_floor_break_bowser_defeat",
+                "live_bowser_observed=1",
+                "mario_alive=1",
+                "player_is_dying=0",
+            ),
+        ),
+        (
+            "princess_rescue",
+            (
+                "evidence=game_owned_princess_rescue_sequence",
+                "bowser_defeat_preceded_rescue=1",
+            ),
+        ),
+        (
+            "credits_started",
+            (
+                "evidence=game_owned_credits_started_after_princess_rescue",
+                "princess_rescue_observed=1",
+            ),
+        ),
+        (
+            "credits_progression",
+            (
+                "evidence=game_owned_credits_progression",
+                "credits_started=1",
+                "credits_completed=1",
+            ),
+        ),
+        (
+            "stable_ending",
+            (
+                "evidence=stable_game_owned_final_ending",
+                "ending_state=1",
+                "stable_frames=300",
+                "credits_completed=1",
+            ),
+        ),
+    )
+)
+
+
 def _line_fields(line: str) -> dict[str, str]:
     return {match.group("key"): match.group("value") for match in FIELD_RE.finditer(line)}
 
@@ -378,6 +461,7 @@ def parse_fceux_log(
     boss_magic_ball_states = {
         contract.level: 0 for contract in BOSS_MAGIC_BALL_OBSERVER_CONTRACTS
     }
+    ending_observer_state = 0
 
     for line in text.splitlines():
         event_match = EVENT_RE.search(line)
@@ -395,9 +479,6 @@ def parse_fceux_log(
                 playback_contaminated = True
                 post_probe_clear = False
             if "_bridge" in event and not allow_bridges:
-                playback_contaminated = True
-                post_probe_clear = False
-            if "_discovery_" in event:
                 playback_contaminated = True
                 post_probe_clear = False
             if event == "post_probe_world_1_roamer_detected":
@@ -811,12 +892,21 @@ def parse_fceux_log(
                         hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
                         hand_trap_state = 2 if valid else -1
                     elif suffix == "reward":
+                        fields = _line_fields(line)
+                        leaf_before = fields.get("leaf_before")
+                        leaf_after = fields.get("leaf_after")
+                        exact_leaf_increment = (
+                            leaf_before is not None
+                            and leaf_after is not None
+                            and leaf_before.isdigit()
+                            and leaf_after.isdigit()
+                            and int(leaf_after) == int(leaf_before) + 1
+                        )
                         valid = (
                             hand_trap_state == 2
                             and "evidence=game_owned_reward_object_82_and_inventory_transition" in line
                             and "reward_item_id=3" in line
-                            and "leaf_before=0" in line
-                            and "leaf_after=1" in line
+                            and exact_leaf_increment
                         )
                         hand_trap_sequence_failed = hand_trap_sequence_failed or not valid
                         hand_trap_state = 3 if valid else -1
@@ -1094,6 +1184,12 @@ def parse_fceux_log(
                     boss_magic_ball_states[contract.level] = -1
                     post_probe_clear = False
                     continue
+                contract_suffixes = {
+                    contract_suffix
+                    for contract_suffix, _ in contract.ordered_events
+                }
+                if suffix not in contract_suffixes:
+                    continue
                 if suffix != expected_suffix:
                     boss_magic_ball_states[contract.level] = -1
                     post_probe_clear = False
@@ -1113,6 +1209,61 @@ def parse_fceux_log(
                     and contract_index == len(BOSS_MAGIC_BALL_OBSERVER_CONTRACTS) - 1
                     and suffix == "post_clear"
                 )
+            ending_prefix = "post_probe_world_8_bowser_castle_"
+            if (
+                event is not None
+                and event.startswith(ending_prefix)
+                and not event.startswith(f"{ending_prefix}discovery_")
+            ):
+                suffix = event.removeprefix(ending_prefix)
+                expected_index = ending_observer_state if ending_observer_state >= 0 else -1
+                expected_suffix = (
+                    ENDING_OBSERVER_CONTRACT.ordered_events[expected_index][0]
+                    if 0 <= expected_index
+                    < len(ENDING_OBSERVER_CONTRACT.ordered_events)
+                    else None
+                )
+                is_failure = any(
+                    token in suffix
+                    for token in (
+                        "wrong", "death", "life_loss", "stall", "timeout",
+                        "false", "missing", "incomplete", "unstable",
+                        "ambiguous", "mismatch", "disappeared",
+                    )
+                )
+                prior_complete = boss_magic_ball_states["world_8_super_tanks"] == len(
+                    BOSS_MAGIC_BALL_OBSERVER_CONTRACTS[-1].ordered_events
+                )
+                contract_suffixes = {
+                    contract_suffix
+                    for contract_suffix, _ in ENDING_OBSERVER_CONTRACT.ordered_events
+                }
+                if is_failure:
+                    ending_observer_state = -1
+                    post_probe_clear = False
+                elif suffix not in contract_suffixes:
+                    pass
+                elif suffix != expected_suffix:
+                    ending_observer_state = -1
+                    post_probe_clear = False
+                else:
+                    required_tokens = ENDING_OBSERVER_CONTRACT.ordered_events[
+                        expected_index
+                    ][1]
+                    valid = (
+                        prior_complete
+                        and all(token in line for token in required_tokens)
+                        and not playback_contaminated
+                    )
+                    ending_observer_state = (
+                        ending_observer_state + 1 if valid else -1
+                    )
+                    post_probe_clear = (
+                        valid
+                        and suffix == "stable_ending"
+                        and ending_observer_state
+                        == len(ENDING_OBSERVER_CONTRACT.ordered_events)
+                    )
             if event.startswith("post_probe_world_8_jet_") and any(
                 token in event
                 for token in (

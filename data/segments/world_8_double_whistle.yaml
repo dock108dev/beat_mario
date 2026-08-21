@@ -424,3 +424,24 @@ segments:
     acceptance_event: post_probe_world_8_super_tanks_post_clear
     evidence: [bounded_live_fceux_2026-08-12_world_8_super_tanks_boom_boom_magic_ball_and_bowser_castle_access]
     notes: Observes the automatic convoy entry, advances with the moving tank geometry, crosses the overhead-airship section, enters the final pipe, defeats flying Boom Boom, collects its Magic Ball, and stops with Bowser's Castle accessible but unentered.
+
+  - id: world_8_bowser_castle_finish
+    name: Clear Bowser's Castle and reach the stable ending
+    status: solved
+    start_condition: {type: stable_map_state, world: 8, map_page: 3, cursor_x: 96, cursor_y: 112, next_node: world_8_bowser_castle}
+    success_condition:
+      type: conjunction
+      conditions:
+        - {type: normal_stage_entry, stage: world_8_bowser_castle, proof: game_owned_map_transition}
+        - {type: representative_gameplay, event: post_probe_world_8_bowser_castle_gameplay}
+        - {type: boss_room_entry, event: post_probe_world_8_bowser_castle_boss_room_entered}
+        - {type: live_boss_encounter, boss: bowser, event: post_probe_world_8_bowser_castle_bowser_live}
+        - {type: boss_defeat, boss: bowser, proof: game_owned_floor_break_defeat_while_mario_alive}
+        - {type: princess_rescue, proof: game_owned_ending_sequence}
+        - {type: credits_progression, proof: game_owned_ending_sequence}
+        - {type: stable_final_state, event: post_probe_world_8_bowser_castle_stable_ending}
+    failure_conditions: [{type: wrong_stage}, {type: wrong_door}, {type: death}, {type: life_loss}, {type: controller_stall}, {type: timeout, seconds: 900}, {type: false_bowser_clear}, {type: missing_princess_rescue}, {type: missing_credits}, {type: incomplete_credits}, {type: event_reordering}, {type: unstable_ending}, {type: observer_mismatch}]
+    current_method: {type: observed_castle_bowser_and_ending_controller, source: scripts/fceux_1_1_agent.lua}
+    acceptance_event: post_probe_world_8_bowser_castle_stable_ending
+    evidence: [game_owned_bowser_defeat_princess_rescue_credits_and_stable_ending]
+    notes: Enters from the accepted Castle node, traverses with normal controller input, proves a live Bowser encounter and the game-owned floor-break defeat while Mario remains alive, then observes Princess rescue, complete credits progression, and a stable final screen.
